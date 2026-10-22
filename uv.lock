@@ -401,21 +401,23 @@ version = "0.0.1"
 source = { editable = "." }
 dependencies = [
     { name = "docling" },
+    { name = "pypdf" },
 ]
 
 [package.dev-dependencies]
 dev = [
-    { name = "pypdf" },
     { name = "pytest" },
     { name = "ruff" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "docling", specifier = ">=2.142,<3" }]
+requires-dist = [
+    { name = "docling", specifier = ">=2.142,<3" },
+    { name = "pypdf", specifier = ">=6.21" },
+]
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "pypdf", specifier = ">=6.21.2" },
     { name = "pytest", specifier = ">=9.1.1" },
     { name = "ruff", specifier = ">=0.17.1" },
 ]

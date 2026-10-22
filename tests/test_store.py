@@ -71,3 +71,19 @@ def test_document_metadata_stored(env):
     store.ingest([src()], db)
     row = sqlite3.connect(db).execute("select school, title, url, sha256 from documents").fetchone()
     assert row[:3] == ("bnu", "标题", "https://x") and len(row[3]) == 64
+
+
+def test_pdf_text_layer_recorded(tmp_path, monkeypatch):
+    from pathlib import Path
+
+    monkeypatch.setattr(sources, "RAW_DIR", tmp_path / "raw")
+    monkeypatch.setattr(store, "parse_document", lambda p, d, k: [])
+    s = src("pdf1", kind="pdf")
+    put(tmp_path, s, (Path(__file__).parent / "fixtures" / "upc_sample.pdf").read_bytes())
+    store.ingest([s], tmp_path / "t.db")
+    rows = (
+        sqlite3.connect(tmp_path / "t.db")
+        .execute("select page, text_chars from pages where doc_id='pdf1' order by page")
+        .fetchall()
+    )
+    assert [p for p, _ in rows] == [1, 2, 3] and all(n > 100 for _, n in rows)

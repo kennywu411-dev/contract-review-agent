@@ -18,7 +18,9 @@ from docling.document_converter import DocumentConverter, PdfFormatOption
 def main(paths: list[str]) -> None:
     # 文字版 PDF 不需要 OCR；开 OCR 时 378 页手册 15 分钟未跑完
     opts = PdfPipelineOptions(do_ocr=False)
-    conv = DocumentConverter(format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=opts)})
+    conv = DocumentConverter(
+        format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=opts)}
+    )
     for p in paths:
         t0 = time.perf_counter()
         doc = conv.convert(p).document

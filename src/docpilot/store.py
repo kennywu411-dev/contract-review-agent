@@ -8,6 +8,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
+from pypdf import PdfReader
+
 from docpilot.config import DB_PATH
 from docpilot.parse import parse_document
 from docpilot.sources import Source, raw_path, sha256_of
@@ -23,6 +25,11 @@ CREATE TABLE IF NOT EXISTS blocks (
     kind TEXT NOT NULL, level INTEGER, text TEXT NOT NULL,
     page INTEGER, page_label TEXT, bbox_json TEXT, section_path_json TEXT NOT NULL,
     PRIMARY KEY (doc_id, seq)
+);
+CREATE TABLE IF NOT EXISTS pages (
+    doc_id TEXT NOT NULL REFERENCES documents(doc_id), page INTEGER NOT NULL,
+    text_chars INTEGER NOT NULL,  -- PDF 文字层字数（pypdf），用来区分扫描页和解析丢失
+    PRIMARY KEY (doc_id, page)
 );
 """
 
@@ -41,6 +48,11 @@ def init_db(db: Path) -> sqlite3.Connection:
     return conn
 
 
+def text_layer_chars(path: Path) -> list[int]:
+    """每页文字层的非空白字数，第 i 项对应第 i+1 页。"""
+    return [len("".join((p.extract_text() or "").split())) for p in PdfReader(path).pages]
+
+
 def ingest(sources: list[Source], db: Path = DB_PATH) -> IngestReport:
     report = IngestReport()
     conn = init_db(db)
@@ -55,9 +67,10 @@ def ingest(sources: list[Source], db: Path = DB_PATH) -> IngestReport:
             report.unchanged.append(src.doc_id)
             continue
         blocks = parse_document(path, src.doc_id, src.kind)
-        pages = [b.page for b in blocks if b.page is not None]
+        layer = text_layer_chars(path) if src.kind == "pdf" else []
         with conn:  # 一个事务：先删旧块再写新块，中途失败不会留下半份文档
             conn.execute("DELETE FROM blocks WHERE doc_id=?", (src.doc_id,))
+            conn.execute("DELETE FROM pages WHERE doc_id=?", (src.doc_id,))
             conn.execute(
                 "INSERT OR REPLACE INTO documents VALUES (?,?,?,?,?,?,?,?,?,?,?)",
                 (
@@ -70,7 +83,7 @@ def ingest(sources: list[Source], db: Path = DB_PATH) -> IngestReport:
                     src.applies_to,
                     src.kind,
                     sha,
-                    max(pages) if pages else None,
+                    len(layer) or None,
                     datetime.now().isoformat(timespec="seconds"),
                 ),
             )
@@ -90,6 +103,10 @@ def ingest(sources: list[Source], db: Path = DB_PATH) -> IngestReport:
                     )
                     for b in blocks
                 ],
+            )
+            conn.executemany(
+                "INSERT INTO pages VALUES (?,?,?)",
+                [(src.doc_id, i + 1, n) for i, n in enumerate(layer)],
             )
         report.parsed.append(src.doc_id)
     conn.close()
