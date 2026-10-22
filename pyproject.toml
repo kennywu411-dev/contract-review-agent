@@ -26,6 +26,7 @@ select = ["E", "F", "I", "UP", "B"]
 
 [dependency-groups]
 dev = [
+    "pypdf>=6.21.2",
     "pytest>=9.1.1",
     "ruff>=0.17.1",
 ]
