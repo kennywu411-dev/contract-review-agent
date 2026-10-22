@@ -3,7 +3,9 @@ name = "docpilot"
 version = "0.0.1"
 description = "DocPilot：高校规章可信问答 agent（逐句出处、查不到就拒答）"
 requires-python = ">=3.12,<3.13"
-dependencies = []
+dependencies = [
+    "docling>=2.142,<3",
+]
 
 [project.scripts]
 docpilot = "docpilot.cli:main"
