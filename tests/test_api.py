@@ -138,6 +138,7 @@ def test_runs_listing_mixed_types(client):
             "review",
             "review_d4",
             "review_dialog",
+            "review_longdialog",
             "contract_retrieval",
         }
         and runs

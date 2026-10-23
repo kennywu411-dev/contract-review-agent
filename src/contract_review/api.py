@@ -149,7 +149,13 @@ def _chunks(strategy: str) -> dict:
 
 
 def _run_kind(summary: dict) -> str:
-    if summary.get("kind") in ("review", "review_d4", "review_dialog", "contract_retrieval"):
+    if summary.get("kind") in (
+        "review",
+        "review_d4",
+        "review_dialog",
+        "review_longdialog",
+        "contract_retrieval",
+    ):
         return summary["kind"]
     if any(isinstance(v, dict) and "followup_correct" in v for v in summary.values()):
         return "dialog"
@@ -491,6 +497,7 @@ def create_app(engine=None) -> FastAPI:
                     "agent_results.jsonl",
                     "review_results.jsonl",
                     "dialog_results.jsonl",
+                    "longdialog_results.jsonl",
                     "results.jsonl",
                 )
                 if (d / n).exists()
