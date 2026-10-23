@@ -157,3 +157,18 @@ def test_acceptable_findings_are_not_false_positives():
     row = score_contract(c, r)
     assert row["acceptable_flagged"] == 2 and row["fp"] == 1  # 类型对不上的仍算误报
     assert row["matched_findings"] == 2
+
+
+def test_strict_precision_counts_one_correct_finding_per_gold():
+    # 审查 Minor 6：同一条款多条意见、类型判错的意见不计入严格精确率
+    r = result(
+        [
+            finding("第四条", "inspection"),
+            finding("第四条", "inspection"),
+            finding("第一条", "payment"),
+        ]
+    )
+    row = score_contract(contract(), r)
+    assert row["strict_hits"] == 1
+    s = summarize_review([row])
+    assert abs(s["detection"]["precision_strict"] - 1 / 3) < 1e-9

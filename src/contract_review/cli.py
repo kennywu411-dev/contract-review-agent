@@ -271,7 +271,7 @@ def cmd_eval_review(args: argparse.Namespace) -> None:
     print(
         f"检出率 {d['recall']:.1%}（{d['n_gold']} 处）  类型判对 {d['type_accuracy']:.1%}  "
         f"依据正确 {d['basis_accuracy']:.1%}  精确率 {d['precision']:.1%}"
-        f"（高/中 {d['precision_hm']:.1%}）"
+        f"（高/中 {d['precision_hm']:.1%}，严格 {d['precision_strict']:.1%}）"
     )
     print(
         f"干净合同误报率 {cl['fp_contract_rate']:.1%}（高/中 {cl['fp_contract_rate_hm']:.1%}，"

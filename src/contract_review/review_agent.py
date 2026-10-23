@@ -256,7 +256,9 @@ def _finish(result: ReviewResult, call, toolbox: ToolBox, contract: str) -> None
                 "clause": normalize_clause(f.get("clause", "")),
                 "clause_raw": f.get("clause", ""),
                 "quote": f.get("quote", ""),
-                "quote_found": quote_in_contract(f.get("quote", ""), contract),
+                # 缺失型意见没有可摘录的原文（模型常写"无"），不做摘录核对
+                "quote_found": normalize_clause(f.get("clause", "")) is None
+                or quote_in_contract(f.get("quote", ""), contract),
                 "risk_type": f.get("risk_type", "other"),
                 "level": f.get("level", "中"),
                 "reason": f.get("reason", ""),

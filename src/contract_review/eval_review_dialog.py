@@ -35,8 +35,10 @@ def score_followup(exp: dict, r: dict, c: Contract) -> dict:
     if t == "flip":
         ok = r["kind"] == "review" and r["our_side"] == exp["side"]
         gold = {g["clause"] for g in c.gold if g["clause"]}
-        reported = {f["clause"] for f in r["findings"]} & gold if ok else gold
-        return {"ok": ok, "old_gold_reported": len(reported) / len(gold) if gold else 0.0}
+        if not ok:  # 没切换身份时谈不上"原风险还报不报"，不计入
+            return {"ok": False, "old_gold_reported": None}
+        reported = {f["clause"] for f in r["findings"]} & gold
+        return {"ok": True, "old_gold_reported": len(reported) / len(gold) if gold else 0.0}
     # clarify：补充身份后应完成审查
     ok = r["kind"] == "review" and r["our_side"] == exp["side"]
     scored = score_contract(c, r) if ok else None
@@ -60,7 +62,8 @@ def summarize_dialogs(rows: list[dict]) -> dict:
             if t == "basis":
                 item["basis_ok_rate"] = _rate(rs, lambda r: r.get("basis_ok", False))
             if t == "flip":
-                item["old_gold_reported"] = sum(r["old_gold_reported"] for r in rs) / len(rs)
+                xs = [r["old_gold_reported"] for r in rs if r["old_gold_reported"] is not None]
+                item["old_gold_reported"] = sum(xs) / len(xs) if xs else None
             if t == "clarify":
                 item["recall"] = sum(r["recall"] for r in rs) / len(rs)
             out[mode][t] = item

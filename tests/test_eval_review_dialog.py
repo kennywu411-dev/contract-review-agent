@@ -62,3 +62,20 @@ def test_summary_by_type_and_mode():
     assert s["full"]["ordinal"]["ok_rate"] == 1.0 and s["none"]["ordinal"]["ok_rate"] == 0.0
     assert s["full"]["basis"]["basis_ok_rate"] == 0.0
     assert abs(s["cost_usd"] - 0.03) < 1e-9
+
+
+def test_failed_flip_not_counted_as_reporting_old_gold():
+    flip = {"type": "flip", "side": "乙"}
+    s = score_followup(flip, result([], our_side="甲"), contract())
+    assert s["ok"] is False and s["old_gold_reported"] is None
+    rows = [
+        {
+            "mode": "full",
+            "type": "flip",
+            "ok": False,
+            "old_gold_reported": None,
+            "cost_usd": 0,
+            "latency_ms": 1,
+        }
+    ]
+    assert summarize_dialogs(rows)["full"]["flip"]["old_gold_reported"] is None

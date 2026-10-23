@@ -62,6 +62,10 @@ def score_contract(c: Contract, r: dict) -> dict:
                 "human": any(f["needs_human_review"] for f in fs),
             }
         )
+    # 严格命中：条款和类型都对，每处风险最多算一条意见
+    strict_hits = sum(
+        1 for g in c.gold if any(_matches(f, g) and f["risk_type"] == g["type"] for f in findings)
+    )
     border = []
     for b in c.borderline:
         hits = [i for i, f in enumerate(findings) if f["clause"] == b["clause"]]
@@ -113,6 +117,7 @@ def score_contract(c: Contract, r: dict) -> dict:
         "matched_findings_hm": matched_hm,
         "n_findings": len(findings),
         "matched_findings": len(used),
+        "strict_hits": strict_hits,
         "human_findings": sum(f["needs_human_review"] for f in findings),
         "quote_found": sum(f.get("quote_found", True) for f in findings),
         "invalid_citations": r.get("invalid_citations", []),
@@ -157,6 +162,8 @@ def summarize_review(rows: list[dict]) -> dict:
             "basis_accuracy": _rate(det, lambda g: g["basis_ok"]),
             "level_agreement": _rate(det, lambda g: g["level_ok"]),
             "precision": _ratio(sum(r["matched_findings"] for r in scored), findings),
+            # 严格口径：只认条款+类型都对的意见，同一处风险的重复意见、临界和合理意见都不算命中
+            "precision_strict": _ratio(sum(r["strict_hits"] for r in scored), findings),
             "precision_hm": _ratio(
                 sum(r["matched_findings_hm"] for r in scored),
                 sum(r["n_findings_hm"] for r in scored),

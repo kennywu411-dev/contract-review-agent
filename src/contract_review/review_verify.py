@@ -12,6 +12,7 @@ import re
 import time
 from dataclasses import dataclass, field
 
+from contract_review.agent import _normalize_citations
 from contract_review.llm import cost_usd
 from contract_review.verify import VERIFY_SCHEMA, _source_text
 
@@ -168,7 +169,7 @@ def verify_review(r: dict, verifier, tenant: str, contract: str = "") -> Verifie
     for f, (label, support, revised) in zip(r["findings"], labels, strict=True):
         item = dict(f)
         flags: list[str] = []
-        support = [c for c in dict.fromkeys(support) if c in citations]
+        support = [c for c in _normalize_citations(support) if c in citations]
         if label in ("unsupported", "unverified") or not support:
             flags.append(label if label != "supported" else "unsupported")
         else:

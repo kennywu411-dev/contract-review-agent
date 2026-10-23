@@ -136,3 +136,12 @@ def test_law_refs_does_not_absorb_contract_clause():
 def test_other_law_is_always_unretrieved():
     f = {"reason": "违反《个人信息保护法》第二十一条。", "suggestion": ""}
     assert unretrieved_refs(f, CITES, "huaxin") == [("其他:个人信息保护法", "第二十一条")]
+
+
+def test_verifier_support_ids_are_normalized():
+    # 审查 Minor 8：校验器返回 "[C1]" 也要认
+    from contract_review.review_verify import verify_review
+
+    r = {"kind": "review", "citations": CITES, "findings": [_f("依据民法典第六百二十一条。")]}
+    v = verify_review(r, FakeVerifier([("supported", ["[C1]"], "")]), "huaxin")
+    assert v.findings[0]["needs_human_review"] is False and "verify_flags" not in v.findings[0]

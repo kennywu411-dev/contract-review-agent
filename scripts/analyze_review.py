@@ -26,6 +26,7 @@ def brief(s: dict) -> dict:
         "basis_acc": round(d["basis_accuracy"], 3),
         "precision": round(d["precision"], 3),
         "precision_hm": round(d["precision_hm"], 3),
+        "precision_strict": round(d["precision_strict"], 3),
         "clean_n": cl["n"],
         "clean_fp_rate": round(cl["fp_contract_rate"], 3),
         "clean_fp_rate_hm": round(cl["fp_contract_rate_hm"], 3),
