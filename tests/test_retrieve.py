@@ -79,3 +79,9 @@ def test_degenerate_queries(retr, q):
 def test_latency_recorded_per_stage(retr):
     lat = retr.search("转专业", "bnu", mode="hybrid_rerank").latency_ms
     assert {"bm25", "vector", "rerank", "total"} <= set(lat)
+
+
+@pytest.mark.parametrize("q", ["", "   ", "？？", "！，。"])
+@pytest.mark.parametrize("mode", ["bm25", "vector", "hybrid", "hybrid_rerank"])
+def test_empty_or_punctuation_query_returns_no_hits(retr, q, mode):
+    assert retr.search(q, "bnu", mode=mode).hits == []

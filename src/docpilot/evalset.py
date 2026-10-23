@@ -37,6 +37,8 @@ def _check(q: Question) -> None:
 
     if q.school not in STUDENT_SCHOOLS:
         raise bad("school", f"不是学生所在学校：{q.school}")
+    if not q.id.startswith(("national-", f"{q.school}-")):
+        raise bad("id", f"前缀应为 {q.school}- 或 national-")
     if q.type not in TYPES:
         raise bad("type", f"取值非法：{q.type}")
     if q.subtype not in SUBTYPES:
@@ -54,6 +56,8 @@ def _check(q: Question) -> None:
     for g in q.gold:
         if "doc_id" in g and g.get("page") is None and not g.get("clause"):
             raise bad("gold", f"{g['doc_id']} 既无页码也无条款号")
+        if g.get("page") is not None and not isinstance(g["page"], int):
+            raise bad("page", f"必须是整数：{g['page']!r}")
 
 
 def load_questions(path: Path = QUESTIONS_PATH) -> list[Question]:
@@ -64,7 +68,10 @@ def load_questions(path: Path = QUESTIONS_PATH) -> list[Question]:
         if not line.strip():
             continue
         row = json.loads(line)
-        q = Question(**{k: v for k, v in row.items() if k in names})
+        unknown = set(row) - names
+        if unknown:
+            raise ValueError(f"{row.get('id')}: 未知字段 {sorted(unknown)}（字段名拼错？）")
+        q = Question(**row)
         if q.id in seen:
             raise ValueError(f"重复的 id: {q.id}")
         seen.add(q.id)

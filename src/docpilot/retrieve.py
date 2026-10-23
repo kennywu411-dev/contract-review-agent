@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal, Protocol
 
-from docpilot.bm25 import BM25
+from docpilot.bm25 import BM25, tokenize
 from docpilot.chunking import Chunk, embed_text
 from docpilot.vector import Encoder, VectorIndex
 
@@ -84,6 +84,9 @@ class Retriever:
     ) -> SearchResult:
         t0 = time.perf_counter()
         lat: dict[str, float] = {}
+        if not tokenize(query):
+            # 空串、纯标点没有任何信息；向量路仍会返回"最近"的块，那是噪声，不是答案
+            return SearchResult([], None, {"total": (time.perf_counter() - t0) * 1000})
         allowed = {school, "national"}
 
         def allow(i: int) -> bool:

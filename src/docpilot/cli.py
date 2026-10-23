@@ -169,7 +169,7 @@ def main() -> None:
     p.add_argument("--strategy", action="append", choices=["block", "fixed", "section"])
     p.add_argument("--mode", action="append", choices=["bm25", "vector", "hybrid", "hybrid_rerank"])
     p.add_argument("--tag", default="retrieval")
-    p.add_argument("--pool", type=int, default=30, help="每路召回和重排的候选数")
+    p.add_argument("--pool", type=int, default=15, help="每路召回和重排的候选数（ADR 002）")
     p.set_defaults(func=cmd_eval_retrieval)
     args = parser.parse_args()
     args.func(args)

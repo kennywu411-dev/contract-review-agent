@@ -91,7 +91,7 @@ def stratified_sample(qs: list[Question], n: int, seed: int = 0) -> list[Questio
 
 
 def run_retrieval_eval(
-    retrievers: dict, questions: list[Question], modes, tag: str, pool: int = 30
+    retrievers: dict, questions: list[Question], modes, tag: str, pool: int = 15
 ) -> Path:
     """retrievers: 切块策略 → Retriever。结果写到 runs/<run_id>/。"""
     run_id = f"{tag}-{datetime.now():%Y%m%d-%H%M%S}"
@@ -100,7 +100,7 @@ def run_retrieval_eval(
     rows = []
     for strategy, retr in retrievers.items():
         for mode in modes:
-            config = f"{strategy}/{mode}" + (f"@pool{pool}" if pool != 30 else "")
+            config = f"{strategy}/{mode}@pool{pool}"
             for q in questions:
                 t = time.perf_counter()
                 res = retr.search(q.question, q.school, k=max(K_LIST), mode=mode, pool=pool)

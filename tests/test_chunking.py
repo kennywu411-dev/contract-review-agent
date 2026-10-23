@@ -111,3 +111,21 @@ def test_chunks_remember_articles_of_sub_items(tmp_path):
     assert "第十二条" not in second.text and second.articles[0] == "第十二条"
     last = next(c for c in chunks if "第十三条" in c.text)
     assert last.articles[-1] == "第十三条"
+
+
+def test_fixed_chunk_ignores_pages_and_articles_with_tiny_overlap(tmp_path):
+    db = make_db(
+        tmp_path,
+        {
+            "f": (
+                "bnu",
+                "办法",
+                [
+                    ("paragraph", 4, "第一条 " + "甲" * 392, 1, ["办法"]),
+                    ("paragraph", 4, "第二条 " + "乙" * 300, 2, ["办法"]),
+                ],
+            )
+        },
+    )
+    first = load_chunks(db, "fixed")[0]
+    assert first.pages == [1] and first.articles == ["第一条"]

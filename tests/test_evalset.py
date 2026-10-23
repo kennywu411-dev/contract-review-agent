@@ -44,6 +44,10 @@ def test_load_valid(tmp_path):
         ({"type": "refuse"}, "gold"),
         ({"gold": []}, "gold"),
         ({"subtype": "weird"}, "subtype"),
+        ({"subtyp": "version"}, "未知字段"),
+        ({"id": "upc-001"}, "id"),
+        ({"gold": [{"doc_id": "bnu-handbook-2025", "page": "166", "clause": None}]}, "page"),
+        ({"gold": [{"doc_id": "x", "page": None, "clause": ""}]}, "gold"),
     ],
 )
 def test_load_rejects_invalid(tmp_path, patch, msg):
@@ -139,3 +143,22 @@ def test_spot_check_sample_is_deterministic():
     assert [q.id for q in a] == [q.id for q in b] and len(a) == 2
     random.seed(1)  # 不受全局随机状态影响
     assert [q.id for q in spot_check_sample(qs_, 0.2)] == [q.id for q in a]
+
+
+@real
+def test_table_gold_queries_return_rows(qs):
+    import sqlite3 as sq
+
+    from docpilot.config import CAMPUS_DB
+
+    conn = sq.connect(CAMPUS_DB)
+    bad = []
+    for q in qs:
+        for g in q.gold:
+            if "table" in g:
+                n = conn.execute(
+                    f"select count(*) from {g['table']} where {g['where']}"
+                ).fetchone()[0]
+                if n == 0:
+                    bad.append(q.id)
+    assert bad == []

@@ -16,6 +16,9 @@ Strategy = Literal["block", "fixed", "section"]
 STRATEGIES: tuple[Strategy, ...] = ("block", "fixed", "section")
 FIXED_SIZE, FIXED_OVERLAP = 400, 80
 SECTION_MAX = 600
+# fixed 切出的片段与某块至少重叠这么多字，才把那块的页码和条款号算进来（审查发现：
+# 只重叠 1 字也算会让跨页 chunk 白拿一页的命中，引用时也会贴错条款号）
+MIN_OVERLAP = 20
 _ARTICLE = re.compile(r"^第[零一二三四五六七八九十百千〇两\d]+条")
 
 
@@ -85,7 +88,9 @@ def _fixed(doc, bodies: list[_Body]) -> list[Chunk]:
     chunks, start, n = [], 0, 0
     while start < len(full):
         end = min(start + FIXED_SIZE, len(full))
-        covered = [b for s, e, b in spans if s < end and e > start]
+        covered = [b for s, e, b in spans if min(e, end) - max(s, start) >= MIN_OVERLAP]
+        if not covered:  # 极短的尾巴：退回到任意重叠
+            covered = [b for s, e, b in spans if s < end and e > start]
         chunks.append(_make(doc, "fixed", n, covered, full[start:end]))
         n += 1
         if end == len(full):
