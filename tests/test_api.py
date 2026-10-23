@@ -104,7 +104,7 @@ def test_html_doc_blocks(client):
 def test_runs_listing_mixed_types(client):
     runs = client.get("/api/runs").json()
     kinds = {r["kind"] for r in runs}
-    assert kinds <= {"retrieval", "agent", "d4", "dialog"} and runs
+    assert kinds <= {"retrieval", "agent", "d4", "dialog", "review"} and runs
 
 
 def test_run_detail_includes_question_text(client):
@@ -154,3 +154,9 @@ def test_switching_school_resets_session(client):
     client.post("/api/ask", json={"question": "国奖多少钱", "tenant": "huaxin", "session_id": "s3"})
     client.post("/api/ask", json={"question": "那研究生呢", "tenant": "yunqi", "session_id": "s3"})
     assert eng.calls[-1][2] == ""
+
+
+def test_review_run_kind():
+    from contract_review.api import _run_kind
+
+    assert _run_kind({"kind": "review", "detection": {}}) == "review"
