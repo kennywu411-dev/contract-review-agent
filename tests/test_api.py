@@ -36,6 +36,30 @@ class FakeEngine:
         ver = VerifiedAnswer("answer", kept=raw.sentences)
         return raw, ver
 
+    def review(self, contract, tenant, on_step, history="", question=""):
+        from contract_review.review_agent import ReviewResult
+        from contract_review.review_verify import VerifiedReview
+
+        self.calls.append(("review", contract, tenant, history, question))
+        on_step({"step": 1, "tool_calls": [{"name": "search_docs", "input": {"query": "检验期"}}]})
+        finding = {
+            "clause": "第四条",
+            "quote": "视为合格",
+            "risk_type": "inspection",
+            "level": "高",
+            "reason": "检验期过短",
+            "suggestion": "改为三十日",
+            "citations": ["C1"],
+            "needs_human_review": False,
+            "quote_found": True,
+        }
+        if question:
+            r = ReviewResult(tenant, "followup", answer="建议改为……", answer_clause="第四条")
+        else:
+            r = ReviewResult(tenant, "review", our_side="甲", findings=[finding])
+        r.trace = {"trace_id": "rev1", "steps": []}
+        return r, VerifiedReview(findings=r.findings)
+
 
 @pytest.fixture
 def client():
@@ -163,3 +187,51 @@ def test_review_run_kind():
     from contract_review.api import _run_kind
 
     assert _run_kind({"kind": "review", "detection": {}}) == "review"
+
+
+CONTRACT = (
+    "工业品买卖合同\n甲方（买受人）：华信制造有限公司\n第四条 检验与验收\n乙方交付即视为合格。"
+)
+
+
+def test_review_streams_steps_and_findings(client):
+    r = client.post("/api/review", json={"contract": CONTRACT, "tenant": "huaxin"})
+    ev = events(r)
+    names = [n for n, _ in ev]
+    assert names[0] == "step" and "review" in names and "verified" in names and names[-1] == "done"
+    assert dict(ev)["review"]["findings"][0]["clause"] == "第四条"
+
+
+def test_review_followup_uses_session_history():
+    eng = FakeEngine()
+    c = TestClient(create_app(engine=eng))
+    c.post("/api/review", json={"contract": CONTRACT, "tenant": "huaxin", "session_id": "s1"})
+    r = c.post(
+        "/api/review", json={"question": "第1条意见怎么改", "tenant": "huaxin", "session_id": "s1"}
+    )
+    assert dict(events(r))["review"]["kind"] == "followup"
+    _, contract, _, history, question = eng.calls[-1]
+    assert contract == CONTRACT and "<上一轮审查>" in history and "1. 第四条" in history
+    assert question == "第1条意见怎么改"
+    c.post("/api/review", json={"question": "再说说", "tenant": "huaxin", "session_id": "s1"})
+    assert "用户：第1条意见怎么改" in eng.calls[-1][3]  # 上一轮追问也进历史
+
+
+@pytest.mark.parametrize(
+    "body,code",
+    [
+        ({"contract": "", "tenant": "huaxin"}, 422),
+        ({"contract": "x" * 20001, "tenant": "huaxin"}, 422),
+        ({"contract": CONTRACT, "tenant": "pku"}, 422),
+        ({"question": "怎么改", "tenant": "huaxin"}, 400),  # 追问必须在已有会话里
+        ({"question": "怎么改", "tenant": "huaxin", "session_id": "nope"}, 400),
+    ],
+)
+def test_review_validation(client, body, code):
+    assert client.post("/api/review", json=body).status_code == code
+
+
+def test_samples_are_constructed_contracts(client):
+    data = client.get("/api/samples").json()
+    assert data and all(d["constructed"] for d in data)
+    assert {"id", "title", "tenant", "text", "our_name"} <= set(data[0])

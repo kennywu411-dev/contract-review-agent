@@ -1,4 +1,4 @@
-"""Web 后端（FastAPI）：问答 SSE、PDF 原文与高亮框、评测运行与 trace 回放。
+"""Web 后端（FastAPI）：合同审查与追问 SSE、法规问答 SSE、原文与高亮框、评测运行与 trace 回放。
 
 只在本机 127.0.0.1 运行。所有文件访问都按白名单（sources.toml 的 doc_id、runs/ 下的目录名）。
 """
@@ -23,7 +23,7 @@ from contract_review.config import DB_PATH, ROOT, TENANTS
 from contract_review.eval_retrieval import RUNS_DIR
 from contract_review.sources import load_sources, raw_path
 
-ClientTenant = Literal["huaxin", "yunqi", "njust", "lzu", "cumt", "ruifeng"]
+ClientTenant = Literal["huaxin", "yunqi", "ruifeng"]
 _SAFE = re.compile(r"^[A-Za-z0-9_.-]+$")
 WEB_DIST = ROOT / "web" / "out"
 
@@ -33,6 +33,17 @@ class AskBody(BaseModel):
     tenant: ClientTenant
     session_id: str | None = Field(default=None, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")
 
+
+class ReviewBody(BaseModel):
+    """首轮审查传 contract；追问传 question + session_id（合同和上一轮结果从会话里取）。"""
+
+    contract: str | None = Field(default=None, min_length=1, max_length=20000)
+    question: str | None = Field(default=None, min_length=1, max_length=2000)
+    tenant: ClientTenant
+    session_id: str | None = Field(default=None, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")
+
+
+MAX_QA = 6  # 追问历史只带最近几轮
 
 MAX_SESSIONS = 200  # 内存里最多保留这么多会话，超出就丢最早的（本地单机演示足够）
 
@@ -50,6 +61,9 @@ class RealEngine:
         self.sql = make_backend()
         self.llm = AnthropicLLM(HAIKU)
         self.verifier = HaikuVerifier(AnthropicLLM(HAIKU))
+        from contract_review.review_verify import ReviewVerifier
+
+        self.review_verifier = ReviewVerifier(AnthropicLLM(HAIKU))
 
     def ask(self, question: str, tenant: str, on_step, history: str = ""):
         from contract_review.pipeline import answer_question
@@ -67,6 +81,26 @@ class RealEngine:
         )
         save_trace(raw)
         return raw, ver
+
+    def review(self, contract: str, tenant: str, on_step, history: str = "", question: str = ""):
+        from contract_review.review_agent import review_contract
+        from contract_review.review_verify import verify_review
+        from contract_review.tools import ToolBox
+        from contract_review.trace import save_trace
+
+        r = review_contract(
+            contract,
+            tenant,
+            self.llm,
+            ToolBox(tenant, self.retriever, self.sql),
+            on_step=on_step,
+            history=history,
+            question=question,
+        )
+        ver = verify_review(r.to_dict(), self.review_verifier, tenant, contract)
+        r.trace["verify"] = asdict(ver)
+        save_trace(r)
+        return r, ver
 
     def new_memory(self):
         from contract_review.llm import HAIKU, AnthropicLLM
@@ -155,7 +189,7 @@ def _stage_row(trace: dict) -> dict:
 def create_app(engine=None) -> FastAPI:
     from fastapi.middleware.cors import CORSMiddleware
 
-    app = FastAPI(title="DocPilot")
+    app = FastAPI(title="Contract Risk Review Agent")
     # 开发时前端跑在 3000 端口；cra serve 时同源，不需要 CORS
     app.add_middleware(
         CORSMiddleware,
@@ -188,6 +222,96 @@ def create_app(engine=None) -> FastAPI:
             while len(sessions) > MAX_SESSIONS:
                 sessions.pop(next(iter(sessions)))
         return mem
+
+    review_sessions: dict[str, dict] = {}  # session_id → {tenant, contract, prev, qa}
+
+    @app.get("/api/samples")
+    def samples():
+        """评测集里的构造合同，供演示时一键填入（不含金标准答案）。"""
+        from contract_review.contract_evalset import load_contracts
+
+        return [
+            {
+                "id": c.id,
+                "title": c.title,
+                "tenant": c.tenant,
+                "our_name": c.our_name if not c.clarify else "",
+                "counterparty": c.counterparty if not c.clarify else "",
+                "text": c.text,
+                "constructed": True,
+            }
+            for c in load_contracts()
+        ]
+
+    @app.post("/api/review")
+    async def review(body: ReviewBody):
+        from contract_review.review_agent import history_from_review
+
+        sess = review_sessions.get(body.session_id or "")
+        if body.question:
+            if sess is None or sess["tenant"] != body.tenant:
+                raise HTTPException(400, "追问需要先在同一会话里审查一份合同")
+            contract = body.contract or sess["contract"]
+            history = history_from_review(sess["prev"], sess["qa"][-MAX_QA:])
+        else:
+            if not body.contract:
+                raise HTTPException(400, "请提供合同全文")
+            contract, history = body.contract, ""
+        loop = asyncio.get_running_loop()
+        queue: asyncio.Queue = asyncio.Queue()
+
+        def on_step(record):
+            loop.call_soon_threadsafe(queue.put_nowait, ("step", record))
+
+        async def work():
+            try:
+                r, ver = await asyncio.to_thread(
+                    get_engine().review,
+                    contract,
+                    body.tenant,
+                    on_step,
+                    history,
+                    body.question or "",
+                )
+                data = r.to_dict()
+                data["trace"] = {"trace_id": r.trace.get("trace_id")}
+                if body.session_id:
+                    if r.kind == "followup":
+                        s = review_sessions[body.session_id]
+                        s["qa"].append((body.question, r.answer))
+                    elif r.kind in ("review", "clarify"):
+                        prev = data | {"findings": ver.findings or r.findings}
+                        old = review_sessions.get(body.session_id)
+                        qa = old["qa"] if old and body.question else []
+                        if body.question:
+                            qa.append((body.question, f"已按{r.our_side}方重新审查。"))
+                        review_sessions[body.session_id] = {
+                            "tenant": body.tenant,
+                            "contract": contract,
+                            "prev": prev,
+                            "qa": qa,
+                        }
+                        while len(review_sessions) > MAX_SESSIONS:
+                            review_sessions.pop(next(iter(review_sessions)))
+                await queue.put(("review", data))
+                await queue.put(("verified", asdict(ver)))
+            except Exception as e:  # 推给前端显示，不让连接挂住
+                await queue.put(("error", {"message": f"{type(e).__name__}: {e}"}))
+            await queue.put(("done", {}))
+
+        async def stream():
+            task = asyncio.create_task(work())
+            try:
+                while True:
+                    name, data = await queue.get()
+                    yield {"event": name, "data": json.dumps(data, ensure_ascii=False, default=str)}
+                    if name == "done":
+                        break
+            finally:
+                if not task.done():
+                    task.cancel()
+
+        return EventSourceResponse(stream(), ping=15)
 
     @app.get("/api/tenants")
     def tenants():
