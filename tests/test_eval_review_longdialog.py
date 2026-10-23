@@ -143,3 +143,15 @@ def test_script_turns_cover_early_references():
 @pytest.fixture(autouse=True)
 def _no_api(monkeypatch):
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+
+
+def test_list_scoring_ignores_excluded_mentions():
+    # 小样里全量历史答对了却被判错："除已谈妥的第六条（定金）外，其余为第四条、第九条"
+    exp = {"type": "list", "must": ["第四条", "第九条"], "must_not": ["第六条"]}
+    ok = {
+        "kind": "followup",
+        "answer": "除已谈妥的第六条（定金）外，其余需要修改的为：第四条、第九条。",
+    }
+    assert score_turn(exp, ok) is True
+    bad = {"kind": "followup", "answer": "需要修改：第四条、第六条、第九条。"}
+    assert score_turn(exp, bad) is False

@@ -32,6 +32,12 @@ BUDGET_CHARS = 3000  # 小样里 8 轮全量历史约 5600 字，6000 不会触�
 _CLAUSE = re.compile(r"(?<![法典释则范办例])第\s*(?:[0-9]+|[零一二三四五六七八九十百]+)\s*条")
 
 
+# 排除语境：除……外 / 已谈妥、不再、无需、不用 处理的条款（往后最多 20 个字到"外"或标点）
+_EXCLUDED = re.compile(
+    r"(?:除(?:了)?|已谈妥的?|不再|无需|不用)[^，。；,;]{0,20}?第[^，。；,;条]{1,6}条[^，。；,;]{0,12}?(?:外|以外|之外)?"
+)
+
+
 def clauses_in(text: str) -> set[str]:
     """回答里提到的合同条款号（前面紧跟"法""典"等的视为法条引用，不算）。"""
     out = set()
@@ -107,8 +113,10 @@ def score_turn(exp: dict, r: dict) -> bool | None:
         return r["kind"] == "followup" and r.get("answer_clause") == exp["clause"]
     if t == "side":
         return r["kind"] == "review" and r.get("our_side") == exp["side"]
-    mentioned = clauses_in(r.get("answer", ""))
-    return set(exp["must"]) <= mentioned and not (set(exp["must_not"]) & mentioned)
+    answer = r.get("answer", "")
+    mentioned = clauses_in(answer)
+    listed = clauses_in(_EXCLUDED.sub("", answer))  # "除已谈妥的第六条外"这类排除语境里的不算列入
+    return set(exp["must"]) <= mentioned and not (set(exp["must_not"]) & listed)
 
 
 def build_long_dialogs(source: Path, n: int) -> list[dict]:
