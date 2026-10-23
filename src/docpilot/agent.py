@@ -66,8 +66,13 @@ def run_agent(
     toolbox: ToolBox,
     max_steps: int = MAX_STEPS,
     on_step=None,
+    cache: str = "prefix",
 ) -> AgentResult:
-    """on_step(record)：每步结束时回调（Web 端用它流式推送步骤）。"""
+    """on_step(record)：每步结束时回调（Web 端用它流式推送步骤）。
+
+    cache="prefix"：system 和整个消息前缀都写缓存（默认）；
+    cache="system"：只缓存 system（成本对比实验用）。
+    """
     t0 = time.perf_counter()
     system = [
         {"type": "text", "text": system_prompt(school), "cache_control": {"type": "ephemeral"}}
@@ -80,19 +85,21 @@ def run_agent(
         "question": question,
         "school": school,
         "max_steps": max_steps,
+        "cache": cache,
         "steps": [],
         "end": "max_steps",
     }
 
     for step in range(1, max_steps + 1):
         ts = time.perf_counter()
+        extra = {"cache_control": {"type": "ephemeral"}} if cache == "prefix" else {}
         resp = llm.create(
             max_tokens=MAX_TOKENS,
             system=system,
             tools=TOOLS,
             messages=messages,
             output_config={"effort": EFFORT},
-            cache_control={"type": "ephemeral"},
+            **extra,
         )
         step_cost = cost_usd(llm.model, resp.usage)
         record = {

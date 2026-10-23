@@ -172,3 +172,10 @@ def test_sentence_kind_defaults_to_fact():
     llm = FakeLLM([[tool("search_docs", {"query": "q"})], [tool("final_answer", ANSWER)]])
     r = run_agent("q", "bnu", llm, box([ch("d", "bnu", "x")]))
     assert r.sentences[0]["kind"] == "fact"
+
+
+def test_system_only_cache_mode():
+    llm = FakeLLM([[tool("final_answer", ANSWER | {"sentences": []})]])
+    run_agent("q", "bnu", llm, box(), cache="system")
+    req = llm.requests[0]
+    assert "cache_control" not in req and req["system"][0]["cache_control"] == {"type": "ephemeral"}

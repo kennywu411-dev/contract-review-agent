@@ -247,7 +247,9 @@ def cmd_eval_agent(args: argparse.Namespace) -> None:
     try:
         out = run_agent_eval(
             qs,
-            lambda q: run_agent(q.question, q.school, llm, ToolBox(q.school, retr, sql)),
+            lambda q: run_agent(
+                q.question, q.school, llm, ToolBox(q.school, retr, sql), cache=args.cache
+            ),
             args.tag,
             args.max_cost,
         )
@@ -382,6 +384,9 @@ def main() -> None:
     p.add_argument("--model", default="claude-haiku-5-5")
     p.add_argument("--tag", default="agent")
     p.add_argument("--max-cost", type=float, default=3.0, help="累计花费上限（美元）")
+    p.add_argument(
+        "--cache", choices=["prefix", "system"], default="prefix", help="缓存策略对比实验"
+    )
     p.set_defaults(func=cmd_eval_agent)
     p = sub.add_parser("eval-d4", help="引用校验与拒答评测（Haiku 作答+校验，Sonnet 评判）")
     p.add_argument("--sample", type=int)
