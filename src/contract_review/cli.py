@@ -544,8 +544,16 @@ def cmd_serve(args: argparse.Namespace) -> None:
 
     if not WEB_DIST.exists():
         print("提示：web/out 不存在，只启动 API。构建前端：cd web && npm install && npm run build")
-    print(f"DocPilot：http://{args.host}:{args.port}（首次提问会加载检索模型，约 20 秒）")
-    uvicorn.run(create_app(), host=args.host, port=args.port, log_level="warning")
+    print(
+        f"Contract Risk Review Agent：http://{args.host}:{args.port}"
+        f"（审查方式：{args.review_mode}；首次请求会加载检索模型，约 20 秒）"
+    )
+    uvicorn.run(
+        create_app(review_mode=args.review_mode),
+        host=args.host,
+        port=args.port,
+        log_level="warning",
+    )
 
 
 def cmd_reverify_d4(args: argparse.Namespace) -> None:
@@ -709,6 +717,12 @@ def main() -> None:
     p = sub.add_parser("serve", help="启动 Web 界面（问答 / 评测看板 / 成本面板）")
     p.add_argument("--host", default="127.0.0.1")
     p.add_argument("--port", type=int, default=8000)
+    p.add_argument(
+        "--review-mode",
+        choices=["multi", "single"],
+        default="multi",
+        help="首轮审查方式（ADR 012）",
+    )
     p.set_defaults(func=cmd_serve)
     p = sub.add_parser("reverify-d4", help="复用某次 D4 运行的原始回答，只换校验策略重评")
     p.add_argument("source", help="runs/ 下的 D4 运行目录名")

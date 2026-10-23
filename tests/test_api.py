@@ -338,3 +338,33 @@ def test_app_shutdown_closes_engine():
     with TestClient(create_app(engine=eng)) as c:
         c.get("/api/tenants")
     assert eng.closed
+
+
+def test_real_engine_first_turn_uses_review_mode(monkeypatch):
+    # 首轮审查按 review_mode 选单/多 Agent；追问始终由单 Agent 带历史回答（ADR 012）
+    from contract_review import api as api_mod
+    from contract_review.review_verify import VerifiedReview
+    from tests.test_multi_agent import RoutedLLM
+    from tests.test_tools import FakeRetriever, FakeSQL
+
+    calls = []
+    monkeypatch.setattr(api_mod, "save_trace", lambda r: None, raising=False)
+    monkeypatch.setattr("contract_review.trace.save_trace", lambda r, d=None: None)
+    monkeypatch.setattr(
+        "contract_review.review_verify.verify_review",
+        lambda r, v, t, c: calls.append("verify") or VerifiedReview(),
+    )
+    eng = object.__new__(api_mod.RealEngine)
+    eng.llm, eng.retriever, eng.sql = (
+        RoutedLLM(),
+        FakeRetriever([]),
+        FakeSQL({"columns": [], "rows": []}),
+    )
+    eng.review_verifier, eng.review_mode = None, "multi"
+    r, _ = eng.review(CONTRACT, "huaxin", None)
+    assert r.trace["task"] == "review_multi"
+    eng.review_mode = "single"
+    with pytest.raises(
+        StopIteration
+    ):  # 单 Agent 路径不带"【组名】"，RoutedLLM 认不出 → 说明没走多 Agent
+        eng.review(CONTRACT, "huaxin", None)

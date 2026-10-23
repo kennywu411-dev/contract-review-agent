@@ -49,15 +49,19 @@ class ReviewBody(BaseModel):
 MAX_SESSIONS = 200  # 内存里最多保留这么多会话，超出就丢最早的（本地单机演示足够）
 
 
+DEFAULT_REVIEW_MODE = "multi"  # 首轮审查默认多 Agent（ADR 012）；"single" 为单 Agent
+
+
 class RealEngine:
     """真实问答：首次请求时加载检索模型和 DataPilot 连接，之后复用。"""
 
-    def __init__(self) -> None:
+    def __init__(self, review_mode: str = DEFAULT_REVIEW_MODE) -> None:
         from contract_review.cli import _retriever
         from contract_review.datapilot_client import make_backend
         from contract_review.llm import HAIKU, AnthropicLLM
         from contract_review.verify import HaikuVerifier
 
+        self.review_mode = review_mode
         self.retriever = _retriever("fixed")
         self.sql = make_backend()
         self.llm = AnthropicLLM(HAIKU)
@@ -94,23 +98,34 @@ class RealEngine:
         stop_servers()
 
     def review(self, contract: str, tenant: str, on_step, history: str = "", question: str = ""):
+        from contract_review import review_verify, trace
+        from contract_review.multi_agent import review_contract_multi
         from contract_review.review_agent import review_contract
-        from contract_review.review_verify import verify_review
         from contract_review.tools import ToolBox
-        from contract_review.trace import save_trace
 
-        r = review_contract(
-            contract,
-            tenant,
-            self.llm,
-            ToolBox(tenant, self.retriever, self.sql),
-            on_step=on_step,
-            history=history,
-            question=question,
-        )
-        ver = verify_review(r.to_dict(), self.review_verifier, tenant, contract)
+        if (
+            not question and self.review_mode == "multi"
+        ):  # 首轮整份审查：主审 + 专职审查员（ADR 012）
+            r = review_contract_multi(
+                contract,
+                tenant,
+                self.llm,
+                lambda: ToolBox(tenant, self.retriever, self.sql),
+                on_step=on_step,
+            )
+        else:  # 追问只涉及个别条款或换视角重审，单 Agent 带历史回答
+            r = review_contract(
+                contract,
+                tenant,
+                self.llm,
+                ToolBox(tenant, self.retriever, self.sql),
+                on_step=on_step,
+                history=history,
+                question=question,
+            )
+        ver = review_verify.verify_review(r.to_dict(), self.review_verifier, tenant, contract)
         r.trace["verify"] = asdict(ver)
-        save_trace(r)
+        trace.save_trace(r)
         return r, ver
 
     def new_review_memory(self):
@@ -215,7 +230,7 @@ def _stage_row(trace: dict) -> dict:
     }
 
 
-def create_app(engine=None) -> FastAPI:
+def create_app(engine=None, review_mode: str = DEFAULT_REVIEW_MODE) -> FastAPI:
     from fastapi.middleware.cors import CORSMiddleware
 
     state = {"engine": engine}
@@ -241,7 +256,7 @@ def create_app(engine=None) -> FastAPI:
 
     def get_engine():
         if state["engine"] is None:
-            state["engine"] = RealEngine()
+            state["engine"] = RealEngine(review_mode)
             app.state.engine = state["engine"]
         return state["engine"]
 
