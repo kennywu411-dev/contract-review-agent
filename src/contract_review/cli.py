@@ -248,17 +248,29 @@ def cmd_eval_review(args: argparse.Namespace) -> None:
     elif args.sample:
         cs = sample_contracts(cs, args.sample)
     retr, sql, llm = _retriever(args.strategy), make_backend(), make_llm(args.model)
-    try:
-        out = run_review_eval(
-            cs,
-            lambda c: review_contract(
+    if args.multi_agent:  # 主审 + 三个专职审查员并行（ADR 012）
+        from contract_review.multi_agent import review_contract_multi
+
+        def run_one(c):
+            return review_contract_multi(
+                c.text, c.tenant, llm, lambda: ToolBox(c.tenant, retr, sql), contract_id=c.id
+            )
+    else:
+
+        def run_one(c):
+            return review_contract(
                 c.text,
                 c.tenant,
                 llm,
                 ToolBox(c.tenant, retr, sql),
                 cache=args.cache,
                 contract_id=c.id,
-            ),
+            )
+
+    try:
+        out = run_review_eval(
+            cs,
+            run_one,
             args.tag,
             args.max_cost,
         )
@@ -658,6 +670,7 @@ def main() -> None:
     p.add_argument("--tag", default="review")
     p.add_argument("--max-cost", type=float, default=1.0, help="累计花费上限（美元）")
     p.add_argument("--cache", choices=["prefix", "system"], default="prefix")
+    p.add_argument("--multi-agent", action="store_true", help="主审 + 三个专职审查员（ADR 012）")
     p.set_defaults(func=cmd_eval_review)
     p = sub.add_parser(
         "review-d4", help="复用一次 eval-review 运行：依据校验（Haiku）+ 评判（Sonnet）"
