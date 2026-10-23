@@ -240,7 +240,7 @@ def test_review_followup_uses_session_history():
     )
     assert dict(events(r))["review"]["kind"] == "followup"
     _, contract, _, history, question = eng.calls[-1]
-    assert contract == CONTRACT and "<上一轮审查>" in history and "1. 第四条" in history
+    assert contract == CONTRACT and "<对话历史>" in history and "1. 第四条" in history
     assert question == "第1条意见怎么改"
     c.post("/api/review", json={"question": "再说说", "tenant": "huaxin", "session_id": s1})
     assert "用户：第1条意见怎么改" in eng.calls[-1][3]  # 上一轮追问也进历史

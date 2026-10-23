@@ -23,6 +23,7 @@ from sse_starlette.sse import EventSourceResponse
 
 from contract_review.config import DB_PATH, ROOT, TENANTS
 from contract_review.eval_retrieval import RUNS_DIR
+from contract_review.review_memory import ReviewMemory
 from contract_review.sources import load_sources, raw_path
 
 ClientTenant = Literal["huaxin", "yunqi", "ruifeng"]
@@ -44,8 +45,6 @@ class ReviewBody(BaseModel):
     tenant: ClientTenant
     session_id: str | None = Field(default=None, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")
 
-
-MAX_QA = 6  # 追问历史只带最近几轮
 
 MAX_SESSIONS = 200  # 内存里最多保留这么多会话，超出就丢最早的（本地单机演示足够）
 
@@ -113,6 +112,11 @@ class RealEngine:
         r.trace["verify"] = asdict(ver)
         save_trace(r)
         return r, ver
+
+    def new_review_memory(self):
+        from contract_review.llm import HAIKU, AnthropicLLM
+
+        return ReviewMemory(mode="compress", summarizer=AnthropicLLM(HAIKU))
 
     def new_memory(self):
         from contract_review.llm import HAIKU, AnthropicLLM
@@ -273,28 +277,27 @@ def create_app(engine=None) -> FastAPI:
 
     @app.post("/api/review")
     async def review(body: ReviewBody):
-        from contract_review.review_agent import history_from_review
-
         sess = review_sessions.get(body.session_id or "")
         if body.question:
             sid = body.session_id or ""
             if sess is None or sess["tenant"] != body.tenant:
                 raise HTTPException(400, "追问需要先在同一会话里审查一份合同")
             # 追问只针对会话里那份合同；请求里带来的 contract 不能把旧历史配到新合同上
-            contract = sess["contract"]
-            history = history_from_review(sess["prev"], sess["qa"][-MAX_QA:])
+            contract, memory = sess["contract"], sess["memory"]
         else:
             if not body.contract:
                 raise HTTPException(400, "请提供合同全文")
-            contract, history = body.contract, ""
+            contract = body.contract
             # 会话 id 由服务端签发（128 位随机，不可猜），客户端自带的 id 不采用（审查 Minor 5a）
             sid = secrets.token_hex(16)
-            review_sessions[sid] = {
-                "tenant": body.tenant,
-                "contract": contract,
-                "prev": None,
-                "qa": [],
-            }
+            eng = get_engine()
+            # 多轮记忆：真实引擎超预算时摘要压缩（ADR 011）；测试用的假引擎退回全量历史
+            memory = (
+                eng.new_review_memory()
+                if hasattr(eng, "new_review_memory")
+                else ReviewMemory(mode="full")
+            )
+            review_sessions[sid] = {"tenant": body.tenant, "contract": contract, "memory": memory}
             while len(review_sessions) > MAX_SESSIONS:
                 review_sessions.pop(next(iter(review_sessions)))
         loop = asyncio.get_running_loop()
@@ -305,6 +308,8 @@ def create_app(engine=None) -> FastAPI:
 
         async def work():
             try:
+                # 超预算时 render 会调用摘要模型，放到线程里
+                history = await asyncio.to_thread(memory.render) if body.question else ""
                 r, ver = await asyncio.to_thread(
                     get_engine().review,
                     contract,
@@ -315,14 +320,12 @@ def create_app(engine=None) -> FastAPI:
                 )
                 data = r.to_dict()
                 data["trace"] = {"trace_id": r.trace.get("trace_id")}
-                s = review_sessions.get(sid)  # 请求期间可能已被淘汰
-                if s is not None:
-                    if r.kind == "followup":
-                        s["qa"].append((body.question, r.answer))
-                    elif r.kind in ("review", "clarify"):
-                        s["prev"] = data | {"findings": ver.findings or r.findings}
-                        if body.question:
-                            s["qa"].append((body.question, f"已按{r.our_side}方重新审查。"))
+                # 记忆里存校验后的意见（带转人工标记）；会话中途被淘汰也只是写进一个不再引用的对象
+                turn = data | {"findings": ver.findings or r.findings}
+                if body.question:
+                    memory.add_followup(body.question, turn)
+                else:
+                    memory.add_review(turn)
                 await queue.put(("review", data))
                 await queue.put(("verified", asdict(ver)))
             except Exception as e:  # 推给前端显示，不让连接挂住
