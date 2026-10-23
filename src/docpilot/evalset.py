@@ -1,0 +1,78 @@
+"""评测集加载与校验（字段说明见 evals/README.md）。"""
+
+from __future__ import annotations
+
+import json
+import random
+from dataclasses import dataclass, fields
+from pathlib import Path
+
+from docpilot.config import ROOT, SCHOOLS
+
+EVAL_DIR = ROOT / "evals"
+QUESTIONS_PATH = EVAL_DIR / "questions.jsonl"
+TYPES = ("answerable", "table", "refuse")
+SUBTYPES = (None, "cross_school", "version", "conflict", "clarify")
+SOURCE_TYPES = ("faq", "public", "doc")
+STUDENT_SCHOOLS = tuple(s for s in SCHOOLS if s != "national")
+
+
+@dataclass
+class Question:
+    id: str
+    school: str
+    question: str
+    type: str
+    subtype: str | None
+    source_type: str
+    source_url: str | None
+    gold: list[dict]
+    answer_hint: str
+    note: str = ""
+
+
+def _check(q: Question) -> None:
+    def bad(field: str, why: str) -> ValueError:
+        return ValueError(f"{q.id}: {field} {why}")
+
+    if q.school not in STUDENT_SCHOOLS:
+        raise bad("school", f"不是学生所在学校：{q.school}")
+    if q.type not in TYPES:
+        raise bad("type", f"取值非法：{q.type}")
+    if q.subtype not in SUBTYPES:
+        raise bad("subtype", f"取值非法：{q.subtype}")
+    if q.source_type not in SOURCE_TYPES:
+        raise bad("source_type", f"取值非法：{q.source_type}")
+    if q.source_type in ("faq", "public") and not q.source_url:
+        raise bad("source_url", "faq/public 题必须填来源")
+    if q.type == "refuse" and q.gold:
+        raise bad("gold", "refuse 题不应有标准出处")
+    if q.type != "refuse" and not any("doc_id" in g for g in q.gold):
+        raise bad("gold", "缺少文档出处")
+    if q.type == "table" and not any("table" in g for g in q.gold):
+        raise bad("gold", "table 题缺少表出处")
+    for g in q.gold:
+        if "doc_id" in g and g.get("page") is None and not g.get("clause"):
+            raise bad("gold", f"{g['doc_id']} 既无页码也无条款号")
+
+
+def load_questions(path: Path = QUESTIONS_PATH) -> list[Question]:
+    names = {f.name for f in fields(Question)}
+    out: list[Question] = []
+    seen: set[str] = set()
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        row = json.loads(line)
+        q = Question(**{k: v for k, v in row.items() if k in names})
+        if q.id in seen:
+            raise ValueError(f"重复的 id: {q.id}")
+        seen.add(q.id)
+        _check(q)
+        out.append(q)
+    return out
+
+
+def spot_check_sample(qs: list[Question], ratio: float, seed: int = 0) -> list[Question]:
+    rng = random.Random(seed)
+    return sorted(rng.sample(qs, max(1, round(len(qs) * ratio))), key=lambda q: q.id)

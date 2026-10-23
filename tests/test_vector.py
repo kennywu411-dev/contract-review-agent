@@ -42,3 +42,12 @@ def test_bge_m3_similarity_sanity():
 
     v = BgeM3Encoder().encode(["国家奖学金金额", "国奖多少钱", "食堂几点关门"])
     assert v[0] @ v[1] > v[0] @ v[2]
+
+
+def test_length_sorted_batches_restore_order():
+    from docpilot.embed import length_sorted_batches
+
+    texts = ["aaaa", "b", "ccc", "dd", "eeeee"]
+    batches = list(length_sorted_batches(texts, 2))
+    assert [len(texts[i]) for b in batches for i in b] == [5, 4, 3, 2, 1]
+    assert sorted(i for b in batches for i in b) == list(range(5))

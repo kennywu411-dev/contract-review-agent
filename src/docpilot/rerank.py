@@ -16,6 +16,8 @@ class BgeReranker:
         self.tokenizer = AutoTokenizer.from_pretrained(MODEL)
         self.model = AutoModelForSequenceClassification.from_pretrained(MODEL)
         self.model = self.model.to(self.device).eval()
+        if self.device == "mps":
+            self.model = self.model.half()
 
     def score(self, query: str, texts: list[str]) -> list[float]:
         import torch
