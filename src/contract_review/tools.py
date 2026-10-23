@@ -14,9 +14,9 @@ from contract_review.config import TENANTS
 
 SEARCH_K = 5
 SQL_PREVIEW_ROWS = 30
-# campus 库的表都带 tenant 列。查询前用同名 CTE 把它们遮住（CTE 名优先于同名表），
-# 不管模型怎么写 SQL（不选 tenant 列、别名、IN、JOIN），都只能看到本校和国家层面的行
-SCOPED_TABLES = ("calendar", "graduation_rules", "national_aid", "scholarships")
+# 台账库的表都带 tenant 列。查询前用同名 CTE 把它们遮住（CTE 名优先于同名表），
+# 不管模型怎么写 SQL（不选 tenant 列、别名、IN、JOIN），都只能看到本租户的行
+SCOPED_TABLES = ("suppliers", "purchase_history")
 _WITH = re.compile(r"^\s*with\s+(recursive\s+)?", re.IGNORECASE)
 
 

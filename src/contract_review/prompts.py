@@ -5,7 +5,7 @@ from __future__ import annotations
 import sqlite3
 from functools import cache
 
-from contract_review.config import CAMPUS_DB, TENANTS
+from contract_review.config import LEDGER_DB, TENANTS
 from contract_review.sources import load_sources
 
 RULES = """你是{school_name}的规章问答助手，回答在校本科生关于学籍、转专业、推免、奖助学金、考试、学位等规章制度的问题。
@@ -51,7 +51,7 @@ SUMMARY_PROMPT = """把下面这段学生与规章问答助手的较早对话压
 
 @cache
 def _table_schema() -> str:
-    conn = sqlite3.connect(f"file:{CAMPUS_DB}?mode=ro", uri=True)
+    conn = sqlite3.connect(f"file:{LEDGER_DB}?mode=ro", uri=True)
     lines = []
     for (name,) in conn.execute("select name from sqlite_master where type='table' order by name"):
         cols = [r[1] for r in conn.execute(f'pragma table_info("{name}")')]

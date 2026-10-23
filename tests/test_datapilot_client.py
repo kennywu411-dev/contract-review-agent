@@ -47,9 +47,9 @@ def test_mcp_backend_roundtrip():
     link_datapilot()
     backend = MCPBackend()
     try:
-        res = backend.run("select count(*) as n from national_aid")
+        res = backend.run("select count(*) as n from suppliers")
         assert res["rows"][0][0] >= 1
-        assert "error" in backend.run("delete from national_aid")
+        assert "error" in backend.run("delete from suppliers")
     finally:
         backend.close()
 

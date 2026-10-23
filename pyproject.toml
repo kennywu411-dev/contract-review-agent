@@ -48,6 +48,8 @@ dev = [
 "src/contract_review/prompts.py" = ["E501"]
 # 测试数据按可读性排，不按 100 字折行
 "tests/*" = ["E501"]
+# 构造数据生成脚本：数据表一行一条，不折行
+"scripts/make_*.py" = ["E501"]
 
 [tool.uv.build-backend]
 module-name = "contract_review"

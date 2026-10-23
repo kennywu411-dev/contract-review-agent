@@ -1,7 +1,7 @@
 """查结构化表：优先走 DataPilot 的只读 MCP Server（stdio），没有 DataPilot 时退回本地只读 sqlite。
 
 DataPilot 只认 data/dev_databases/<db_id>/<db_id>.sqlite，所以在那里建一个
-指向 data/campus 的软链接，不改 DataPilot 的代码（`cra link-datapilot`）。
+指向 data/ledger 的软链接，不改 DataPilot 的代码（`cra link-datapilot`）。
 """
 
 from __future__ import annotations
@@ -15,10 +15,10 @@ import threading
 from pathlib import Path
 from typing import Protocol
 
-from contract_review.config import CAMPUS_DB
+from contract_review.config import LEDGER_DB
 
 DATAPILOT_DIR = Path(os.environ.get("DATAPILOT_DIR", Path.home() / "Documents" / "datapilot"))
-DB_ID = "campus"
+DB_ID = "ledger"
 MAX_ROWS = 50
 CALL_TIMEOUT_S = 20
 
@@ -30,10 +30,10 @@ class SQLBackend(Protocol):
 
 
 def link_datapilot() -> Path:
-    """在 DataPilot 的库目录下建 campus → 本仓库 data/campus 的软链接；已存在则不动。"""
+    """在 DataPilot 的库目录下建 ledger → 本仓库 data/ledger 的软链接；已存在则不动。"""
     target = DATAPILOT_DIR / "data" / "dev_databases" / DB_ID
     if not target.is_symlink():
-        target.symlink_to(CAMPUS_DB.parent.resolve(), target_is_directory=True)
+        target.symlink_to(LEDGER_DB.parent.resolve(), target_is_directory=True)
     return target
 
 
@@ -50,7 +50,7 @@ class LocalBackend:
 
     name = "local"
 
-    def __init__(self, db: Path = CAMPUS_DB) -> None:
+    def __init__(self, db: Path = LEDGER_DB) -> None:
         self.db = db
 
     def run(self, sql: str) -> dict:

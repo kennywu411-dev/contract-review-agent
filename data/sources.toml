@@ -94,3 +94,31 @@ url = "https://htsfwb.samr.gov.cn/api/File/DownTemplate?id=0912bdd8-c6f0-4c4b-bf
 issuer = "国家数据局、国家市场监督管理总局"
 issued = "2025"
 kind = "docx"
+
+# ---------- 构造的租户内部合同审查规范（ADR 007；公司与内容均为虚构） ----------
+[[source]]
+doc_id = "huaxin-contract-policy"
+tenant = "huaxin"
+title = "华信制造有限公司合同审查管理规范（构造）"
+url = "repo:data/tenants/huaxin/contract-policy.txt"
+issuer = "华信制造有限公司（构造）"
+issued = "2026-01-01"
+kind = "txt"
+
+[[source]]
+doc_id = "yunqi-contract-policy"
+tenant = "yunqi"
+title = "云启科技有限公司合同审批与风险控制细则（构造）"
+url = "repo:data/tenants/yunqi/contract-policy.txt"
+issuer = "云启科技有限公司（构造）"
+issued = "2026-01-01"
+kind = "txt"
+
+[[source]]
+doc_id = "ruifeng-contract-policy"
+tenant = "ruifeng"
+title = "瑞丰贸易有限公司购销合同管理办法（构造）"
+url = "repo:data/tenants/ruifeng/contract-policy.txt"
+issuer = "瑞丰贸易有限公司（构造）"
+issued = "2026-01-01"
+kind = "txt"

@@ -5,8 +5,8 @@ from __future__ import annotations
 import argparse
 import time
 
-from contract_review.campus_db import build_campus_db
-from contract_review.config import CAMPUS_DB, DATA_DIR, DB_PATH, ROOT
+from contract_review.config import DATA_DIR, DB_PATH, LEDGER_DB, LEDGER_SRC, ROOT
+from contract_review.ledger_db import build_ledger_db
 from contract_review.quality import DocQuality, doc_quality
 from contract_review.sources import fetch_all, load_sources, write_lock
 from contract_review.store import ingest
@@ -67,9 +67,9 @@ def cmd_ingest(args: argparse.Namespace) -> None:
     rows = [(s.tenant, s.doc_id, doc_quality(DB_PATH, s.doc_id)) for s in present]
     REPORT_PATH.write_text(render_report(rows, report.missing, report.failed), encoding="utf-8")
     print(f"质量报告已写入 {REPORT_PATH.relative_to(ROOT)}")
-    counts = build_campus_db(DATA_DIR / "structured", CAMPUS_DB)
+    counts = build_ledger_db(LEDGER_SRC, LEDGER_DB)
     print(
-        f"结构化表库 {CAMPUS_DB.relative_to(ROOT)}："
+        f"供应商台账 {LEDGER_DB.relative_to(ROOT)}："
         + "，".join(f"{t} {n} 行" for t, n in counts.items())
     )
 
@@ -484,7 +484,7 @@ def main() -> None:
     p.add_argument("--tag", default="dialog")
     p.add_argument("--max-cost", type=float, default=5.0)
     p.set_defaults(func=cmd_eval_dialog)
-    sub.add_parser("link-datapilot", help="把 campus 库链接进 DataPilot").set_defaults(
+    sub.add_parser("link-datapilot", help="把供应商台账库链接进 DataPilot").set_defaults(
         func=cmd_link
     )
     args = parser.parse_args()

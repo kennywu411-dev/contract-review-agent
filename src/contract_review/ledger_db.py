@@ -1,6 +1,7 @@
-"""结构化表库：data/structured/*.csv → data/campus/campus.sqlite（供 DataPilot 只读查询）。
+"""供应商台账库：data/ledger_src/*.csv → data/ledger/ledger.sqlite（供 DataPilot 只读查询）。
 
-每张表都必须带出处三列；目录布局遵循 DataPilot 的 <db_id>/<db_id>.sqlite 约定，db_id=campus。
+台账是构造的（ADR 007）。每张表都必须带 tenant（租户隔离）和 source（数据出处，如"构造"）两列；
+目录布局遵循 DataPilot 的 <db_id>/<db_id>.sqlite 约定，db_id=ledger。
 """
 
 from __future__ import annotations
@@ -10,9 +11,9 @@ import re
 import sqlite3
 from pathlib import Path
 
-from contract_review.config import CAMPUS_DB
+from contract_review.config import LEDGER_DB
 
-REQUIRED_COLUMNS = ("tenant", "source_doc_id", "source_page")
+REQUIRED_COLUMNS = ("tenant", "source")
 _INT = re.compile(r"^-?\d+$")
 _REAL = re.compile(r"^-?\d+\.\d+$")
 
@@ -32,7 +33,7 @@ def _convert(value: str, typ: str):
     return int(value) if typ == "INTEGER" else float(value) if typ == "REAL" else value
 
 
-def build_campus_db(csv_dir: Path, out: Path = CAMPUS_DB) -> dict[str, int]:
+def build_ledger_db(csv_dir: Path, out: Path = LEDGER_DB) -> dict[str, int]:
     """每次整库重建，返回 表名 → 行数。"""
     out.parent.mkdir(parents=True, exist_ok=True)
     tmp = out.with_suffix(".tmp")

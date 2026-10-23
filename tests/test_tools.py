@@ -75,7 +75,7 @@ def test_sql_rows_filtered_to_school():
         {"columns": ["tenant", "name"], "rows": [["huaxin", "x"], ["yunqi", "y"], ["common", "z"]]}
     )
     b = box(sql=sql)
-    out = b.execute("run_sql", {"sql": "select tenant, name from scholarships"})
+    out = b.execute("run_sql", {"sql": "select tenant, name from purchase_history"})
     data = json.loads(out.content.split("\n")[2])
     assert data["rows"] == [["huaxin", "x"], ["common", "z"]] and "[T1]" in out.content
     assert b.citations["T1"]["sql"].startswith("select")
@@ -104,7 +104,7 @@ def test_empty_search_says_so():
 def campus(tmp_path):
     p = tmp_path / "campus.sqlite"
     c = _sq.connect(p)
-    for t in ("scholarships", "national_aid", "graduation_rules", "calendar"):
+    for t in ("purchase_history", "suppliers"):
         c.execute(f"create table {t} (tenant text, name text, amount_yuan int)")
         c.executemany(
             f"insert into {t} values (?,?,?)",
@@ -117,15 +117,15 @@ def campus(tmp_path):
 @_pt.mark.parametrize(
     "sql",
     [
-        "SELECT name, amount_yuan FROM scholarships WHERE tenant='yunqi'",
-        "SELECT tenant AS s, name FROM scholarships",
-        "select name from scholarships where tenant in ('huaxin','yunqi')",
-        "SELECT a.name FROM scholarships a JOIN national_aid b ON 1=1 WHERE a.tenant='yunqi'",
-        "WITH x AS (SELECT * FROM scholarships) SELECT name FROM x",
-        "select name from SCHOLARSHIPS",
+        "SELECT name, amount_yuan FROM purchase_history WHERE tenant='yunqi'",
+        "SELECT tenant AS s, name FROM purchase_history",
+        "select name from purchase_history where tenant in ('huaxin','yunqi')",
+        "SELECT a.name FROM purchase_history a JOIN suppliers b ON 1=1 WHERE a.tenant='yunqi'",
+        "WITH x AS (SELECT * FROM purchase_history) SELECT name FROM x",
+        "select name from PURCHASE_HISTORY",
     ],
 )
-def test_sql_scope_enforced_without_school_column(campus, sql):
+def test_sql_scope_enforced_without_tenant_column(campus, sql):
     b = ToolBox("huaxin", FakeRetriever([]), LocalBackend(campus))
     out = b.execute("run_sql", {"sql": sql})
     assert "综合优秀" not in out.content
@@ -133,7 +133,7 @@ def test_sql_scope_enforced_without_school_column(campus, sql):
 
 def test_scope_sql_keeps_query_working(campus):
     res = LocalBackend(campus).run(
-        scope_sql("SELECT name FROM scholarships ORDER BY name", "huaxin")
+        scope_sql("SELECT name FROM purchase_history ORDER BY name", "huaxin")
     )
     assert sorted(r[0] for r in res["rows"]) == ["京师", "国奖"]
 

@@ -181,9 +181,9 @@ def test_spot_check_sample_is_deterministic():
 def test_table_gold_queries_return_rows(qs):
     import sqlite3 as sq
 
-    from contract_review.config import CAMPUS_DB
+    from contract_review.config import LEDGER_DB
 
-    conn = sq.connect(CAMPUS_DB)
+    conn = sq.connect(LEDGER_DB)
     bad = []
     for q in qs:
         for g in q.gold:
