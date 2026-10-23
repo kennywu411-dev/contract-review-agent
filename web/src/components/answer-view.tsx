@@ -13,7 +13,7 @@ const KIND = {
   clarify: { label: "需要补充信息", cls: "bg-sky-500/15 text-sky-600 dark:text-sky-400" },
 } as const;
 
-function CiteChip({ id, citation, active, onOpen }: { id: string; citation?: Citation; active: boolean; onOpen: (id: string) => void }) {
+export function CiteChip({ id, citation, active, onOpen }: { id: string; citation?: Citation; active: boolean; onOpen: (id: string) => void }) {
   if (!citation) return null;
   const title =
     citation.kind === "doc"

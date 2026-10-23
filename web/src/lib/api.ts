@@ -1,16 +1,16 @@
 // 后端接口与 SSE 客户端。EventSource 只支持 GET，这里用 fetch + ReadableStream 解析 SSE（同 DataPilot）。
 
-// docpilot serve 时前后端同源，用相对路径；开发时 `npm run dev` 设 NEXT_PUBLIC_API_BASE 指向 8000 端口
+// cra serve 时前后端同源，用相对路径；开发时 `npm run dev` 设 NEXT_PUBLIC_API_BASE 指向 8000 端口
 export const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "";
 const IDLE_TIMEOUT_MS = 60_000; // 后端每 15 秒发心跳，60 秒没有任何数据视为断线
 
-export type School = { id: string; name: string };
+export type Tenant = { id: string; name: string };
 
 export type DocCitation = {
   kind: "doc";
   chunk_id: string;
   doc_id: string;
-  school: string;
+  tenant: string;
   title: string;
   section_path: string[];
   pages: number[];
@@ -43,7 +43,7 @@ export type Step = {
 
 export type AgentAnswer = {
   question: string;
-  school: string;
+  tenant: string;
   kind: string;
   sentences: Sentence[];
   refuse_reason: string;
@@ -93,7 +93,11 @@ export type HtmlDoc = {
   blocks: { seq: number; kind: string; level: number | null; text: string }[];
 };
 
-export type RunInfo = { run: string; kind: "retrieval" | "agent" | "d4" | "dialog"; n: number | null };
+export type RunInfo = {
+  run: string;
+  kind: "retrieval" | "agent" | "d4" | "dialog" | "review" | "review_d4" | "review_dialog";
+  n: number | null;
+};
 export type RunDetail = {
   run: string;
   kind: RunInfo["kind"];
@@ -103,7 +107,7 @@ export type RunDetail = {
 export type StageRow = {
   trace_id: string;
   question: string;
-  school: string;
+  tenant: string;
   steps: number;
   llm_ms: number;
   search_ms: number;
@@ -120,7 +124,7 @@ export type Trace = {
   trace_id: string;
   model: string;
   question: string;
-  school: string;
+  tenant: string;
   steps: Step[];
   end: string;
   result: Record<string, unknown>;
@@ -139,12 +143,110 @@ export async function getJSON<T>(path: string): Promise<T> {
 
 export const pdfUrl = (docId: string) => `${API_BASE}/api/docs/${encodeURIComponent(docId)}/pdf`;
 
+// ---------------- 合同审查 ----------------
+
+export type Finding = {
+  clause: string | null;
+  clause_raw?: string;
+  quote: string;
+  quote_found: boolean;
+  risk_type: string;
+  level: "高" | "中" | "低";
+  reason: string;
+  suggestion: string;
+  citations: string[];
+  needs_human_review: boolean;
+  verify_flags?: string[];
+  revised_from?: string;
+};
+
+export type ReviewResult = {
+  tenant: string;
+  kind: "review" | "clarify" | "followup" | "fallback";
+  our_side: string;
+  summary: string;
+  findings: Finding[];
+  clarification: string;
+  answer: string;
+  answer_clause: string | null;
+  answer_citations: string[];
+  answer_needs_human: boolean;
+  invalid_citations: string[];
+  citations: Record<string, Citation>;
+  steps: number;
+  cost_usd: number;
+  latency_ms: number;
+  trace: { trace_id: string };
+};
+
+export type VerifiedReview = {
+  findings: Finding[];
+  flagged: number;
+  revised: number;
+  repaired: number;
+  verifier_error: string;
+  cost_usd: number;
+  latency_ms: number;
+};
+
+export type ReviewEvent =
+  | { event: "step"; data: Step }
+  | { event: "review"; data: ReviewResult }
+  | { event: "verified"; data: VerifiedReview }
+  | { event: "error"; data: { message: string } }
+  | { event: "done"; data: Record<string, never> };
+
+export type Sample = {
+  id: string;
+  title: string;
+  tenant: string;
+  our_name: string;
+  counterparty: string;
+  text: string;
+  constructed: boolean;
+};
+
+export const RISK_TYPES: Record<string, string> = {
+  penalty: "违约金过高或只约束一方",
+  liability: "免责或责任无上限",
+  termination: "单方解除权",
+  inspection: "检验期过短或视为合格",
+  payment: "付款周期过长或背靠背",
+  confidentiality: "保密缺失或不对等",
+  ip: "知识产权归属不利",
+  jurisdiction: "管辖不利或或裁或诉",
+  auto_renew: "自动续约",
+  deposit: "定金超过 20%",
+  unit_price: "单价高于台账历史价",
+  other: "其他",
+};
+
+/** 合同审查或追问：首轮传 contract，追问传 question（同一 sessionId）。 */
+export function review(
+  body: { contract?: string; question?: string; tenant: string; session_id: string },
+  onEvent: (e: ReviewEvent) => void,
+): () => void {
+  return streamPost("/api/review", body, onEvent as (e: { event: string; data: unknown }) => void);
+}
+
 /** 提交问题并逐个回调 SSE 事件；返回取消函数。 */
 export function ask(
   question: string,
-  school: string,
+  tenant: string,
   onEvent: (e: AskEvent) => void,
   sessionId?: string,
+): () => void {
+  return streamPost(
+    "/api/ask",
+    { question, tenant, session_id: sessionId },
+    onEvent as (e: { event: string; data: unknown }) => void,
+  );
+}
+
+function streamPost(
+  path: string,
+  body: unknown,
+  onEvent: (e: { event: string; data: unknown }) => void,
 ): () => void {
   const ctrl = new AbortController();
   (async () => {
@@ -155,10 +257,10 @@ export function ask(
     };
     try {
       arm();
-      const r = await fetch(`${API_BASE}/api/ask`, {
+      const r = await fetch(`${API_BASE}${path}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question, school, session_id: sessionId }),
+        body: JSON.stringify(body),
         signal: ctrl.signal,
       });
       if (!r.ok || !r.body) throw new Error(`${r.status} ${await r.text()}`);
@@ -181,7 +283,7 @@ export function ask(
             else if (line.startsWith("data:")) data.push(line.slice(5).trimStart());
           }
           if (!data.length) continue; // 心跳（注释行）
-          onEvent({ event: name, data: JSON.parse(data.join("\n")) } as AskEvent);
+          onEvent({ event: name, data: JSON.parse(data.join("\n")) });
         }
       }
     } catch (e) {
