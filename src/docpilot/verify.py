@@ -6,7 +6,13 @@
 
 from __future__ import annotations
 
+import json
 import re
+import time
+from dataclasses import dataclass, field
+
+from docpilot.llm import cost_usd
+from docpilot.prompts import VERIFY_PROMPT
 
 _CN = {
     "零": 0,
@@ -88,3 +94,138 @@ def numbers_supported(
                 elif isinstance(cell, str):
                     have |= extract_numbers(cell)
     return need <= have
+
+
+# ---------------- 第二层：Haiku 蕴含判断 + 降级策略 ----------------
+
+VERIFY_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "labels": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "index": {"type": "integer"},
+                    "label": {"type": "string", "enum": ["supported", "partial", "unsupported"]},
+                    "reason": {"type": "string"},
+                },
+                "required": ["index", "label", "reason"],
+                "additionalProperties": False,
+            },
+        }
+    },
+    "required": ["labels"],
+    "additionalProperties": False,
+}
+
+
+REFUSE_NO_BASIS = "未能在已收录的学校文件中找到可靠依据，建议咨询学校教务处或学生工作部门。"
+
+
+@dataclass
+class VerifiedAnswer:
+    kind: str  # answer / partial / refuse / clarify
+    kept: list[dict] = field(default_factory=list)
+    dropped: list[dict] = field(default_factory=list)  # {sentence, reason}
+    refuse_reason: str = ""
+    unanswered: str = ""
+    clarification: str = ""
+    verifier_error: str = ""
+    cost_usd: float = 0.0
+    latency_ms: float = 0.0
+
+
+def _sources(sentence: dict, citations: dict) -> tuple[list[str], list[list[list]]]:
+    texts, tables = [], []
+    for cid in sentence["citations"]:
+        c = citations.get(cid)
+        if not c:
+            continue
+        if c["kind"] == "doc":
+            texts.append(c["text"])
+        else:
+            tables.append(c["rows"])
+            texts.append(
+                json.dumps({"columns": c["columns"], "rows": c["rows"]}, ensure_ascii=False)
+            )
+    return texts, tables
+
+
+class HaikuVerifier:
+    def __init__(self, llm) -> None:
+        self.llm = llm
+
+    def label(self, items: list[tuple[str, list[str]]]) -> tuple[list[str], float]:
+        """items: (句子, 引用原文列表)。返回每句的标签和本次花费。"""
+        parts = [VERIFY_PROMPT]
+        for i, (sent, texts) in enumerate(items):
+            src = "\n---\n".join(texts)
+            parts.append(f'<句子 index="{i}">{sent}</句子>\n<原文>\n{src}\n</原文>\n')
+        resp = self.llm.create(
+            max_tokens=2000,
+            messages=[{"role": "user", "content": "\n".join(parts)}],
+            output_config={
+                "effort": "low",
+                "format": {"type": "json_schema", "schema": VERIFY_SCHEMA},
+            },
+        )
+        text = next(b.text for b in resp.content if b.type == "text")
+        by_index = {x["index"]: x["label"] for x in json.loads(text)["labels"]}
+        return [by_index.get(i, "unsupported") for i in range(len(items))], cost_usd(
+            self.llm.model, resp.usage
+        )
+
+
+def verify_result(result, verifier: HaikuVerifier) -> VerifiedAnswer:
+    t0 = time.perf_counter()
+    if result.kind in ("refuse", "clarify", "fallback"):
+        kind = "refuse" if result.kind == "fallback" else result.kind
+        reason = result.refuse_reason or (REFUSE_NO_BASIS if kind == "refuse" else "")
+        return VerifiedAnswer(kind, refuse_reason=reason, clarification=result.clarification)
+
+    v = VerifiedAnswer(result.kind, unanswered=result.unanswered)
+    candidates: list[tuple[int, dict, list[str]]] = []
+    keep_flags: dict[int, bool] = {}
+    for i, s in enumerate(result.sentences):
+        is_note = s.get("kind") == "note" and not extract_numbers(s["text"])
+        if is_note:
+            keep_flags[i] = True
+            continue
+        valid = [c for c in s["citations"] if c in result.citations]
+        if not valid:
+            v.dropped.append({"sentence": s, "reason": "无引用"})
+            continue
+        texts, tables = _sources({"citations": valid}, result.citations)
+        if not numbers_supported(s["text"], texts, tables):
+            v.dropped.append({"sentence": s, "reason": "数字与原文不符"})
+            continue
+        candidates.append((i, s, texts))
+
+    if candidates:
+        try:
+            labels, cost = verifier.label([(s["text"], texts) for _, s, texts in candidates])
+            v.cost_usd += cost
+        except Exception as e:  # 校验器自己出错：保守处理，不放行未校验的句子
+            v.verifier_error = f"{type(e).__name__}: {e}"
+            labels = ["unverified"] * len(candidates)
+        for (i, s, _), label in zip(candidates, labels, strict=True):
+            if label == "supported":
+                keep_flags[i] = True
+            else:
+                v.dropped.append({"sentence": s, "reason": f"校验未通过（{label}）"})
+
+    v.kept = [s for i, s in enumerate(result.sentences) if keep_flags.get(i)]
+    facts_kept = [s for s in v.kept if s.get("kind") != "note" or extract_numbers(s["text"])]
+    if not facts_kept:
+        v.kind = "refuse"
+        v.refuse_reason = (
+            f"{result.unanswered}：文件中没有相关规定。" if result.unanswered else REFUSE_NO_BASIS
+        )
+        v.kept = []
+    elif v.dropped or result.unanswered:
+        v.kind = "partial"
+    else:
+        v.kind = "answer"
+    v.latency_ms = (time.perf_counter() - t0) * 1000
+    return v
