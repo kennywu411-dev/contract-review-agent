@@ -125,3 +125,39 @@ def test_no_compression_under_budget():
     mem = ReviewMemory(mode="compress", budget_chars=100000, summarizer=s)
     mem.add_review(REVIEW)
     assert "【第0轮·首次审查】" in mem.render() and not s.calls
+
+
+def test_truncated_summary_falls_back_to_rule_ledger():
+    class Truncated(FakeSummarizer):
+        def create(self, **kw):
+            r = super().create(**kw)
+            r.stop_reason = "max_tokens"
+            return r
+
+    mem = build(
+        ReviewMemory(
+            mode="compress", keep_last=2, budget_chars=200, summarizer=Truncated({"our_side": "甲"})
+        )
+    )
+    h = mem.render()
+    assert mem.compress_errors == 1 and "截断" in mem.last_error and "第0轮第2条：第六条" in h
+
+
+def test_backfill_not_counted_when_fallback_after_success():
+    class Flaky(FakeSummarizer):
+        n = 0
+
+        def create(self, **kw):
+            self.n += 1
+            if self.n == 2:
+                raise RuntimeError("down")
+            return super().create(**kw)
+
+    payload = {"our_side": "甲", "findings": [], "decisions": [], "cited": []}
+    mem = build(
+        ReviewMemory(mode="compress", keep_last=1, budget_chars=50, summarizer=Flaky(payload))
+    )
+    mem.render()  # 第一次压缩成功但台账为空 → 补录 2 条（第0轮两条意见）
+    mem.add_followup("再问", followup("第四条"))
+    mem.render()  # 第二次压缩失败 → 规则兜底，不再计补录
+    assert mem.compressions == 1 and mem.compress_errors == 1 and mem.backfilled == 2

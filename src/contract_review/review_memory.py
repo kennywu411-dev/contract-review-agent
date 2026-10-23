@@ -20,6 +20,7 @@ from contract_review.contract_evalset import RISK_TYPES
 from contract_review.llm import cost_usd
 
 Mode = Literal["full", "window", "compress"]
+SUMMARY_MAX_TOKENS = 4000
 
 SUMMARY_SCHEMA = {
     "type": "object",
@@ -82,6 +83,7 @@ class ReviewMemory:
         self.compressions = self.compress_errors = self.backfilled = 0
         self.cost_usd = 0.0
         self.last_render_chars = 0
+        self.last_error = ""
         self._next = 0
 
     # ---------------- 记录 ----------------
@@ -170,7 +172,8 @@ class ReviewMemory:
         ) + "\n".join(t.text for t in old)
         try:
             resp = self.summarizer.create(
-                max_tokens=1500,
+                # 自适应思考的 token 也算在上限里；1500 会把 JSON 截断（ADR 011 小样）
+                max_tokens=SUMMARY_MAX_TOKENS,
                 messages=[{"role": "user", "content": f"{REVIEW_SUMMARY_PROMPT}\n\n{text}"}],
                 output_config={
                     "effort": "low",
@@ -178,11 +181,16 @@ class ReviewMemory:
                 },
             )
             self.cost_usd += cost_usd(self.summarizer.model, resp.usage)
+            if getattr(resp, "stop_reason", None) == "max_tokens":
+                raise ValueError("摘要输出被截断（max_tokens）")
             body = next(b.text for b in resp.content if b.type == "text")
             summary = json.loads(body)
             self.compressions += 1
-        except Exception:  # 摘要模型出错：整份用规则生成，不能丢掉早期意见
+            by_model = True
+        except Exception as e:  # 摘要模型出错：整份用规则生成，不能丢掉早期意见
             self.compress_errors += 1
+            self.last_error = f"{type(e).__name__}: {e}"[:300]
+            by_model = False
             prev = self.summary or {}
             summary = {
                 "our_side": side or prev.get("our_side", ""),
@@ -190,9 +198,9 @@ class ReviewMemory:
                 "decisions": prev.get("decisions", []),
                 "cited": prev.get("cited", []),
             }
-        self.summary = self._backfill(summary, side)
+        self.summary = self._backfill(summary, side, by_model)
 
-    def _backfill(self, summary: dict, side: str) -> dict:
+    def _backfill(self, summary: dict, side: str, by_model: bool) -> dict:
         """规则核对：每条被压缩过的意见都要在台账里（按 轮次+序号 对），缺的补录。"""
         have = {(f["turn"], f["no"]) for f in summary.get("findings", [])}
         for turn, no, clause, rtype in self.required:
@@ -206,7 +214,7 @@ class ReviewMemory:
                         "status": "已报（补录）",
                     }
                 )
-                if self.compressions:  # 模型摘要漏了才算补录；规则兜底时全是补录，不计
+                if by_model:  # 模型摘要漏了才算补录；规则兜底时全是补录，不计
                     self.backfilled += 1
         summary["findings"].sort(key=lambda f: (f["turn"], f["no"]))
         if not summary.get("our_side"):
