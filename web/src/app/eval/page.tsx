@@ -11,7 +11,50 @@ import { cn } from "@/lib/utils";
 
 type Row = Record<string, unknown>;
 type ChartTheme = { series: string[]; axis: string; split: string };
-const KIND_LABEL = { retrieval: "检索（D2）", agent: "Agent（D3）", d4: "校验与拒答（D4）" } as const;
+const KIND_LABEL = {
+  retrieval: "检索（D2）",
+  agent: "Agent（D3）",
+  d4: "校验与拒答（D4）",
+  dialog: "多轮对话记忆",
+} as const;
+const MODE_LABEL: Record<string, string> = { none: "不带记忆", full: "完整历史", compress: "历史 + 压缩" };
+
+function DialogView({ s }: { s: Record<string, unknown> }) {
+  const modes = ["none", "full", "compress"].filter((m) => s[m]);
+  return (
+    <div className="overflow-x-auto rounded-lg border">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="text-muted-foreground bg-muted/40 border-b text-left text-xs">
+            <th className="px-3 py-2 font-medium">记忆方式</th>
+            <th className="font-medium">追问正确率</th>
+            <th className="font-medium">指代</th>
+            <th className="font-medium">省略</th>
+            <th className="font-medium">槽位延续</th>
+            <th className="font-medium">换话题</th>
+            <th className="font-medium">平均历史字数</th>
+            <th className="font-medium">平均输入 token</th>
+            <th className="px-3 font-medium">压缩次数</th>
+          </tr>
+        </thead>
+        <tbody className="tabular-nums">
+          {modes.map((m) => (
+            <tr key={m} className="border-b last:border-0">
+              <td className="px-3 py-1.5">{MODE_LABEL[m]}</td>
+              <td className="font-medium">{pct(get(s, `${m}.followup_correct`))}（{String(get(s, `${m}.followup_n`))}）</td>
+              {["coreference", "ellipsis", "slot_carry", "topic_switch"].map((p) => (
+                <td key={p}>{pct(get(s, `${m}.by_pattern.${p}.correct`))}</td>
+              ))}
+              <td>{Math.round(num(get(s, `${m}.history_tokens_mean`)))}</td>
+              <td>{Math.round(num(get(s, `${m}.input_tokens_mean`)))}</td>
+              <td className="px-3">{String(get(s, `${m}.compressions`) ?? 0)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 const KIND_TEXT: Record<string, string> = {
   answer: "作答",
   partial: "部分",
@@ -265,7 +308,7 @@ export default function EvalPage() {
             <label className="flex items-center gap-1.5">
               <span className="text-muted-foreground text-xs">运行</span>
               <select value={sel} onChange={(e) => setSel(e.target.value)} className="bg-background h-9 cursor-pointer rounded-md border px-2">
-                {(["d4", "agent", "retrieval"] as const).map((k) => (
+                {(["d4", "dialog", "agent", "retrieval"] as const).map((k) => (
                   <optgroup key={k} label={KIND_LABEL[k]}>
                     {runs.filter((r) => r.kind === k).map((r) => (
                       <option key={r.run} value={r.run}>
@@ -276,7 +319,7 @@ export default function EvalPage() {
                 ))}
               </select>
             </label>
-            {detail && detail.kind !== "retrieval" && (
+            {detail && (detail.kind === "agent" || detail.kind === "d4") && (
               <label className="flex items-center gap-1.5">
                 <span className="text-muted-foreground text-xs">对比</span>
                 <select value={cmp} onChange={(e) => setCmp(e.target.value)} className="bg-background h-9 cursor-pointer rounded-md border px-2">
@@ -296,7 +339,10 @@ export default function EvalPage() {
             {detail.kind === "retrieval" && <RetrievalView d={detail} />}
             {detail.kind === "d4" && <D4Metrics s={detail.summary} />}
             {detail.kind === "agent" && <AgentMetrics s={detail.summary} />}
-            {detail.kind !== "retrieval" && <QuestionTable d={detail} compare={cmpDetail} onOpen={setTrace} />}
+            {detail.kind === "dialog" && <DialogView s={detail.summary} />}
+            {(detail.kind === "agent" || detail.kind === "d4") && (
+              <QuestionTable d={detail} compare={cmpDetail} onOpen={setTrace} />
+            )}
           </>
         )}
       </main>

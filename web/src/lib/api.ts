@@ -93,7 +93,7 @@ export type HtmlDoc = {
   blocks: { seq: number; kind: string; level: number | null; text: string }[];
 };
 
-export type RunInfo = { run: string; kind: "retrieval" | "agent" | "d4"; n: number | null };
+export type RunInfo = { run: string; kind: "retrieval" | "agent" | "d4" | "dialog"; n: number | null };
 export type RunDetail = {
   run: string;
   kind: RunInfo["kind"];

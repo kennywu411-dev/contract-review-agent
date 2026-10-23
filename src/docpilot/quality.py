@@ -14,8 +14,9 @@ MIN_PAGE_CHARS = 20  # 文字层少于这个数视为"无文字页"
 UNPARSED_LAYER_CHARS = 100  # 文字层不少于这个数、却没解析出块，视为"未解析页"
 SCANNED_RATIO = 0.2  # 无文字页超过这个比例，整份文件视为疑似扫描件
 GARBLED_THRESHOLD = 0.005
-# 已在真实文件里见到的错误字形映射（中石油手册：全角空格被抽成"暋"）
-KNOWN_GARBLE = set("暋暠")
+# 已在真实文件里见到的错误字形映射（中石油手册的 ToUnicode 表有误，问题日志 P3、P16）
+GARBLE_MAP = {"暋": "", "暠": "”", "暡": "〔", "暢": "〕"}
+KNOWN_GARBLE = set(GARBLE_MAP)
 
 
 @dataclass

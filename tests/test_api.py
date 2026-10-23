@@ -106,7 +106,7 @@ def test_html_doc_blocks(client):
 def test_runs_listing_mixed_types(client):
     runs = client.get("/api/runs").json()
     kinds = {r["kind"] for r in runs}
-    assert kinds <= {"retrieval", "agent", "d4"} and runs
+    assert kinds <= {"retrieval", "agent", "d4", "dialog"} and runs
 
 
 def test_run_detail_includes_question_text(client):

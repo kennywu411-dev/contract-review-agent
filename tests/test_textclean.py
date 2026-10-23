@@ -51,3 +51,11 @@ def test_strip_garble_keeps_table_spacing():
     from docpilot.textclean import strip_garble
 
     assert strip_garble("| 备暋注 | 学 分 |") == "| 备注 | 学 分 |"
+
+
+def test_garble_mapped_to_real_characters():
+    from docpilot.textclean import strip_garble
+
+    assert strip_garble("财教暡2024暢181号") == "财教〔2024〕181号"
+    assert strip_garble("等级为“B暠及以上") == "等级为“B”及以上"
+    assert normalize("第一章暋总暋则") == "第一章总则"
