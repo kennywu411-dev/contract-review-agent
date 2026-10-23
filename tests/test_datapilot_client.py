@@ -52,3 +52,42 @@ def test_mcp_backend_roundtrip():
         assert "error" in backend.run("delete from national_aid")
     finally:
         backend.close()
+
+
+class Flaky:
+    name = "datapilot-mcp"
+
+    def __init__(self):
+        self.calls = 0
+        self.closed = False
+
+    def run(self, sql):
+        self.calls += 1
+        return {"error": "backend_error", "message": "broken pipe"}
+
+    def close(self):
+        self.closed = True
+
+
+def test_resilient_backend_falls_back_after_repeated_errors(db):
+    from docpilot.datapilot_client import ResilientBackend
+
+    primary = Flaky()
+    b = ResilientBackend(primary, LocalBackend(db), max_errors=2)
+    assert "error" in b.run("select 1")
+    res = b.run("select school from t")
+    assert res["rows"] and b.name == "local(fallback)" and primary.closed
+    assert primary.calls == 2
+
+
+def test_sql_errors_do_not_trigger_fallback(db):
+    from docpilot.datapilot_client import ResilientBackend
+
+    class Strict(Flaky):
+        def run(self, sql):
+            self.calls += 1
+            return {"error": "sql_error", "message": "no such column"}
+
+    b = ResilientBackend(Strict(), LocalBackend(db), max_errors=1)
+    b.run("select nope from t")
+    assert b.name == "datapilot-mcp"

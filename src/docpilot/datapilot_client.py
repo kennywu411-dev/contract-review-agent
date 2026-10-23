@@ -84,10 +84,10 @@ class MCPBackend:
         self._error: BaseException | None = None
         self.session = None
         self._task = asyncio.run_coroutine_threadsafe(self._serve(), self.loop)
-        if not self._ready.wait(CALL_TIMEOUT_S * 3):
-            raise TimeoutError("DataPilot MCP Server 启动超时")
-        if self._error:
-            raise self._error
+        if not self._ready.wait(CALL_TIMEOUT_S * 3) or self._error:
+            error = self._error or TimeoutError("DataPilot MCP Server 启动超时")
+            self.close()  # 启动失败也要收掉后台线程和已拉起的子进程
+            raise error
 
     async def _serve(self) -> None:
         from mcp import ClientSession, StdioServerParameters
@@ -132,6 +132,7 @@ class MCPBackend:
         try:
             return future.result(CALL_TIMEOUT_S)
         except Exception as e:  # MCP 断开、超时：作为工具错误交还给模型
+            future.cancel()  # 超时的协程不能留在 loop 上越积越多
             return {"error": "backend_error", "message": f"{type(e).__name__}: {e}"}
 
     def close(self) -> None:
@@ -143,11 +144,47 @@ class MCPBackend:
         self.loop.call_soon_threadsafe(self.loop.stop)
 
 
+class ResilientBackend:
+    """MCP 连续出现后端错误（断连、超时）max_errors 次后，关掉它，改走本地只读库。
+
+    SQL 本身写错（sql_error、rejected）不算后端故障，不会触发切换。
+    """
+
+    def __init__(self, primary, fallback: SQLBackend, max_errors: int = 2) -> None:
+        self.primary, self.fallback, self.max_errors = primary, fallback, max_errors
+        self.errors = 0
+        self.active = primary
+
+    @property
+    def name(self) -> str:
+        return (
+            self.primary.name if self.active is self.primary else f"{self.fallback.name}(fallback)"
+        )
+
+    def run(self, sql: str) -> dict:
+        res = self.active.run(sql)
+        if self.active is self.primary:
+            if res.get("error") == "backend_error":
+                self.errors += 1
+                if self.errors >= self.max_errors:
+                    if hasattr(self.primary, "close"):
+                        self.primary.close()
+                    self.active = self.fallback
+                    return self.fallback.run(sql)  # 切换的这一次就用本地重跑，别让学生看到报错
+            else:
+                self.errors = 0
+        return res
+
+    def close(self) -> None:
+        if self.active is self.primary and hasattr(self.primary, "close"):
+            self.primary.close()
+
+
 def make_backend() -> SQLBackend:
     if (DATAPILOT_DIR / "src" / "datapilot" / "mcp_server.py").exists():
         try:
             link_datapilot()
-            return MCPBackend()
+            return ResilientBackend(MCPBackend(), LocalBackend())
         except Exception:
             pass
     return LocalBackend()

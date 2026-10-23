@@ -138,3 +138,23 @@ def test_citation_ids_are_normalized():
     llm = FakeLLM([[tool("search_docs", {"query": "q"})], [tool("final_answer", messy)]])
     r = run_agent("q", "bnu", llm, box([ch("d", "bnu", "x")]))
     assert r.sentences[0]["citations"] == ["C1", "T1"] and r.invalid_citations == ["T1"]
+
+
+def test_stop_reason_recorded_when_no_tool():
+    class Cut(FakeLLM):
+        def create(self, **kw):
+            r = super().create(**kw)
+            r.stop_reason = "max_tokens"
+            return r
+
+    r = run_agent("q", "bnu", Cut([[text("思考到一半")]]), box())
+    assert r.kind == "fallback" and r.trace["end"] == "max_tokens"
+
+
+def test_unknown_model_rejected_before_spending():
+    import pytest
+
+    from docpilot.llm import AnthropicLLM
+
+    with pytest.raises(ValueError):
+        AnthropicLLM("gpt-x")

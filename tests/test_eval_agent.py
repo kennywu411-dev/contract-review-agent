@@ -56,7 +56,7 @@ def test_uncited_retrieval_is_not_a_hit():
 
 def test_table_question_routes_to_sql():
     gold = [{"table": "scholarships", "where": "1"}, {"doc_id": "d", "page": 5, "clause": None}]
-    cites = {"T1": {"kind": "table", "sql": "select", "columns": [], "rows": []}}
+    cites = {"T1": {"kind": "table", "sql": "select", "columns": ["a"], "rows": [[1]]}}
     s = score_one(q("table", gold=gold), res(cites=("T1",), citations=cites, tools=("run_sql",)))
     assert s["used_sql"] is True and s["cite_hit"] is True
 
@@ -80,3 +80,13 @@ def test_summary_rates():
     assert s["refuse"]["correct_refuse_rate"] == 1.0
     assert s["clarify"]["clarify_rate"] == 1.0
     assert s["cost"]["total_usd"] > 0 and "p95" in s["latency_ms"]
+
+
+def test_empty_or_failed_sql_does_not_count():
+    gold = [{"table": "scholarships", "where": "1"}, {"doc_id": "d", "page": 5, "clause": None}]
+    empty = {"T1": {"kind": "table", "sql": "select", "columns": ["a"], "rows": []}}
+    s = score_one(q("table", gold=gold), res(cites=("T1",), citations=empty, tools=("run_sql",)))
+    assert s["cite_hit"] is False
+    r = res(cites=(), tools=())
+    r["trace"]["steps"] = [{"tool_calls": [{"name": "run_sql", "is_error": True}]}]
+    assert score_one(q("table", gold=gold), r)["used_sql"] is False

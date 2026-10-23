@@ -7,12 +7,31 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
 
 from docpilot.config import SCHOOLS
 
 SEARCH_K = 5
 SQL_PREVIEW_ROWS = 30
+# campus 库的表都带 school 列。查询前用同名 CTE 把它们遮住（CTE 名优先于同名表），
+# 不管模型怎么写 SQL（不选 school 列、别名、IN、JOIN），都只能看到本校和国家层面的行
+SCOPED_TABLES = ("calendar", "graduation_rules", "national_aid", "scholarships")
+_WITH = re.compile(r"^\s*with\s+(recursive\s+)?", re.IGNORECASE)
+
+
+def scope_sql(sql: str, school: str) -> str:
+    if school not in SCHOOLS:  # school 会拼进 SQL，只接受固定取值
+        raise ValueError(f"未知学校：{school}")
+    ctes = ", ".join(
+        f"{t} AS (SELECT * FROM main.{t} WHERE school IN ('{school}', 'national'))"
+        for t in SCOPED_TABLES
+    )
+    body = sql.strip().rstrip(";")
+    m = _WITH.match(body)
+    if m:  # 原 SQL 自带 WITH：把遮蔽 CTE 插在最前面，后面的 CTE 能引用它们
+        return f"WITH {m.group(1) or ''}{ctes}, {body[m.end() :]}"
+    return f"WITH {ctes} {body}"
 
 
 def _tool(name: str, description: str, props: dict) -> dict:
@@ -133,11 +152,14 @@ class ToolBox:
             )
             scope = "国家层面" if c.school == "national" else SCHOOLS[c.school]
             path = " > ".join(c.section_path[1:]) if len(c.section_path) > 1 else ""
-            lines.append(f"[{cid}] 《{c.title}》{path}｜{scope}｜{where}\n{c.text}")
+            lines.append(
+                f"[{cid}] 《{c.title}》{path}｜{scope}｜{where}\n"
+                f'<文档片段 id="{cid}">\n{c.text}\n</文档片段>'
+            )
         return ToolOutput("\n\n".join(lines), new_citations=new)
 
     def _run_sql(self, sql: str) -> ToolOutput:
-        res = self.sql.run(sql)
+        res = self.sql.run(scope_sql(sql, self.school))
         if "error" in res:
             return ToolOutput(
                 f"SQL 出错（{res['error']}）：{res.get('message', '')}", is_error=True
@@ -150,4 +172,7 @@ class ToolBox:
         tid = f"T{self._t}"
         self.citations[tid] = {"kind": "table", "sql": sql, "columns": columns, "rows": rows}
         body = json.dumps({"columns": columns, "rows": rows[:SQL_PREVIEW_ROWS]}, ensure_ascii=False)
-        return ToolOutput(f"[{tid}] {len(rows)} 行\n{body}", new_citations=[tid])
+        return ToolOutput(
+            f'[{tid}] {len(rows)} 行\n<查询结果 id="{tid}">\n{body}\n</查询结果>',
+            new_citations=[tid],
+        )

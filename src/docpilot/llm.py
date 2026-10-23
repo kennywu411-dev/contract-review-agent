@@ -50,6 +50,8 @@ class AnthropicLLM:
     def __init__(self, model: str = DEFAULT_MODEL) -> None:
         import anthropic
 
+        if model not in PRICING:  # 先校验，避免花了钱才发现算不了成本
+            raise ValueError(f"未登记价格的模型：{model}（可选：{', '.join(PRICING)}）")
         _load_dotenv()
         self.model = model
         self.client = anthropic.Anthropic(max_retries=3)

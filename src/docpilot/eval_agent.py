@@ -19,7 +19,13 @@ REFUSED = ("refuse", "fallback")
 
 
 def _tools_used(r: dict) -> set[str]:
-    return {c["name"] for s in r["trace"]["steps"] for c in s.get("tool_calls", [])}
+    """只算执行成功的工具调用（报错的 run_sql 不算"走了查表"）。"""
+    return {
+        c["name"]
+        for s in r["trace"]["steps"]
+        for c in s.get("tool_calls", [])
+        if not c.get("is_error")
+    }
 
 
 def score_one(q: Question, r: dict) -> dict:
@@ -31,7 +37,7 @@ def score_one(q: Question, r: dict) -> dict:
         if not c:
             continue
         if c["kind"] == "table" and q.type == "table":
-            hit = True
+            hit = hit or bool(c.get("rows"))  # 查出 0 行不算命中
         elif c["kind"] == "doc":
             chunk = SimpleNamespace(
                 doc_id=c["doc_id"], pages=c["pages"], articles=c["articles"], text=c["text"]

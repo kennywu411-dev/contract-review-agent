@@ -102,7 +102,13 @@ def run_agent(
         result.steps = step
         uses = [b for b in resp.content if b.type == "tool_use"]
         if not uses:
-            trace["end"] = "no_terminal_tool"
+            # end_turn 却没调终止工具 / 输出被截断 / 模型拒绝：分开记录，回放时好诊断
+            trace["end"] = (
+                "no_terminal_tool" if resp.stop_reason == "end_turn" else resp.stop_reason
+            )
+            details = getattr(resp, "stop_details", None)
+            if details is not None:
+                trace["stop_details"] = getattr(details, "category", str(details))
             break
         terminal = next((b for b in uses if b.name in TERMINAL_TOOLS), None)
         if terminal is not None:
