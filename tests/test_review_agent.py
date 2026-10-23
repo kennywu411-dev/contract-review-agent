@@ -98,3 +98,59 @@ def test_review_tools_strict_and_terminal():
     assert item["additionalProperties"] is False and set(item["required"]) == set(
         item["properties"]
     )
+
+
+def test_history_lists_previous_findings_in_order():
+    from contract_review.review_agent import history_from_review
+
+    prev = {
+        "kind": "review",
+        "our_side": "甲",
+        "summary": "两处风险。",
+        "findings": [
+            FINDING | {"clause": "第二条"},
+            FINDING | {"clause": "第一条", "risk_type": "unit_price"},
+        ],
+    }
+    h = history_from_review(prev, [("第2条意见怎么改", "建议改为……")])
+    assert "<上一轮审查>" in h and "我方：甲方" in h
+    assert h.index("1. 第二条") < h.index("2. 第一条")
+    assert "用户：第2条意见怎么改" in h and "助手：建议改为……" in h
+
+
+def test_followup_answer_ends_turn():
+    from contract_review.review_agent import FOLLOWUP_TOOLS
+
+    ans = {
+        "clause": "第2条",
+        "answer": "建议改为：甲方在收到货物之日起三十日内检验。",
+        "citations": ["C1"],
+        "needs_human_review": False,
+    }
+    llm = FakeLLM(
+        [[tool("search_docs", {"query": "检验期"}, "a")], [tool("answer_followup", ans, "b")]]
+    )
+    r = review_contract(
+        CONTRACT,
+        "huaxin",
+        llm,
+        box([ch("law", "common", "第六百二十一条")]),
+        question="你列的第1条意见怎么改？",
+        history="<上一轮审查>…</上一轮审查>",
+    )
+    assert r.kind == "followup" and r.answer.startswith("建议改为") and r.answer_clause == "第二条"
+    assert r.answer_citations == ["C1"]
+    req = llm.requests[0]
+    assert {t["name"] for t in req["tools"]} == {t["name"] for t in FOLLOWUP_TOOLS}
+    content = req["messages"][0]["content"]
+    assert (
+        content.index("<上一轮审查>")
+        < content.index("<合同>")
+        < content.index("用户追问：你列的第1条意见怎么改？")
+    )
+
+
+def test_first_turn_has_no_followup_tool():
+    llm = FakeLLM([[tool("submit_review", REVIEW)]])
+    review_contract(CONTRACT, "huaxin", llm, box())
+    assert "answer_followup" not in {t["name"] for t in llm.requests[0]["tools"]}
