@@ -85,19 +85,19 @@ def test_pdf_path_traversal_rejected(client, doc):
 
 
 def test_pdf_served_for_known_doc(client):
-    r = client.get("/api/docs/cumt-xuewei-2025/pdf")
+    r = client.get("/api/docs/law-civil-procedure/pdf")
     assert r.status_code == 200 and r.content[:4] == b"%PDF"
 
 
 def test_highlight_returns_page_boxes(client):
-    data = client.get("/api/highlight", params={"chunk_id": "cumt-xuewei-2025:fixed:0"}).json()
-    assert data["doc_id"] == "cumt-xuewei-2025" and data["boxes"]
+    data = client.get("/api/highlight", params={"chunk_id": "law-civil-procedure:fixed:0"}).json()
+    assert data["doc_id"] == "law-civil-procedure" and data["boxes"]
     b = data["boxes"][0]
     assert b["page"] >= 1 and len(b["bbox"]) == 4 and b["page_width"] > 0
 
 
 def test_html_doc_blocks(client):
-    data = client.get("/api/docs/common-xwf/html").json()
+    data = client.get("/api/docs/law-civil-code/html").json()
     assert data["title"] and any(b["text"].startswith("第一条") for b in data["blocks"])
 
 

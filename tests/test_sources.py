@@ -123,3 +123,22 @@ def test_html_saved_as_pdf_is_rejected(raw):
 def test_docx_magic_accepted(raw):
     report = fetch_all([make_source(kind="docx")], opener=fake_opener(b"PK\x03\x04..", []))
     assert report.downloaded == ["d1"]
+
+
+def test_repo_url_copies_local_file(raw, tmp_path, monkeypatch):
+    # 构造的租户规范放在仓库里，url 写 repo:<相对路径>，下载时直接复制，不联网
+    monkeypatch.setattr(sources, "ROOT", tmp_path)
+    (tmp_path / "data" / "tenants").mkdir(parents=True)
+    (tmp_path / "data" / "tenants" / "p.txt").write_text("第一条 规范。", encoding="utf-8")
+    calls = []
+    src = make_source(kind="txt", url="repo:data/tenants/p.txt")
+    report = fetch_all([src], opener=fake_opener(b"", calls))
+    assert calls == [] and report.downloaded == ["d1"]
+    assert (raw / "huaxin" / "d1.txt").read_text(encoding="utf-8") == "第一条 规范。"
+
+
+def test_repo_url_cannot_escape_root(raw, tmp_path, monkeypatch):
+    monkeypatch.setattr(sources, "ROOT", tmp_path / "repo")
+    (tmp_path / "secret.txt").write_text("x", encoding="utf-8")
+    report = fetch_all([make_source(kind="txt", url="repo:../secret.txt")], opener=fake_opener(b"", []))
+    assert report.failed == ["d1"]

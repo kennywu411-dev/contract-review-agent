@@ -9,8 +9,8 @@ from pathlib import Path
 from contract_review.blocks import Block
 from contract_review.structure import RawItem, assemble
 
-# 各站正文容器：gov.cn 用 id=UCAP-CONTENT，人大网用 TRS_Editor，博达站群用 v_news_content
-CONTAINERS = (("id", "UCAP-CONTENT"), ("class", "TRS_Editor"), ("class", "v_news_content"))
+# 各站正文容器：gov.cn 用 id=UCAP-CONTENT，人大网用 TRS_Editor，博达站群用 v_news_content，最高法用 txt_txt
+CONTAINERS = (("id", "UCAP-CONTENT"), ("class", "TRS_Editor"), ("class", "v_news_content"), ("class", "txt_txt"))
 BREAK_TAGS = {"p", "div", "br", "h1", "h2", "h3", "h4", "h5", "h6", "li", "tr"}
 SKIP_TAGS = {"script", "style"}
 # 没有闭合标签的空元素：不能计入深度，否则正文容器永远关不上，页脚会被当成正文
