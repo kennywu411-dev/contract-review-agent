@@ -1,6 +1,6 @@
 """长对话评测（ADR 011）：一份合同审查后连续追问 8 轮，后面的轮次回指最早的审查和用户中途的决定。
 
-对比三种记忆：full（全部原文）、window（只留最近 2 轮）、compress（超 6000 字时把较早轮次压成
+对比三种记忆：full（全部原文）、window（只留最近 2 轮）、compress（超 3000 字时把较早轮次压成
 结构化摘要）。第 0 轮复用一次 eval-review 全量运行的审查结果（不再付费），每种方式各走自己的轨迹。
 
 追问脚本（A、B 是首次审查的第 1、2 条意见，X 是"通知与送达"条款）：
@@ -28,7 +28,7 @@ from contract_review.review_agent import normalize_clause
 from contract_review.review_memory import ReviewMemory
 
 KEEP_LAST = 2
-BUDGET_CHARS = 6000
+BUDGET_CHARS = 3000  # 小样里 8 轮全量历史约 5600 字，6000 不会触发压缩（问题日志 P23）
 _CLAUSE = re.compile(r"(?<![法典释则范办例])第\s*(?:[0-9]+|[零一二三四五六七八九十百]+)\s*条")
 
 
