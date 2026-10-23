@@ -6,6 +6,7 @@ import argparse
 import time
 
 from contract_review.config import DATA_DIR, DB_PATH, LEDGER_DB, LEDGER_SRC, ROOT
+from contract_review.eval_retrieval import RUNS_DIR
 from contract_review.ledger_db import build_ledger_db
 from contract_review.quality import DocQuality, doc_quality
 from contract_review.sources import fetch_all, load_sources, write_lock
@@ -283,6 +284,37 @@ def cmd_eval_review(args: argparse.Namespace) -> None:
     )
 
 
+def cmd_review_d4(args: argparse.Namespace) -> None:
+    import json
+
+    from contract_review.contract_evalset import load_contracts
+    from contract_review.eval_review_d4 import ReviewJudge, run_review_d4
+    from contract_review.llm import HAIKU, SONNET, AnthropicLLM
+    from contract_review.review_verify import ReviewVerifier
+
+    out = run_review_d4(
+        RUNS_DIR / args.source,
+        {c.id: c for c in load_contracts()},
+        ReviewVerifier(AnthropicLLM(HAIKU)),
+        ReviewJudge(AnthropicLLM(SONNET, fallbacks=True)),
+        args.tag,
+        args.max_cost,
+    )
+    s = json.loads((out / "summary.json").read_text(encoding="utf-8"))
+    h, sg = s["hallucination"], s["suggestion"]
+    print(f"{out.relative_to(ROOT)}：{s['contracts']} 份合同，{s['findings']} 条意见")
+    print(
+        f"无依据意见 {h['raw_rate']:.1%}；未拦截：校验前 {h['raw_unflagged_rate']:.1%} → "
+        f"校验后 {h['after_unflagged_rate']:.1%}；误拦 {h['false_flag_rate']:.1%}；"
+        f"点名未检索条文 {s['unretrieved_ref_rate']:.1%}"
+    )
+    print(
+        f"转人工 +{s['flagged']}，改写 {s['revised']}，改正引用 {s['repaired']}；"
+        f"修改建议均分 {sg['mean']:.2f}（≥4 分 {sg['ge4_rate']:.1%}，{sg['n']} 条）"
+    )
+    print(f"花费：校验 ${s['cost']['verify_usd']:.4f}，评判 ${s['cost']['judge_usd']:.4f}")
+
+
 def cmd_eval_agent(args: argparse.Namespace) -> None:
     import json
 
@@ -526,6 +558,13 @@ def main() -> None:
     p.add_argument("--max-cost", type=float, default=1.0, help="累计花费上限（美元）")
     p.add_argument("--cache", choices=["prefix", "system"], default="prefix")
     p.set_defaults(func=cmd_eval_review)
+    p = sub.add_parser(
+        "review-d4", help="复用一次 eval-review 运行：依据校验（Haiku）+ 评判（Sonnet）"
+    )
+    p.add_argument("source", help="runs/ 下的 eval-review 运行目录名")
+    p.add_argument("--tag", default="review-d4")
+    p.add_argument("--max-cost", type=float, default=2.0)
+    p.set_defaults(func=cmd_review_d4)
     p = sub.add_parser("eval-d4", help="引用校验与拒答评测（Haiku 作答+校验，Sonnet 评判）")
     p.add_argument("--sample", type=int)
     p.add_argument("--model", default="claude-haiku-5-5")

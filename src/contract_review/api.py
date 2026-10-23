@@ -99,8 +99,8 @@ def _chunks(strategy: str) -> dict:
 
 
 def _run_kind(summary: dict) -> str:
-    if summary.get("kind") == "review":
-        return "review"
+    if summary.get("kind") in ("review", "review_d4"):
+        return summary["kind"]
     if any(isinstance(v, dict) and "followup_correct" in v for v in summary.values()):
         return "dialog"
     if "_meta" in summary:
