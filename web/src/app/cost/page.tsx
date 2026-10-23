@@ -32,10 +32,11 @@ export default function CostPage() {
 
   useEffect(() => {
     getJSON<RunInfo[]>("/api/runs").then((rs) => {
-      const usable = rs.filter((r) => r.kind !== "retrieval");
+      // 只列有逐题 trace 的运行（检索评测和依据校验没有）
+      const usable = rs.filter((r) => !["retrieval", "contract_retrieval", "review_d4"].includes(r.kind));
       setRuns(usable);
-      const full = (k: RunInfo["kind"]) => usable.find((r) => r.kind === k && (r.n ?? 0) >= 100);
-      const pref = full("d4") ?? full("agent") ?? usable[0];
+      const full = (k: RunInfo["kind"], n: number) => usable.find((r) => r.kind === k && (r.n ?? 0) >= n);
+      const pref = full("review", 48) ?? full("d4", 100) ?? full("agent", 100) ?? usable[0];
       if (pref) setSel(pref.run);
     });
   }, []);
