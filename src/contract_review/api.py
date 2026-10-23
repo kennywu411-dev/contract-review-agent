@@ -258,7 +258,8 @@ def create_app(engine=None) -> FastAPI:
         if body.question:
             if sess is None or sess["tenant"] != body.tenant:
                 raise HTTPException(400, "追问需要先在同一会话里审查一份合同")
-            contract = body.contract or sess["contract"]
+            # 追问只针对会话里那份合同；请求里带来的 contract 不能把旧历史配到新合同上
+            contract = sess["contract"]
             history = history_from_review(sess["prev"], sess["qa"][-MAX_QA:])
         else:
             if not body.contract:
@@ -284,8 +285,9 @@ def create_app(engine=None) -> FastAPI:
                 data["trace"] = {"trace_id": r.trace.get("trace_id")}
                 if body.session_id:
                     if r.kind == "followup":
-                        s = review_sessions[body.session_id]
-                        s["qa"].append((body.question, r.answer))
+                        s = review_sessions.get(body.session_id)  # 请求期间可能已被淘汰
+                        if s is not None:
+                            s["qa"].append((body.question, r.answer))
                     elif r.kind in ("review", "clarify"):
                         prev = data | {"findings": ver.findings or r.findings}
                         old = review_sessions.get(body.session_id)

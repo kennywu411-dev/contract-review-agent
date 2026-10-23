@@ -258,3 +258,28 @@ def test_contract_run_kinds_and_rows(client):
     assert all(r["n"] for r in reviews)
     d = client.get(f"/api/runs/{reviews[0]['run']}").json()
     assert d["rows"] and {"id", "title", "trace_id"} <= set(d["rows"][0])
+
+
+def test_followup_ignores_new_contract_and_survives_eviction(monkeypatch):
+    # 全分支审查 Important 5：追问时带来的 contract 不能替换会话里的合同；会话中途被淘汰不报 KeyError
+    import contract_review.api as api_mod
+
+    eng = FakeEngine()
+    c = TestClient(create_app(engine=eng))
+    c.post("/api/review", json={"contract": CONTRACT, "tenant": "huaxin", "session_id": "s1"})
+    c.post(
+        "/api/review",
+        json={
+            "question": "怎么改",
+            "contract": "另一份合同",
+            "tenant": "huaxin",
+            "session_id": "s1",
+        },
+    )
+    assert eng.calls[-1][1] == CONTRACT
+    monkeypatch.setattr(api_mod, "MAX_SESSIONS", 0)  # 下一次写会话时把 s1 淘汰掉
+    c.post("/api/review", json={"contract": CONTRACT, "tenant": "huaxin", "session_id": "s2"})
+    monkeypatch.setattr(api_mod, "MAX_SESSIONS", 200)
+    r = c.post("/api/review", json={"question": "再问", "tenant": "huaxin", "session_id": "s1"})
+    names = [n for n, _ in events(r)] if r.status_code == 200 else []
+    assert r.status_code == 400 or "error" not in names
