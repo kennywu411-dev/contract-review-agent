@@ -1,7 +1,7 @@
 """Agent 的工具：检索文档、查表（DataPilot）、反问、作答。
 
-安全边界：学校由会话注入（ToolBox.tenant），工具参数里没有 tenant，模型改不了检索范围；
-查表结果里带 tenant 列的行只保留本校和国家层面。
+安全边界：租户由会话注入（ToolBox.tenant），工具参数里没有 tenant，模型改不了检索范围；
+查表结果里带 tenant 列的行只保留本租户（和 common）。
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ _WITH = re.compile(r"^\s*with\s+(recursive\s+)?", re.IGNORECASE)
 
 def scope_sql(sql: str, tenant: str) -> str:
     if tenant not in TENANTS:  # tenant 会拼进 SQL，只接受固定取值
-        raise ValueError(f"未知学校：{tenant}")
+        raise ValueError(f"未知租户：{tenant}")
     ctes = ", ".join(
         f"{t} AS (SELECT * FROM main.{t} WHERE tenant IN ('{tenant}', 'common'))"
         for t in SCOPED_TABLES
@@ -126,8 +126,8 @@ class ToolBox:
         lines: list[str] = []
         if res.tenant_mismatch:
             lines.append(
-                f"注意：问题提到了{TENANTS[res.tenant_mismatch]}，但学生选择的是{TENANTS[self.tenant]}，"
-                "检索只覆盖本校和国家层面文件。"
+                f"注意：查询提到了{TENANTS[res.tenant_mismatch]}，但当前租户是{TENANTS[self.tenant]}，"
+                "检索只覆盖本公司规范和通用的法律法规、示范文本。"
             )
         if not res.hits:
             lines.append("没有检索到相关条文。")
@@ -153,7 +153,7 @@ class ToolBox:
             where = (
                 f"第{','.join(map(str, c.pages))}页" if c.pages else "、".join(c.articles) or "网页"
             )
-            scope = "国家层面" if c.tenant == "common" else TENANTS[c.tenant]
+            scope = "通用" if c.tenant == "common" else TENANTS[c.tenant]
             path = " > ".join(c.section_path[1:]) if len(c.section_path) > 1 else ""
             lines.append(
                 f"[{cid}] 《{c.title}》{path}｜{scope}｜{where}\n"

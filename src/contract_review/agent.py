@@ -59,47 +59,37 @@ def _usage_dict(u) -> dict:
     return {k: getattr(u, k, 0) or 0 for k in keys}
 
 
-def run_agent(
-    question: str,
-    tenant: str,
+def tool_loop(
+    *,
     llm: LLM,
-    toolbox: ToolBox,
-    max_steps: int = MAX_STEPS,
+    system_text: str,
+    tools: list[dict],
+    terminal_tools: set[str],
+    user_content: str,
+    toolbox,
+    trace: dict,
+    max_steps: int,
+    max_tokens: int = MAX_TOKENS,
     on_step=None,
     cache: str = "prefix",
-    history: str = "",
-) -> AgentResult:
-    """on_step(record)：每步结束时回调（Web 端用它流式推送步骤）。
+):
+    """通用工具循环：调模型 → 执行工具 → 回填结果，直到模型调用终止工具或步数用完。
 
-    cache="prefix"：system 和整个消息前缀都写缓存（默认）；
-    cache="system"：只缓存 system（成本对比实验用）。
+    返回 (终止工具调用块或 None, 总花费, 步数)；
+    每步记录追加到 trace["steps"]，结束原因写 trace["end"]。
+    cache="prefix"：system 和整个消息前缀都写缓存（默认）；cache="system"：只缓存 system。
     """
-    t0 = time.perf_counter()
-    system = [
-        {"type": "text", "text": system_prompt(tenant), "cache_control": {"type": "ephemeral"}}
-    ]
-    content = f"{history}\n\n当前问题：{question}" if history else question
-    messages: list[dict] = [{"role": "user", "content": content}]
-    result = AgentResult(question, tenant, "fallback")
-    trace = {
-        "trace_id": uuid.uuid4().hex[:12],
-        "model": llm.model,
-        "question": question,
-        "tenant": tenant,
-        "max_steps": max_steps,
-        "cache": cache,
-        "history": history,
-        "steps": [],
-        "end": "max_steps",
-    }
-
+    system = [{"type": "text", "text": system_text, "cache_control": {"type": "ephemeral"}}]
+    messages: list[dict] = [{"role": "user", "content": user_content}]
+    cost, steps, terminal = 0.0, 0, None
+    trace["end"] = "max_steps"
     for step in range(1, max_steps + 1):
         ts = time.perf_counter()
         extra = {"cache_control": {"type": "ephemeral"}} if cache == "prefix" else {}
         resp = llm.create(
-            max_tokens=MAX_TOKENS,
+            max_tokens=max_tokens,
             system=system,
-            tools=TOOLS,
+            tools=tools,
             messages=messages,
             output_config={"effort": EFFORT},
             **extra,
@@ -115,8 +105,8 @@ def run_agent(
             "tool_calls": [],
         }
         trace["steps"].append(record)
-        result.cost_usd += step_cost
-        result.steps = step
+        cost += step_cost
+        steps = step
         uses = [b for b in resp.content if b.type == "tool_use"]
         if not uses:
             # end_turn 却没调终止工具 / 输出被截断 / 模型拒绝：分开记录，回放时好诊断
@@ -127,9 +117,8 @@ def run_agent(
             if details is not None:
                 trace["stop_details"] = getattr(details, "category", str(details))
             break
-        terminal = next((b for b in uses if b.name in TERMINAL_TOOLS), None)
+        terminal = next((b for b in uses if b.name in terminal_tools), None)
         if terminal is not None:
-            _finish(result, terminal, toolbox)
             record["tool_calls"].append({"name": terminal.name, "input": terminal.input})
             trace["end"] = terminal.name
             if on_step:
@@ -161,6 +150,47 @@ def run_agent(
         messages.append({"role": "user", "content": results})
         if on_step:
             on_step(record)
+    return terminal, cost, steps
+
+
+def run_agent(
+    question: str,
+    tenant: str,
+    llm: LLM,
+    toolbox: ToolBox,
+    max_steps: int = MAX_STEPS,
+    on_step=None,
+    cache: str = "prefix",
+    history: str = "",
+) -> AgentResult:
+    """on_step(record)：每步结束时回调（Web 端用它流式推送步骤）。"""
+    t0 = time.perf_counter()
+    content = f"{history}\n\n当前问题：{question}" if history else question
+    result = AgentResult(question, tenant, "fallback")
+    trace = {
+        "trace_id": uuid.uuid4().hex[:12],
+        "model": llm.model,
+        "question": question,
+        "tenant": tenant,
+        "max_steps": max_steps,
+        "cache": cache,
+        "history": history,
+        "steps": [],
+    }
+    terminal, result.cost_usd, result.steps = tool_loop(
+        llm=llm,
+        system_text=system_prompt(tenant),
+        tools=TOOLS,
+        terminal_tools=TERMINAL_TOOLS,
+        user_content=content,
+        toolbox=toolbox,
+        trace=trace,
+        max_steps=max_steps,
+        on_step=on_step,
+        cache=cache,
+    )
+    if terminal is not None:
+        _finish(result, terminal, toolbox)
 
     result.citations = toolbox.citations
     result.latency_ms = (time.perf_counter() - t0) * 1000

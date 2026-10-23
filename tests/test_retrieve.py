@@ -63,10 +63,10 @@ def test_rerank_reorders_pool(tmp_path, fake_encoder):
     assert res.hits[0].chunk.doc_id == "d3" and rr.seen
 
 
-def test_mentioned_other_school_is_flagged(retr):
-    assert retr.search("郑大的转专业要求是什么", "huaxin").tenant_mismatch == "ruifeng"
-    assert retr.search("北师大转专业", "huaxin").tenant_mismatch is None
-    assert retr.search("北京师范大学转专业", "yunqi").tenant_mismatch == "huaxin"
+def test_mentioned_other_tenant_is_flagged(retr):
+    assert retr.search("瑞丰的付款期限要求", "huaxin").tenant_mismatch == "ruifeng"
+    assert retr.search("华信制造的付款期限", "huaxin").tenant_mismatch is None
+    assert retr.search("华信制造有限公司违约金上限", "yunqi").tenant_mismatch == "huaxin"
 
 
 @pytest.mark.parametrize("q", ["", "转" * 5000, "GPA 3.5", "2025"])

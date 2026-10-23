@@ -1,6 +1,6 @@
-"""检索：学校过滤 → BM25 / 向量 → RRF 融合 → 交叉编码器重排。
+"""检索：租户过滤 → BM25 / 向量 → RRF 融合 → 交叉编码器重排。
 
-过滤在每一路检索内部做（allow 回调），而不是检索完再删，保证前 k 个里不会被别校内容占位。
+过滤在每一路检索内部做（allow 回调），而不是检索完再删，保证前 k 个里不会被别家公司的规范占位。
 """
 
 from __future__ import annotations
@@ -18,14 +18,11 @@ Mode = Literal["bm25", "vector", "hybrid", "hybrid_rerank"]
 MODES: tuple[Mode, ...] = ("bm25", "vector", "hybrid", "hybrid_rerank")
 RRF_K = 60
 
-# 问题里提到的学校（全称或常用简称）→ 学校 id，用来发现"选的是 A 校、问的是 B 校"
+# 问题里提到的租户公司（全称或简称）→ 租户 id，用来发现"当前是 A 公司、问的却是 B 公司的规范"
 TENANT_ALIASES = {
-    "huaxin": ("北京师范大学", "北师大"),
-    "yunqi": ("中国石油大学", "中石油", "石大华东", "石油大学"),
-    "njust": ("南京理工大学", "南理工"),
-    "lzu": ("兰州大学", "兰大"),
-    "cumt": ("中国矿业大学", "矿大"),
-    "ruifeng": ("郑州大学", "郑大"),
+    "huaxin": ("华信制造有限公司", "华信制造", "华信"),
+    "yunqi": ("云启科技有限公司", "云启科技", "云启"),
+    "ruifeng": ("瑞丰贸易有限公司", "瑞丰贸易", "瑞丰"),
 }
 
 
@@ -52,7 +49,6 @@ class SearchResult:
 def mentioned_tenant(query: str, tenant: str) -> str | None:
     for sid, names in TENANT_ALIASES.items():
         if sid != tenant and any(n in query for n in names):
-            # "中国石油大学"里没有别校简称；但"北京师范大学"不能被当成别的学校
             if not any(n in query for n in TENANT_ALIASES.get(tenant, ())):
                 return sid
     return None
