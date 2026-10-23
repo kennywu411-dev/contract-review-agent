@@ -61,6 +61,7 @@ class Retriever:
         encoder: Encoder,
         reranker: Reranker | None,
         cache_dir: Path,
+        vector_backend: Literal["numpy", "milvus"] = "numpy",
     ) -> None:
         self.chunks = chunks
         self.encoder, self.reranker = encoder, reranker
@@ -68,7 +69,19 @@ class Retriever:
         self.texts = texts
         self.bm25 = BM25(texts)
         strategy = chunks[0].chunk_id.split(":")[1] if chunks else "empty"
-        self.vectors = VectorIndex.build(texts, encoder, cache_dir / f"vectors-{strategy}")
+        self.vector_backend = vector_backend
+        if vector_backend == "milvus":
+            from contract_review.milvus_index import MilvusVectorIndex
+
+            self.vectors = MilvusVectorIndex.build(
+                texts,
+                [c.tenant for c in chunks],
+                encoder,
+                cache_dir / f"vectors-{strategy}",
+                f"chunks_{strategy}",
+            )
+        else:
+            self.vectors = VectorIndex.build(texts, encoder, cache_dir / f"vectors-{strategy}")
 
     def search(
         self,
@@ -98,7 +111,7 @@ class Retriever:
         if mode != "bm25":
             t = time.perf_counter()
             qvec = self.encoder.encode([query])[0]
-            vec = self.vectors.search(qvec, pool, allow)
+            vec = self.vectors.search(qvec, pool, allow, tenants=sorted(allowed))
             vec_ranks = {i: r for r, (i, _) in enumerate(vec, 1)}
             lat["vector"] = (time.perf_counter() - t) * 1000
 

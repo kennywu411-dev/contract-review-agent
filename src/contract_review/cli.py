@@ -78,14 +78,16 @@ def cmd_ingest(args: argparse.Namespace) -> None:
 INDEX_DIR = DATA_DIR / "index"
 
 
-def _retriever(strategy: str, rerank: bool = True):
+def _retriever(strategy: str, rerank: bool = True, backend: str = "numpy"):
     from contract_review.chunking import load_chunks
     from contract_review.embed import BgeM3Encoder
     from contract_review.rerank import BgeReranker
     from contract_review.retrieve import Retriever
 
     reranker = BgeReranker() if rerank else None
-    return Retriever(load_chunks(DB_PATH, strategy), BgeM3Encoder(), reranker, INDEX_DIR)
+    return Retriever(
+        load_chunks(DB_PATH, strategy), BgeM3Encoder(), reranker, INDEX_DIR, vector_backend=backend
+    )
 
 
 def cmd_index(args: argparse.Namespace) -> None:
@@ -350,6 +352,33 @@ def cmd_eval_review_dialog(args: argparse.Namespace) -> None:
         print(mode, json.dumps(s.get(mode, {}), ensure_ascii=False))
 
 
+def cmd_eval_contract_retrieval(args: argparse.Namespace) -> None:
+    import json
+    import time as _t
+
+    from contract_review.contract_evalset import load_contracts
+    from contract_review.eval_contract_retrieval import build_queries, run_contract_retrieval_eval
+
+    t0 = _t.perf_counter()
+    retr = _retriever(args.strategy, backend=args.backend)
+    build_s = _t.perf_counter() - t0
+    out = run_contract_retrieval_eval(
+        retr,
+        build_queries(load_contracts()),
+        args.mode or ["bm25", "vector", "hybrid", "hybrid_rerank"],
+        f"{args.tag}-{args.backend}",
+    )
+    s = json.loads((out / "summary.json").read_text(encoding="utf-8"))
+    s["backend"], s["index_build_s"] = args.backend, build_s
+    (out / "summary.json").write_text(json.dumps(s, ensure_ascii=False, indent=1), "utf-8")
+    print(f"{out.relative_to(ROOT)}：{s['n']} 条查询，后端 {args.backend}，建索引 {build_s:.1f}s")
+    for mode, m in s["modes"].items():
+        print(
+            f"{mode:14} R@{s['k']} {m['recall_at_k']:.1%}  P50 {m['latency_ms']['p50']:.0f}ms  "
+            f"分段 {json.dumps({k: round(v, 1) for k, v in m['stage_p50_ms'].items()})}"
+        )
+
+
 def cmd_eval_agent(args: argparse.Namespace) -> None:
     import json
 
@@ -607,6 +636,12 @@ def main() -> None:
     p.add_argument("--tag", default="review-dialog")
     p.add_argument("--max-cost", type=float, default=0.6)
     p.set_defaults(func=cmd_eval_review_dialog)
+    p = sub.add_parser("eval-contract-retrieval", help="合同场景检索评测（条款找依据，R@5）")
+    p.add_argument("--backend", choices=["numpy", "milvus"], default="numpy")
+    p.add_argument("--strategy", default="fixed", choices=["block", "fixed", "section"])
+    p.add_argument("--mode", action="append", choices=["bm25", "vector", "hybrid", "hybrid_rerank"])
+    p.add_argument("--tag", default="contract-retrieval")
+    p.set_defaults(func=cmd_eval_contract_retrieval)
     p = sub.add_parser("eval-d4", help="引用校验与拒答评测（Haiku 作答+校验，Sonnet 评判）")
     p.add_argument("--sample", type=int)
     p.add_argument("--model", default="claude-haiku-5-5")

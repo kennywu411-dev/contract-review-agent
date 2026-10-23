@@ -45,7 +45,11 @@ class VectorIndex:
         return cls(vectors)
 
     def search(
-        self, qvec: np.ndarray, k: int, allow: Callable[[int], bool] | None = None
+        self,
+        qvec: np.ndarray,
+        k: int,
+        allow: Callable[[int], bool] | None = None,
+        tenants: list[str] | None = None,  # numpy 后端用 allow 过滤；参数与 Milvus 后端对齐
     ) -> list[tuple[int, float]]:
         scores = self.vectors @ qvec
         order = np.argsort(-scores)
