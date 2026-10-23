@@ -129,7 +129,17 @@ def test_runs_listing_mixed_types(client):
     runs = client.get("/api/runs").json()
     kinds = {r["kind"] for r in runs}
     assert (
-        kinds <= {"retrieval", "agent", "d4", "dialog", "review", "review_d4", "review_dialog"}
+        kinds
+        <= {
+            "retrieval",
+            "agent",
+            "d4",
+            "dialog",
+            "review",
+            "review_d4",
+            "review_dialog",
+            "contract_retrieval",
+        }
         and runs
     )
 
@@ -235,3 +245,16 @@ def test_samples_are_constructed_contracts(client):
     data = client.get("/api/samples").json()
     assert data and all(d["constructed"] for d in data)
     assert {"id", "title", "tenant", "text", "our_name"} <= set(data[0])
+
+
+def test_contract_run_kinds_and_rows(client):
+    from contract_review.api import _run_kind
+
+    assert _run_kind({"kind": "contract_retrieval", "modes": {}}) == "contract_retrieval"
+    runs = client.get("/api/runs").json()
+    reviews = [r for r in runs if r["kind"] == "review"]
+    if not reviews:
+        pytest.skip("没有合同审查运行")
+    assert all(r["n"] for r in reviews)
+    d = client.get(f"/api/runs/{reviews[0]['run']}").json()
+    assert d["rows"] and {"id", "title", "trace_id"} <= set(d["rows"][0])

@@ -133,7 +133,7 @@ def _chunks(strategy: str) -> dict:
 
 
 def _run_kind(summary: dict) -> str:
-    if summary.get("kind") in ("review", "review_d4", "review_dialog"):
+    if summary.get("kind") in ("review", "review_d4", "review_dialog", "contract_retrieval"):
         return summary["kind"]
     if any(isinstance(v, dict) and "followup_correct" in v for v in summary.values()):
         return "dialog"
@@ -156,6 +156,13 @@ def _questions() -> dict:
     from contract_review.evalset import load_questions
 
     return {q.id: q for q in load_questions()}
+
+
+@cache
+def _contracts() -> dict:
+    from contract_review.contract_evalset import load_contracts
+
+    return {c.id: c for c in load_contracts()}
 
 
 def _stage_row(trace: dict) -> dict:
@@ -436,7 +443,10 @@ def create_app(engine=None) -> FastAPI:
                 {
                     "run": d.parent.name,
                     "kind": _run_kind(s),
-                    "n": s.get("n") or s.get("_meta", {}).get("n_questions"),
+                    "n": s.get("n")
+                    or s.get("contracts")
+                    or s.get("dialogs")
+                    or s.get("_meta", {}).get("n_questions"),
                 }
             )
         return out
@@ -448,17 +458,27 @@ def create_app(engine=None) -> FastAPI:
         name = next(
             (
                 n
-                for n in ("d4_results.jsonl", "agent_results.jsonl", "results.jsonl")
+                for n in (
+                    "d4_results.jsonl",
+                    "agent_results.jsonl",
+                    "review_results.jsonl",
+                    "dialog_results.jsonl",
+                    "results.jsonl",
+                )
                 if (d / n).exists()
             ),
             None,
         )
         rows = [json.loads(x) for x in (d / name).open(encoding="utf-8")] if name else []
         qs = _questions()
+        contracts = _contracts()
         for r in rows:
             q = qs.get(r.get("qid"))
             if q:
                 r |= {"question": q.question, "tenant": q.tenant, "answer_hint": q.answer_hint}
+            c = contracts.get(r.get("id") or r.get("contract_id"))
+            if c:
+                r |= {"title": c.title, "tenant": c.tenant}
         return {"run": run, "kind": _run_kind(summary), "summary": summary, "rows": rows}
 
     @app.get("/api/runs/{run}/stages")
