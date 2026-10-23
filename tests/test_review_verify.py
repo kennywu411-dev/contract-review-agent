@@ -116,3 +116,21 @@ def test_verify_skips_non_review_and_survives_verifier_error():
     )
     assert v.verifier_error and v.findings[0]["needs_human_review"] is True
     assert v.findings[0]["verify_flags"] == ["unverified"]
+
+
+def test_law_refs_catches_other_named_laws():
+    # 全分支审查 Important 4：白名单外的法名也要抽出来，凭记忆引用别的法最该被拦
+    assert law_refs("依据《个人信息保护法》第二十一条，受托人应当……") == {("其他:个人信息保护法", "第二十一条")}
+    assert law_refs("《数据安全法》第27条") == {("其他:数据安全法", "第二十七条")}
+    assert law_refs("《民法典》合同编第五百八十五条") == {("law-civil-code", "第五百八十五条")}
+
+
+def test_law_refs_does_not_absorb_contract_clause():
+    assert law_refs("《民法典》第五百八十五条及第八条约定的违约金") == {
+        ("law-civil-code", "第五百八十五条")
+    }
+
+
+def test_other_law_is_always_unretrieved():
+    f = {"reason": "违反《个人信息保护法》第二十一条。", "suggestion": ""}
+    assert unretrieved_refs(f, CITES, "huaxin") == [("其他:个人信息保护法", "第二十一条")]

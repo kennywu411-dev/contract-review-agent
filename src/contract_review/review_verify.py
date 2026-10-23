@@ -18,26 +18,18 @@ from contract_review.verify import VERIFY_SCHEMA, _source_text
 _DIGITS = "零一二三四五六七八九"
 _NUM = r"[0-9零〇一二两三四五六七八九十百千]+"
 _ART = rf"第\s*{_NUM}\s*条"
-# 文件名 → doc_id（policy 表示当前租户的合同审查规范）
+# 文件名 → doc_id（policy 表示当前租户的合同审查规范）；书名号里不在这张表上的法名记为"其他:<名>"
 _DOCS = [
     (r"民法典", "law-civil-code"),
     (r"合同编通则(?:若干问题的)?解释|通则解释|合同编解释|司法解释", "law-contract-interp-2023"),
     (r"民事诉讼法|民诉法", "law-civil-procedure"),
     (r"规范|细则|管理办法|办法", "policy"),
 ]
-_REF = re.compile(
-    "("
-    + "|".join(p for p, _ in _DOCS)
-    + r")[》」”\s]*("
-    + _ART
-    + r"(?:\s*第\s*"
-    + _NUM
-    + r"\s*款)?(?:\s*[、和及与或]\s*"
-    + _ART
-    + r"(?:\s*第\s*"
-    + _NUM
-    + r"\s*款)?)*)"
-)
+_CLAUSE_ITEM = rf"{_ART}(?:\s*第\s*{_NUM}\s*款)?"
+# 连写的条号；后面紧跟"约定"的是合同自己的条款（"第五百八十五条及第八条约定"），不并入
+_LIST = rf"{_CLAUSE_ITEM}(?:\s*[、和及与或]\s*{_CLAUSE_ITEM}(?!\s*约定))*"
+_BOOK = re.compile(rf"《([^《》]{{1,40}})》[^《》第。；\n]{{0,8}}?({_LIST})")
+_BARE = re.compile("(" + "|".join(p for p, _ in _DOCS) + rf")[」”\s]*({_LIST})")
 _ONE = re.compile(rf"第\s*({_NUM})\s*条")
 
 
@@ -68,15 +60,19 @@ def _article(raw: str) -> str:
 
 
 def _doc_id(name: str) -> str:
-    return next(d for p, d in _DOCS if re.fullmatch(p, name))
+    for pattern, doc in _DOCS:
+        if re.search(pattern, name):
+            return doc
+    return f"其他:{name}"
 
 
 def law_refs(text: str) -> set[tuple[str, str]]:
     out: set[tuple[str, str]] = set()
-    for m in _REF.finditer(text or ""):
-        doc = _doc_id(m.group(1))
-        for a in _ONE.finditer(m.group(2)):
-            out.add((doc, _article(a.group(1))))
+    for regex in (_BOOK, _BARE):
+        for m in regex.finditer(text or ""):
+            doc = _doc_id(m.group(1))
+            for a in _ONE.finditer(m.group(2)):
+                out.add((doc, _article(a.group(1))))
     return out
 
 
