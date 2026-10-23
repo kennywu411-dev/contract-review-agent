@@ -3,13 +3,27 @@
 向量本身仍走 VectorIndex 的 sha1 缓存（不重复编码）；这里只负责把向量和租户同步进 Milvus Lite，
 检索时把租户条件下推成过滤表达式，而不是取回后再删，保证前 k 个里不会被别家租户占位。
 内容指纹（全部文本 sha1 + 租户）不变时直接复用集合，变了才重建。
+
+连接方式（ADR 008）：
+- 默认：在本机 127.0.0.1 起一个 Milvus Lite 服务子进程，用 URI 连接。
+  Milvus Lite 3.x 是进程内纯 Python
+  实现，检索用 faiss（自带 libomp），和 torch 自带的 libomp 同进程会报 OMP #15；分进程从根上隔离，
+  连接方式也和生产环境的 Milvus Standalone 一样；
+- 环境变量 MILVUS_URI：直接连外部 Milvus（如 Docker 里的 Standalone）；
+- 传 .db 路径：进程内模式（测试用，不跑 torch 推理时可用）。
 """
 
 from __future__ import annotations
 
+import atexit
 import hashlib
 import json
+import os
 import re
+import socket
+import subprocess
+import sys
+import time
 from pathlib import Path
 
 import numpy as np
@@ -17,6 +31,53 @@ import numpy as np
 from contract_review.vector import Encoder, VectorIndex
 
 BATCH = 500
+SERVER_START_TIMEOUT_S = 60
+_SERVERS: dict[str, subprocess.Popen] = {}  # 数据目录 → 服务子进程
+
+
+def _free_port() -> int:
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
+def _ensure_server(data_dir: Path) -> str:
+    """同一数据目录只起一个服务；只监听 127.0.0.1。"""
+    key = str(data_dir.resolve())
+    proc = _SERVERS.get(key)
+    if proc is not None and proc.poll() is None:
+        return proc.uri  # type: ignore[attr-defined]
+    port = _free_port()
+    cmd = [sys.executable, "-m", "milvus_lite", "server", "--data-dir", key]
+    cmd += ["--host", "127.0.0.1", "--port", str(port)]
+    proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    deadline = time.monotonic() + SERVER_START_TIMEOUT_S
+    while True:
+        try:
+            socket.create_connection(("127.0.0.1", port), timeout=0.5).close()
+            break
+        except OSError:
+            if proc.poll() is not None or time.monotonic() > deadline:
+                proc.kill()
+                raise RuntimeError(f"Milvus Lite 服务没起来：{' '.join(cmd)}") from None
+            time.sleep(0.2)
+    proc.uri = f"http://127.0.0.1:{port}"  # type: ignore[attr-defined]
+    _SERVERS[key] = proc
+    return proc.uri  # type: ignore[attr-defined]
+
+
+def stop_servers() -> None:
+    for proc in _SERVERS.values():
+        if proc.poll() is None:
+            proc.terminate()
+            try:
+                proc.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+    _SERVERS.clear()
+
+
+atexit.register(stop_servers)
 _SAFE_TENANT = re.compile(r"^[a-z0-9_]+$")
 
 
@@ -40,6 +101,7 @@ class MilvusVectorIndex:
         encoder: Encoder,
         cache_path: Path,
         collection: str,
+        uri: str | None = None,
     ) -> MilvusVectorIndex:
         from pymilvus import MilvusClient
 
@@ -47,10 +109,12 @@ class MilvusVectorIndex:
         db = cache_path.parent / "milvus.db"
         meta_path = cache_path.with_suffix(".milvus.json")
         name = re.sub(r"[^A-Za-z0-9_]", "_", collection)
-        client = MilvusClient(str(db))
+        uri = uri or os.environ.get("MILVUS_URI") or _ensure_server(db)
+        client = MilvusClient(uri)
         fp = _fingerprint(texts, tenants)
         meta = json.loads(meta_path.read_text("utf-8")) if meta_path.exists() else {}
         if client.has_collection(name) and meta.get("fingerprint") == fp:
+            client.load_collection(name)  # 新进程里复用时集合是 released 状态，要先加载
             return cls(client, name, rebuilt=False)
         if client.has_collection(name):
             client.drop_collection(name)
