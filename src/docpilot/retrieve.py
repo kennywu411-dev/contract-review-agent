@@ -80,7 +80,7 @@ class Retriever:
         school: str,
         k: int = 5,
         mode: Mode = "hybrid_rerank",
-        pool: int = 30,
+        pool: int = 15,  # ADR 002：候选 15 与 30 的 R@5 相同，耗时减半
     ) -> SearchResult:
         t0 = time.perf_counter()
         lat: dict[str, float] = {}

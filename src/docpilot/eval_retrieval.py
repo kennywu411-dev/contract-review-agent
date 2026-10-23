@@ -25,8 +25,10 @@ def is_hit(chunk: Chunk, gold: list[dict]) -> bool:
         if g.get("page") is not None:
             if g["page"] in chunk.pages:
                 return True
-        elif g.get("clause") and re.search(rf"(^|\n){re.escape(g['clause'])}", chunk.text):
-            return True
+        elif g.get("clause"):
+            clause = g["clause"]
+            if clause in chunk.articles or re.search(rf"(^|\n){re.escape(clause)}", chunk.text):
+                return True
     return False
 
 
@@ -88,7 +90,9 @@ def stratified_sample(qs: list[Question], n: int, seed: int = 0) -> list[Questio
     return sorted(out, key=lambda q: q.id)
 
 
-def run_retrieval_eval(retrievers: dict, questions: list[Question], modes, tag: str) -> Path:
+def run_retrieval_eval(
+    retrievers: dict, questions: list[Question], modes, tag: str, pool: int = 30
+) -> Path:
     """retrievers: 切块策略 → Retriever。结果写到 runs/<run_id>/。"""
     run_id = f"{tag}-{datetime.now():%Y%m%d-%H%M%S}"
     out_dir = RUNS_DIR / run_id
@@ -96,10 +100,10 @@ def run_retrieval_eval(retrievers: dict, questions: list[Question], modes, tag: 
     rows = []
     for strategy, retr in retrievers.items():
         for mode in modes:
-            config = f"{strategy}/{mode}"
+            config = f"{strategy}/{mode}" + (f"@pool{pool}" if pool != 30 else "")
             for q in questions:
                 t = time.perf_counter()
-                res = retr.search(q.question, q.school, k=max(K_LIST), mode=mode)
+                res = retr.search(q.question, q.school, k=max(K_LIST), mode=mode, pool=pool)
                 rank = next((i for i, h in enumerate(res.hits, 1) if is_hit(h.chunk, q.gold)), None)
                 rows.append(
                     {

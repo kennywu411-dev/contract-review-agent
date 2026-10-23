@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -15,6 +16,7 @@ Strategy = Literal["block", "fixed", "section"]
 STRATEGIES: tuple[Strategy, ...] = ("block", "fixed", "section")
 FIXED_SIZE, FIXED_OVERLAP = 400, 80
 SECTION_MAX = 600
+_ARTICLE = re.compile(r"^第[零一二三四五六七八九十百千〇两\d]+条")
 
 
 @dataclass
@@ -27,6 +29,9 @@ class Chunk:
     text: str
     pages: list[int] = field(default_factory=list)
     block_seqs: list[int] = field(default_factory=list)
+    # 覆盖到的条款号。"第十二条"下面的"1. 2."被切到别的 chunk 时，靠它知道属于哪一条
+    # （网页、DOCX 没有页码，评测命中和 D4 引用都按条款号定位）
+    articles: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -35,6 +40,7 @@ class _Body:
     text: str
     page: int | None
     path: list[str]
+    article: str | None = None
 
 
 def embed_text(c: Chunk) -> str:
@@ -60,6 +66,7 @@ def _make(doc, strategy, n, bodies: list[_Body], text: str | None = None) -> Chu
         text=text if text is not None else "\n".join(b.text for b in bodies),
         pages=_pages(bodies),
         block_seqs=[b.seq for b in bodies],
+        articles=list(dict.fromkeys(b.article for b in bodies if b.article)),
     )
 
 
@@ -116,11 +123,16 @@ def load_chunks(db: Path, strategy: Strategy) -> list[Chunk]:
             (doc_id,),
         ).fetchall()
         titles = {text for _, kind, level, text, _, _ in rows if kind == "heading" and level == 0}
-        bodies = [
-            _Body(seq, text, page, json.loads(path))
-            for seq, kind, _, text, page, path in rows
-            if kind != "heading"
-        ]
+        bodies: list[_Body] = []
+        article: str | None = None
+        for seq, kind, _, text, page, path_json in rows:
+            if kind == "heading":
+                article = None  # 换章节，条款归属清空
+                continue
+            m = _ARTICLE.match(text)
+            if m:
+                article = m.group()
+            bodies.append(_Body(seq, text, page, json.loads(path_json), article))
         if not bodies:
             continue
         doc = (doc_id, school, title, titles)

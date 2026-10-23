@@ -66,3 +66,9 @@ def test_html_clause_inside_merged_section_chunk():
     gold = [{"doc_id": "h", "page": None, "clause": "第二十八条"}]
     assert is_hit(ch("h", [], "第二十七条　休学\n第二十八条　复学"), gold)
     assert not is_hit(ch("h", [], "第二十七条　依照第二十八条处理"), gold)
+
+
+def test_clause_gold_matches_article_of_sub_items():
+    c = ch("h", [], "2.二年级只能在学院内转专业。")
+    c.articles = ["第十二条"]
+    assert is_hit(c, [{"doc_id": "h", "page": None, "clause": "第十二条"}])

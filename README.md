@@ -4,7 +4,7 @@
 
 DataPilot 负责结构化数据，DocPilot 负责非结构化文档，两者由同一个 agent 调度。产品定义见 [docs/PRD.md](docs/PRD.md)。
 
-> 当前进度：**D1 解析入库**已完成；检索、agent、引用校验、界面和评测按 D2–D7 推进。
+> 当前进度：**D1 解析入库**、**D2 检索与切块实验**已完成；agent、引用校验、界面和评测看板按 D3–D7 推进。
 
 ## 一条命令复现
 
@@ -19,6 +19,31 @@ uv sync && uv run docpilot ingest
 4. 用手工整理的 CSV 构建结构化表库 `data/campus/campus.sqlite`（供 DataPilot 查询）。
 
 首次运行约 3 分钟，会下载 docling 模型和 24MB 文件。南京理工大学有 3 份文件因网站反爬拿不到，需要手动放到 `data/raw/njust/`（文件名见 `sources.toml` 中 `manual = true` 的条目）；不放也能运行，只是这 3 份标为缺失。
+
+## 检索（D2）
+
+固定长度切块 → BM25（手写，中文字二元组）与 bge-m3 向量各取前 15 → RRF 融合 → bge-reranker-v2-m3 重排；只在"本校 + 国家层面"范围内检索。
+
+| 评测集 v1（174 题，真实来源 67%） | Recall@5 | R@1 | 单题检索 P50 |
+|---|---|---|---|
+| 选定方案 | **98.6%** | 72.3% | 1.58s |
+| 不重排（降级方案） | 96.5% | 65.2% | 39ms |
+
+3 种切块 × 4 种模式的对比和选型理由见 [ADR 002](docs/adr/002-检索与切块.md)。
+
+```bash
+uv run docpilot index
+```
+
+```bash
+uv run docpilot search "国奖能拿多少钱" --school bnu
+```
+
+```bash
+uv run docpilot eval-retrieval --sample 20
+```
+
+首次运行会下载 bge-m3 和 bge-reranker-v2-m3（各约 2.3GB）。
 
 ## 数据
 
@@ -44,7 +69,15 @@ src/docpilot/
   store.py       SQLite 入库（documents / blocks / pages）
   quality.py     质量检查：疑似扫描件、未解析页、乱码比例
   campus_db.py   结构化表库
-  cli.py         docpilot ingest
+  chunking.py    三种切块策略（block / fixed / section），记录页码与条款号
+  bm25.py        手写 BM25
+  embed.py       bge-m3 向量（transformers 直接加载）
+  vector.py      numpy 余弦检索 + 按文本哈希的向量缓存
+  rerank.py      bge-reranker-v2-m3
+  retrieve.py    学校过滤 + RRF + 重排
+  evalset.py     评测集加载与校验
+  eval_retrieval.py  检索评测
+  cli.py         docpilot ingest / index / search / eval-retrieval
 docs/            PRD、ADR、问题日志、数字登记表、质量报告
 ```
 

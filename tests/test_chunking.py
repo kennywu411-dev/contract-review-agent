@@ -86,3 +86,28 @@ def test_title_falls_back_to_document_title(db):
 def test_embed_text_prefixes_section_path(db):
     c = load_chunks(db, "block")[0]
     assert embed_text(c).startswith(f"{T} > 第一章 总则\n第一条")
+
+
+def test_chunks_remember_articles_of_sub_items(tmp_path):
+    path = ["转专业办法", "第三章 程序"]
+    db = make_db(
+        tmp_path,
+        {
+            "h": (
+                "lzu",
+                "转专业办法",
+                [
+                    ("heading", 2, "第三章 程序", None, ["转专业办法"]),
+                    ("paragraph", 4, "第十二条 申请范围如下：", None, path),
+                    ("paragraph", None, "1.一年级可全校范围转专业。" + "甲" * 590, None, path),
+                    ("paragraph", None, "2.二年级只能在学院内转专业。", None, path),
+                    ("paragraph", 4, "第十三条 其他。", None, path),
+                ],
+            )
+        },
+    )
+    chunks = load_chunks(db, "section")
+    second = next(c for c in chunks if "二年级" in c.text)
+    assert "第十二条" not in second.text and second.articles[0] == "第十二条"
+    last = next(c for c in chunks if "第十三条" in c.text)
+    assert last.articles[-1] == "第十三条"

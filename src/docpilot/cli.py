@@ -130,7 +130,7 @@ def cmd_eval_retrieval(args: argparse.Namespace) -> None:
     retrievers = {
         s: Retriever(load_chunks(DB_PATH, s), encoder, reranker, INDEX_DIR) for s in strategies
     }
-    out = run_retrieval_eval(retrievers, qs, args.mode or list(MODES), args.tag)
+    out = run_retrieval_eval(retrievers, qs, args.mode or list(MODES), args.tag, args.pool)
     import json
 
     summary = json.loads((out / "summary.json").read_text(encoding="utf-8"))
@@ -158,7 +158,7 @@ def main() -> None:
     p = sub.add_parser("search", help="检索调试")
     p.add_argument("query")
     p.add_argument("--school", required=True)
-    p.add_argument("--strategy", default="section", choices=["block", "fixed", "section"])
+    p.add_argument("--strategy", default="fixed", choices=["block", "fixed", "section"])
     p.add_argument(
         "--mode", default="hybrid_rerank", choices=["bm25", "vector", "hybrid", "hybrid_rerank"]
     )
@@ -169,6 +169,7 @@ def main() -> None:
     p.add_argument("--strategy", action="append", choices=["block", "fixed", "section"])
     p.add_argument("--mode", action="append", choices=["bm25", "vector", "hybrid", "hybrid_rerank"])
     p.add_argument("--tag", default="retrieval")
+    p.add_argument("--pool", type=int, default=30, help="每路召回和重排的候选数")
     p.set_defaults(func=cmd_eval_retrieval)
     args = parser.parse_args()
     args.func(args)
