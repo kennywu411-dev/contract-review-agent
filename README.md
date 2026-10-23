@@ -4,7 +4,7 @@
 
 DataPilot 负责结构化数据，DocPilot 负责非结构化文档，两者由同一个 agent 调度。产品定义见 [docs/PRD.md](docs/PRD.md)。
 
-> 当前进度：**D1 解析入库**、**D2 检索与切块实验**已完成；agent、引用校验、界面和评测看板按 D3–D7 推进。
+> 当前进度：D1 解析入库、D2 检索、**D3 Agent 与工具**已完成；引用校验、界面和评测看板按 D4–D7 推进。
 
 ## 一条命令复现
 
@@ -45,6 +45,28 @@ uv run docpilot eval-retrieval --sample 20
 
 首次运行会下载 bge-m3 和 bge-reranker-v2-m3（各约 2.3GB）。
 
+## Agent（D3）
+
+学生提问后，agent 最多走 6 步，在 4 个工具里自己选：检索本校和国家层面的文件、通过 DataPilot 的只读 MCP 查 campus 表、反问澄清、结构化作答（每句话都列出处编号）。每一步都写 trace。
+
+| 174 题（Haiku 5.5） | 结果 |
+|---|---|
+| 作答率 / 误拒率 | 99.3% / 0.7% |
+| 引用命中率 | 97.1% |
+| 需查表题走查表 | 91.7% |
+| 拒答正确率（严格口径） | 81.8% |
+| 单题花费 / 耗时 P50 | $0.0011 / 8.1s |
+
+```bash
+uv run docpilot ask "国家奖学金一年能拿多少钱？" --school upc
+```
+
+```bash
+uv run docpilot eval-agent --sample 20
+```
+
+需要 `ANTHROPIC_API_KEY`（环境变量或仓库根目录的 `.env`）。设计取舍见 [ADR 003](docs/adr/003-agent设计.md)。
+
 ## 数据
 
 | 层 | 内容 |
@@ -77,7 +99,13 @@ src/docpilot/
   retrieve.py    学校过滤 + RRF + 重排
   evalset.py     评测集加载与校验
   eval_retrieval.py  检索评测
-  cli.py         docpilot ingest / index / search / eval-retrieval
+  llm.py         Claude 调用与成本计算
+  datapilot_client.py  DataPilot MCP 客户端（含本地只读降级）
+  tools.py       agent 工具与安全边界
+  prompts.py     按校生成的 system 提示词
+  agent.py       工具循环与 trace
+  eval_agent.py  agent 评测
+  cli.py         docpilot ingest / index / search / eval-retrieval / ask / eval-agent
 docs/            PRD、ADR、问题日志、数字登记表、质量报告
 ```
 

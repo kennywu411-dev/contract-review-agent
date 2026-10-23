@@ -206,6 +206,52 @@ def cmd_link(_: argparse.Namespace) -> None:
     print(f"已链接：{link_datapilot()}")
 
 
+def cmd_eval_agent(args: argparse.Namespace) -> None:
+    import json
+
+    from docpilot.agent import run_agent
+    from docpilot.datapilot_client import make_backend
+    from docpilot.eval_agent import run_agent_eval
+    from docpilot.eval_retrieval import stratified_sample
+    from docpilot.evalset import load_questions
+    from docpilot.llm import AnthropicLLM
+    from docpilot.tools import ToolBox
+
+    qs = load_questions()
+    if args.sample:
+        qs = stratified_sample(qs, args.sample)
+    retr, sql, llm = _retriever("fixed"), make_backend(), AnthropicLLM(args.model)
+    try:
+        out = run_agent_eval(
+            qs,
+            lambda q: run_agent(q.question, q.school, llm, ToolBox(q.school, retr, sql)),
+            args.tag,
+            args.max_cost,
+        )
+    finally:
+        if hasattr(sql, "close"):
+            sql.close()
+    s = json.loads((out / "summary.json").read_text(encoding="utf-8"))
+    a, r = s["answerable"], s["refuse"]
+    print(f"{out.relative_to(ROOT)}：{s['n']} 题，后端 {getattr(sql, 'name', '?')}")
+    print(
+        f"可回答 {a['n']}：作答 {a['answer_rate']:.1%}  误拒 {a['false_refusal_rate']:.1%}  "
+        f"反问 {a['clarify_rate']:.1%}  引用命中 {a['cite_hit_rate']:.1%}  "
+        f"无效引用 {a['invalid_citation_rate']:.1%}"
+    )
+    print(
+        f"查表题路由 {s['table']['route_rate']:.1%}（{s['table']['n']}）  "
+        f"该拒答 {r['correct_refuse_rate']:.1%}（{r['n']}）  "
+        f"反问题 {s['clarify']['clarify_rate']:.1%}（{s['clarify']['n']}）  "
+        f"fallback {s['fallback']}"
+    )
+    print(
+        f"花费 ${s['cost']['total_usd']:.4f}（P50 ${s['cost']['p50']:.5f} / P95 "
+        f"${s['cost']['p95']:.5f}）  耗时 P50 {s['latency_ms']['p50'] / 1000:.1f}s / "
+        f"P95 {s['latency_ms']['p95'] / 1000:.1f}s  平均 {s['steps_mean']:.1f} 步"
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="docpilot")
     sub = parser.add_subparsers(required=True)
@@ -236,6 +282,12 @@ def main() -> None:
     p.add_argument("--school", required=True, choices=["bnu", "upc", "njust", "lzu", "cumt", "zzu"])
     p.add_argument("--model", default="claude-haiku-5-5")
     p.set_defaults(func=cmd_ask)
+    p = sub.add_parser("eval-agent", help="agent 评测（会调用 Claude API）")
+    p.add_argument("--sample", type=int)
+    p.add_argument("--model", default="claude-haiku-5-5")
+    p.add_argument("--tag", default="agent")
+    p.add_argument("--max-cost", type=float, default=3.0, help="累计花费上限（美元）")
+    p.set_defaults(func=cmd_eval_agent)
     sub.add_parser("link-datapilot", help="把 campus 库链接进 DataPilot").set_defaults(
         func=cmd_link
     )
