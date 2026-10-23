@@ -38,3 +38,7 @@ dev = [
     "pytest>=9.1.1",
     "ruff>=0.17.1",
 ]
+
+[tool.ruff.lint.per-file-ignores]
+# 提示词正文按自然段写，不按 100 字折行
+"src/docpilot/prompts.py" = ["E501"]
