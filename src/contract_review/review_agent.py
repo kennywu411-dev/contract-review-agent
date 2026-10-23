@@ -123,6 +123,11 @@ def normalize_clause(raw: str) -> str | None:
     return f"第{_cn_num(int(num)) if num.isdigit() else num}条"
 
 
+def _defang(text: str) -> str:
+    """用户文本里的 <合同> / </合同> 换成全角书名号，不能提前闭合分隔符（审查 Minor 9）。"""
+    return (text or "").replace("</合同>", "〈/合同〉").replace("<合同>", "〈合同〉")
+
+
 def quote_in_contract(quote: str, contract: str) -> bool:
     """摘录是否真在合同里（忽略空白；"……"省略的几段分别查）。空摘录（缺失型）算存在。"""
     body = _SPACES.sub("", contract)
@@ -168,6 +173,7 @@ def review_contract(
     """question 为空是首轮审查；否则是追问轮，history 放上一轮的审查意见（history_from_review）。"""
     t0 = time.perf_counter()
     company = TENANTS[tenant].removesuffix("（构造）")
+    contract, question = _defang(contract), _defang(question)
     if question:
         content = (
             f"{history}\n\n正在审查的合同（我方：{company}）：\n<合同>\n{contract.strip()}\n</合同>"

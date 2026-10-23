@@ -70,3 +70,33 @@ def test_default_uri_runs_server_in_separate_process(tmp_path, fake_encoder, mon
     assert idx.search(fake_encoder.encode(["付款"])[0], 1, tenants=["huaxin"])
     milvus_index.stop_servers()
     assert proc.poll() is not None
+
+
+def test_server_start_retries_when_port_taken(tmp_path, monkeypatch):
+    # 审查 Minor 10：先取空闲端口再让子进程绑定有竞争；端口被占时换一个重试
+    import socket
+
+    from contract_review import milvus_index
+
+    busy = socket.socket()
+    busy.bind(("127.0.0.1", 0))
+    busy.listen()
+    ports = iter([busy.getsockname()[1]])
+    real = milvus_index._free_port
+    monkeypatch.setattr(milvus_index, "_free_port", lambda: next(ports, None) or real())
+    try:
+        uri = milvus_index._ensure_server(tmp_path / "m.db")
+        assert str(busy.getsockname()[1]) not in uri
+    finally:
+        busy.close()
+        milvus_index.stop_servers()
+
+
+def test_index_close_releases_client(tmp_path, fake_encoder):
+    from contract_review.milvus_index import MilvusVectorIndex, stop_servers
+
+    # 不用进程内模式（.db 路径）：那会把 faiss 的 libomp 加载进测试进程，后面 torch 的测试会崩（ADR 009）
+    idx = MilvusVectorIndex.build(["甲方付款"], ["huaxin"], fake_encoder, tmp_path / "v", "t")
+    idx.close()
+    idx.close()  # 幂等
+    stop_servers()

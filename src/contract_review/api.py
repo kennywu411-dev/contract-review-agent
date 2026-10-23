@@ -8,7 +8,9 @@ from __future__ import annotations
 import asyncio
 import json
 import re
+import secrets
 import sqlite3
+from contextlib import asynccontextmanager
 from dataclasses import asdict
 from functools import cache
 from pathlib import Path
@@ -81,6 +83,16 @@ class RealEngine:
         )
         save_trace(raw)
         return raw, ver
+
+    def close(self) -> None:
+        if hasattr(self.sql, "close"):
+            self.sql.close()
+        vectors = getattr(self.retriever, "vectors", None)
+        if hasattr(vectors, "close"):
+            vectors.close()
+        from contract_review.milvus_index import stop_servers
+
+        stop_servers()
 
     def review(self, contract: str, tenant: str, on_step, history: str = "", question: str = ""):
         from contract_review.review_agent import review_contract
@@ -196,7 +208,17 @@ def _stage_row(trace: dict) -> dict:
 def create_app(engine=None) -> FastAPI:
     from fastapi.middleware.cors import CORSMiddleware
 
-    app = FastAPI(title="Contract Risk Review Agent")
+    state = {"engine": engine}
+
+    @asynccontextmanager
+    async def lifespan(_app):
+        yield
+        # 关闭时回收 DataPilot MCP 子进程、Milvus 服务等（审查 Minor 10）
+        eng = state["engine"]
+        if eng is not None and hasattr(eng, "close"):
+            eng.close()
+
+    app = FastAPI(title="Contract Risk Review Agent", lifespan=lifespan)
     # 开发时前端跑在 3000 端口；cra serve 时同源，不需要 CORS
     app.add_middleware(
         CORSMiddleware,
@@ -204,7 +226,6 @@ def create_app(engine=None) -> FastAPI:
         allow_methods=["GET", "POST"],
         allow_headers=["*"],
     )
-    state = {"engine": engine}
     app.state.engine = engine
     sessions: dict[str, tuple[str, object]] = {}  # session_id → (学校, ConversationMemory)
 
@@ -256,6 +277,7 @@ def create_app(engine=None) -> FastAPI:
 
         sess = review_sessions.get(body.session_id or "")
         if body.question:
+            sid = body.session_id or ""
             if sess is None or sess["tenant"] != body.tenant:
                 raise HTTPException(400, "追问需要先在同一会话里审查一份合同")
             # 追问只针对会话里那份合同；请求里带来的 contract 不能把旧历史配到新合同上
@@ -265,6 +287,16 @@ def create_app(engine=None) -> FastAPI:
             if not body.contract:
                 raise HTTPException(400, "请提供合同全文")
             contract, history = body.contract, ""
+            # 会话 id 由服务端签发（128 位随机，不可猜），客户端自带的 id 不采用（审查 Minor 5a）
+            sid = secrets.token_hex(16)
+            review_sessions[sid] = {
+                "tenant": body.tenant,
+                "contract": contract,
+                "prev": None,
+                "qa": [],
+            }
+            while len(review_sessions) > MAX_SESSIONS:
+                review_sessions.pop(next(iter(review_sessions)))
         loop = asyncio.get_running_loop()
         queue: asyncio.Queue = asyncio.Queue()
 
@@ -283,25 +315,14 @@ def create_app(engine=None) -> FastAPI:
                 )
                 data = r.to_dict()
                 data["trace"] = {"trace_id": r.trace.get("trace_id")}
-                if body.session_id:
+                s = review_sessions.get(sid)  # 请求期间可能已被淘汰
+                if s is not None:
                     if r.kind == "followup":
-                        s = review_sessions.get(body.session_id)  # 请求期间可能已被淘汰
-                        if s is not None:
-                            s["qa"].append((body.question, r.answer))
+                        s["qa"].append((body.question, r.answer))
                     elif r.kind in ("review", "clarify"):
-                        prev = data | {"findings": ver.findings or r.findings}
-                        old = review_sessions.get(body.session_id)
-                        qa = old["qa"] if old and body.question else []
+                        s["prev"] = data | {"findings": ver.findings or r.findings}
                         if body.question:
-                            qa.append((body.question, f"已按{r.our_side}方重新审查。"))
-                        review_sessions[body.session_id] = {
-                            "tenant": body.tenant,
-                            "contract": contract,
-                            "prev": prev,
-                            "qa": qa,
-                        }
-                        while len(review_sessions) > MAX_SESSIONS:
-                            review_sessions.pop(next(iter(review_sessions)))
+                            s["qa"].append((body.question, f"已按{r.our_side}方重新审查。"))
                 await queue.put(("review", data))
                 await queue.put(("verified", asdict(ver)))
             except Exception as e:  # 推给前端显示，不让连接挂住
@@ -309,6 +330,8 @@ def create_app(engine=None) -> FastAPI:
             await queue.put(("done", {}))
 
         async def stream():
+            if not body.question:
+                yield {"event": "session", "data": json.dumps({"session_id": sid})}
             task = asyncio.create_task(work())
             try:
                 while True:

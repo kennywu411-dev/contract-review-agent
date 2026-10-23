@@ -26,7 +26,8 @@ _SCHEMA = re.compile(
 
 
 def scope_sql(sql: str, tenant: str) -> str:
-    if tenant not in TENANTS:  # tenant 会拼进 SQL，只接受固定取值
+    # tenant 会拼进 SQL，只接受固定取值；common 不是客户租户（审查 Minor 11）
+    if tenant not in TENANTS or tenant == "common":
         raise ValueError(f"未知租户：{tenant}")
     if _SCHEMA.search(sql):
         raise ValueError("不允许带 schema 前缀的表名（如 main.suppliers），请直接写表名")

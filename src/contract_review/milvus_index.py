@@ -40,29 +40,52 @@ def _free_port() -> int:
         return s.getsockname()[1]
 
 
+START_ATTEMPTS = 3
+
+
+def _ready(uri: str) -> bool:
+    """用一次真实调用确认是 Milvus 服务在应答（被别的程序占着的端口也能建 TCP 连接）。"""
+    from pymilvus import MilvusClient
+
+    try:
+        client = MilvusClient(uri, timeout=2)
+        client.list_collections()
+        client.close()
+        return True
+    except Exception:
+        return False
+
+
+def _reap(proc: subprocess.Popen) -> None:
+    if proc.poll() is None:
+        proc.kill()
+    proc.wait(timeout=10)
+
+
 def _ensure_server(data_dir: Path) -> str:
-    """同一数据目录只起一个服务；只监听 127.0.0.1。"""
+    """同一数据目录只起一个服务；只监听 127.0.0.1。
+
+    先取空闲端口再交给子进程绑定，中间可能被别人抢走（审查 Minor 10）：子进程退出就换端口重试。
+    """
     key = str(data_dir.resolve())
     proc = _SERVERS.get(key)
     if proc is not None and proc.poll() is None:
         return proc.uri  # type: ignore[attr-defined]
-    port = _free_port()
-    cmd = [sys.executable, "-m", "milvus_lite", "server", "--data-dir", key]
-    cmd += ["--host", "127.0.0.1", "--port", str(port)]
-    proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    deadline = time.monotonic() + SERVER_START_TIMEOUT_S
-    while True:
-        try:
-            socket.create_connection(("127.0.0.1", port), timeout=0.5).close()
-            break
-        except OSError:
-            if proc.poll() is not None or time.monotonic() > deadline:
-                proc.kill()
-                raise RuntimeError(f"Milvus Lite 服务没起来：{' '.join(cmd)}") from None
+    for _ in range(START_ATTEMPTS):
+        port = _free_port()
+        uri = f"http://127.0.0.1:{port}"
+        cmd = [sys.executable, "-m", "milvus_lite", "server", "--data-dir", key]
+        cmd += ["--host", "127.0.0.1", "--port", str(port)]
+        proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        deadline = time.monotonic() + SERVER_START_TIMEOUT_S
+        while proc.poll() is None and time.monotonic() < deadline:
+            if _ready(uri) and proc.poll() is None:
+                proc.uri = uri  # type: ignore[attr-defined]
+                _SERVERS[key] = proc
+                return uri
             time.sleep(0.2)
-    proc.uri = f"http://127.0.0.1:{port}"  # type: ignore[attr-defined]
-    _SERVERS[key] = proc
-    return proc.uri  # type: ignore[attr-defined]
+        _reap(proc)  # 端口被占（子进程退出）或超时：回收后换端口再试
+    raise RuntimeError(f"Milvus Lite 服务没起来（试了 {START_ATTEMPTS} 次）：{key}")
 
 
 def stop_servers() -> None:
@@ -72,7 +95,7 @@ def stop_servers() -> None:
             try:
                 proc.wait(timeout=10)
             except subprocess.TimeoutExpired:
-                proc.kill()
+                _reap(proc)
     _SERVERS.clear()
 
 
@@ -126,6 +149,11 @@ class MilvusVectorIndex:
             client.insert(name, rows[start : start + BATCH])
         meta_path.write_text(json.dumps({"fingerprint": fp, "rows": len(rows)}), "utf-8")
         return cls(client, name, rebuilt=True)
+
+    def close(self) -> None:
+        if self.client is not None:
+            self.client.close()
+            self.client = None
 
     def search(
         self, qvec: np.ndarray, k: int, allow=None, tenants: list[str] | None = None
