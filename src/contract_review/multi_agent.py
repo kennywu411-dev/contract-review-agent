@@ -179,6 +179,9 @@ def _subagent(group, side, header, headings, parts, contract, tenant, llm, toolb
         f"【{g['label']}】你是专职审查员，只负责这些风险类型：{types}。"
         f"我方已确认是{side}方（{company}）。只审查下面分给你的条款；全部条款标题也列出来了，"
         "用来判断有没有缺少你负责的条款。其他类型的问题不要报（由别的审查员负责）。"
+        # 片段里看不到全局，容易把对我方有利的单方条款当成风险（ADR 012 小样）：这里重申视角规则
+        f"判断每一条前先想清楚它约束谁、保护谁：只约束对方、保护我方（{side}方）的条款，"
+        "即使写得过严、可能被法院调整或认定无效，也不要报。"
         "完成后调用 submit_review。\n"
         f"<合同首部>\n{_defang(header).strip()}\n</合同首部>\n"
         f"<全部条款标题>\n{headings}\n</全部条款标题>\n"

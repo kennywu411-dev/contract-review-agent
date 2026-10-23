@@ -171,3 +171,15 @@ def test_merge_keeps_higher_level_and_unions_citations():
     assert (
         len(merged) == 1 and merged[0]["level"] == "高" and merged[0]["citations"] == ["C2", "C1"]
     )
+
+
+def test_subagent_brief_restates_perspective_rule():
+    # 小样里专职审查员把"只约束对方"的违约金/免责当成我方风险（视角错误 2/4）：片段里要重申视角规则
+    llm = RoutedLLM()
+    review_contract_multi(CONTRACT, "huaxin", llm, lambda: box())
+    sub = [
+        q["messages"][0]["content"]
+        for q in llm.requests
+        if "plan_review" not in {t["name"] for t in q["tools"]}
+    ]
+    assert sub and all("只约束对方、保护我方" in c for c in sub)
