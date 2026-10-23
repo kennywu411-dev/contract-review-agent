@@ -60,8 +60,14 @@ def _usage_dict(u) -> dict:
 
 
 def run_agent(
-    question: str, school: str, llm: LLM, toolbox: ToolBox, max_steps: int = MAX_STEPS
+    question: str,
+    school: str,
+    llm: LLM,
+    toolbox: ToolBox,
+    max_steps: int = MAX_STEPS,
+    on_step=None,
 ) -> AgentResult:
+    """on_step(record)：每步结束时回调（Web 端用它流式推送步骤）。"""
     t0 = time.perf_counter()
     system = [
         {"type": "text", "text": system_prompt(school), "cache_control": {"type": "ephemeral"}}
@@ -116,6 +122,8 @@ def run_agent(
             _finish(result, terminal, toolbox)
             record["tool_calls"].append({"name": terminal.name, "input": terminal.input})
             trace["end"] = terminal.name
+            if on_step:
+                on_step(record)
             break
         messages.append({"role": "assistant", "content": resp.content})
         results = []
@@ -141,6 +149,8 @@ def run_agent(
                 }
             )
         messages.append({"role": "user", "content": results})
+        if on_step:
+            on_step(record)
 
     result.citations = toolbox.citations
     result.latency_ms = (time.perf_counter() - t0) * 1000

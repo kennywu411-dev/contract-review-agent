@@ -9,9 +9,9 @@ from docpilot.verify import HaikuVerifier, VerifiedAnswer, verify_result
 
 
 def answer_question(
-    question: str, school: str, llm, toolbox, verifier: HaikuVerifier
+    question: str, school: str, llm, toolbox, verifier: HaikuVerifier, on_step=None
 ) -> tuple[AgentResult, VerifiedAnswer]:
-    raw = run_agent(question, school, llm, toolbox)
+    raw = run_agent(question, school, llm, toolbox, on_step=on_step)
     ver = verify_result(raw, verifier)
     raw.trace["verify"] = asdict(ver)
     raw.trace["cost_usd"] = raw.cost_usd + ver.cost_usd

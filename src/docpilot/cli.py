@@ -336,6 +336,17 @@ def cmd_eval_d4(args: argparse.Namespace) -> None:
     )
 
 
+def cmd_serve(args: argparse.Namespace) -> None:
+    import uvicorn
+
+    from docpilot.api import WEB_DIST, create_app
+
+    if not WEB_DIST.exists():
+        print("提示：web/out 不存在，只启动 API。构建前端：cd web && npm install && npm run build")
+    print(f"DocPilot：http://{args.host}:{args.port}（首次提问会加载检索模型，约 20 秒）")
+    uvicorn.run(create_app(), host=args.host, port=args.port, log_level="warning")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="docpilot")
     sub = parser.add_subparsers(required=True)
@@ -378,6 +389,10 @@ def main() -> None:
     p.add_argument("--tag", default="d4")
     p.add_argument("--max-cost", type=float, default=5.0)
     p.set_defaults(func=cmd_eval_d4)
+    p = sub.add_parser("serve", help="启动 Web 界面（问答 / 评测看板 / 成本面板）")
+    p.add_argument("--host", default="127.0.0.1")
+    p.add_argument("--port", type=int, default=8000)
+    p.set_defaults(func=cmd_serve)
     sub.add_parser("link-datapilot", help="把 campus 库链接进 DataPilot").set_defaults(
         func=cmd_link
     )
