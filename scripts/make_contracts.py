@@ -536,6 +536,22 @@ def fmt_price(p: float) -> str:
     return f"{p:.2f}".rstrip("0").rstrip(".") if p < 100 else str(int(round(p)))
 
 
+GEN_DATE = "2026-10-23"  # 生成日：台账里资质有效期早于这天的供应商算资质已过期
+
+
+def supplier_flag(tenant: str, name: str) -> str | None:
+    """台账里对方的异常（黑名单或资质过期）；按规范报出属于正确意见（全分支审查 Important 2）。"""
+    _, status = ledger()
+    s = status.get((tenant, name))
+    if s is None:
+        return None
+    if s["status"] == "黑名单":
+        return "对方在供应商黑名单中"
+    if s["qual_valid_until"] < GEN_DATE:
+        return f"对方资质（{s['qualification']}）已于 {s['qual_valid_until']} 过期"
+    return None
+
+
 def build_contract(
     cid, ctype, our_side, risks, borderline, favorable, clarify, rng, stats, ctx_extra=None
 ):
@@ -579,7 +595,7 @@ def build_contract(
     has_deposit = (
         "deposit" in plan or "deposit" in borderline or "deposit" in fav or rng.random() < 0.4
     )
-    clauses, gold, border_gold, fav_gold = [], [], [], []
+    clauses, gold, border_gold, fav_gold, acceptable = [], [], [], [], []
     n = 0
     for slot, heading, fn in SLOTS:
         if slot == "deposit" and not has_deposit:
@@ -646,6 +662,26 @@ def build_contract(
             border_gold.append(dict(clause=no, type=btype, basis=basis(tenant, btype)))
         if slot in fav:
             fav_gold.append(dict(clause=no, type=slot, variant=fav[slot], victim=other(our_side)))
+        if slot == "subject":
+            subject_no = no
+        if (
+            slot == "liability"
+            and our_side == "甲"
+            and slot not in plan | fav
+            and slot not in borderline
+        ):
+            # 甲方视角的安全写法把"侵犯知识产权、违反保密义务"等排除在上限之外，例外对我方同样适用，
+            # 我方对外赔偿可能无上限——按华信第十四条、云启第十一条报出是对的（全分支审查 Important 3）
+            acceptable.append(
+                {
+                    "clauses": [no],
+                    "types": ["liability", "other"],
+                    "reason": "责任上限的例外对我方同样适用",
+                }
+            )
+    flag = supplier_flag(tenant, cp[0]) if our_side == "甲" else None
+    if flag:
+        acceptable.append({"clauses": [None, subject_no], "types": ["other"], "reason": flag})
     names = {s: ("____________（待填）" if clarify else party[s][0]) for s in ("甲", "乙")}
     homes = {s: ("____________" if clarify else party[s][1]) for s in ("甲", "乙")}
     sign_place = "____________" if "jurisdiction" in borderline else our[2]
@@ -676,6 +712,7 @@ def build_contract(
         gold=gold,
         borderline=border_gold,
         favorable=fav_gold,
+        acceptable=acceptable,
         constructed=True,
     )
 

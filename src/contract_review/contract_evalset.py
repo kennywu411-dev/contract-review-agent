@@ -41,6 +41,8 @@ class Contract:
     gold: list[dict] = field(default_factory=list)
     borderline: list[dict] = field(default_factory=list)
     favorable: list[dict] = field(default_factory=list)
+    # 金标准没植入、但按租户规范报出来是对的意见（全分支审查订正，见问题日志 P21）：不算误报
+    acceptable: list[dict] = field(default_factory=list)
     constructed: bool = True
 
 

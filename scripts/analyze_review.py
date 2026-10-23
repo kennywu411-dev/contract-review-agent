@@ -1,6 +1,9 @@
 """把一次合同审查全量运行拆成"调试小样"和"留出集"分别汇总（P20：小样参与过调试，留出集没有）。
 
-用法：uv run python scripts/analyze_review.py runs/<run_id> [--sample 20]
+用法：uv run python scripts/analyze_review.py runs/<run_id> [--sample 20] [--rescore]
+
+--rescore：不用运行时记下的分数，而是从 trace 取原始意见、按当前 evals/contracts.jsonl 重新判分
+（金标准订正后用，不调用 API；问题日志 P21）。
 """
 
 from __future__ import annotations
@@ -10,7 +13,7 @@ import json
 from pathlib import Path
 
 from contract_review.contract_evalset import load_contracts, sample_contracts
-from contract_review.eval_review import summarize_review
+from contract_review.eval_review import score_contract, summarize_review
 
 
 def brief(s: dict) -> dict:
@@ -40,12 +43,31 @@ def brief(s: dict) -> dict:
     }
 
 
+def rescore(run: Path, rows: list[dict]) -> list[dict]:
+    contracts = {c.id: c for c in load_contracts()}
+    out = []
+    for row in rows:
+        t = json.loads((run / "traces" / f"{row['trace_id']}.json").read_text(encoding="utf-8"))
+        r = t["result"] | {
+            "citations": t["citations"],
+            "steps": len(t["steps"]),
+            "cost_usd": t["cost_usd"],
+            "latency_ms": t["latency_ms"],
+            "trace": {"end": t.get("end")},
+        }
+        out.append(score_contract(contracts[row["id"]], r) | {"trace_id": row["trace_id"]})
+    return out
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("run", type=Path)
     ap.add_argument("--sample", type=int, default=20)
+    ap.add_argument("--rescore", action="store_true")
     args = ap.parse_args()
     rows = [json.loads(x) for x in (args.run / "review_results.jsonl").open(encoding="utf-8")]
+    if args.rescore:
+        rows = rescore(args.run, rows)
     dev = {c.id for c in sample_contracts(load_contracts(), args.sample)}
     out = {
         "all": brief(summarize_review(rows)),

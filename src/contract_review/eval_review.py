@@ -74,6 +74,13 @@ def score_contract(c: Contract, r: dict) -> dict:
                 "human": any(findings[i]["needs_human_review"] for i in hits),
             }
         )
+    acceptable = 0
+    for i, f in enumerate(findings):
+        if i not in used and any(
+            f["clause"] in a["clauses"] and f["risk_type"] in a["types"] for a in c.acceptable
+        ):
+            used.add(i)
+            acceptable += 1
     favorable = {f["clause"] for f in c.favorable}
     rest = [f for i, f in enumerate(findings) if i not in used]
     fav_flagged = {f["clause"] for f in rest if f["clause"] in favorable}
@@ -97,6 +104,7 @@ def score_contract(c: Contract, r: dict) -> dict:
         "borderline_n": len(border),
         "borderline_flagged": sum(b["flagged"] for b in border),
         "borderline_human": sum(b["human"] for b in border),
+        "acceptable_flagged": acceptable,
         "favorable_n": len(favorable),
         "favorable_flagged": len(fav_flagged),
         "fp": len(fp_clauses),

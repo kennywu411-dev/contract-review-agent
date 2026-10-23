@@ -87,3 +87,10 @@ def test_sample_covers_every_subset(cs):
     assert any(c.favorable for c in s)
     assert {c.contract_type for c in s} == {c.contract_type for c in cs}
     assert sample_contracts(cs, 20) == s
+
+
+def test_acceptable_clauses_exist(cs):
+    for c in cs:
+        for a in c.acceptable:
+            for no in a["clauses"]:
+                assert no is None or f"\n{no} " in c.text, (c.id, no)

@@ -137,3 +137,18 @@ def test_low_level_findings_reported_separately():
     s = summarize_review([clean])
     assert s["clean"]["fp_contract_rate"] == 1.0 and s["clean"]["fp_contract_rate_hm"] == 0.0
     assert s["detection"]["precision_hm"] == 0.0  # 没有高/中意见时记 0
+
+
+def test_acceptable_findings_are_not_false_positives():
+    # 全分支审查 Important 2/3：金标准漏标的正确意见（台账资质过期、责任上限例外对我方同样适用）
+    c = contract(
+        id="goods-c3", gold=[], borderline=[], favorable=[],
+        acceptable=[
+            {"clauses": [None, "第一条"], "types": ["other"], "reason": "对方资质已过期"},
+            {"clauses": ["第九条"], "types": ["liability"], "reason": "例外对我方同样适用"},
+        ],
+    )
+    r = result([finding(None, "other"), finding("第九条", "liability"), finding("第九条", "penalty")])
+    row = score_contract(c, r)
+    assert row["acceptable_flagged"] == 2 and row["fp"] == 1  # 类型对不上的仍算误报
+    assert row["matched_findings"] == 2
