@@ -2,7 +2,7 @@ import sqlite3
 
 import pytest
 
-from docpilot.datapilot_client import DATAPILOT_DIR, LocalBackend, MCPBackend, link_datapilot
+from contract_review.datapilot_client import DATAPILOT_DIR, LocalBackend, MCPBackend, link_datapilot
 
 
 @pytest.fixture
@@ -34,7 +34,7 @@ def test_local_backend_reports_sql_errors(db):
 
 
 def test_link_is_idempotent(tmp_path, monkeypatch):
-    import docpilot.datapilot_client as dc
+    import contract_review.datapilot_client as dc
 
     monkeypatch.setattr(dc, "DATAPILOT_DIR", tmp_path / "datapilot")
     (tmp_path / "datapilot" / "data" / "dev_databases").mkdir(parents=True)
@@ -70,7 +70,7 @@ class Flaky:
 
 
 def test_resilient_backend_falls_back_after_repeated_errors(db):
-    from docpilot.datapilot_client import ResilientBackend
+    from contract_review.datapilot_client import ResilientBackend
 
     primary = Flaky()
     b = ResilientBackend(primary, LocalBackend(db), max_errors=2)
@@ -81,7 +81,7 @@ def test_resilient_backend_falls_back_after_repeated_errors(db):
 
 
 def test_sql_errors_do_not_trigger_fallback(db):
-    from docpilot.datapilot_client import ResilientBackend
+    from contract_review.datapilot_client import ResilientBackend
 
     class Strict(Flaky):
         def run(self, sql):

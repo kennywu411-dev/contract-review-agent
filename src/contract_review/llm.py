@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from typing import Any, Protocol
 
-from docpilot.config import ROOT
+from contract_review.config import ROOT
 
 HAIKU = "claude-haiku-5-5"
 SONNET = "claude-sonnet-5-5"
@@ -77,6 +77,6 @@ def make_llm(model: str):
     """按模型名选封装：claude-* 走 Anthropic SDK，其余走 OpenAI 兼容接口（agent 代码不用改）。"""
     if model.startswith("claude-"):
         return AnthropicLLM(model)
-    from docpilot.openai_compat import OpenAICompatLLM
+    from contract_review.openai_compat import OpenAICompatLLM
 
     return OpenAICompatLLM(model)

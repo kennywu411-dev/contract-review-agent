@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from dataclasses import asdict
 
-from docpilot.agent import AgentResult, run_agent
-from docpilot.memory import Turn
-from docpilot.verify import HaikuVerifier, VerifiedAnswer, verify_result
+from contract_review.agent import AgentResult, run_agent
+from contract_review.memory import Turn
+from contract_review.verify import HaikuVerifier, VerifiedAnswer, verify_result
 
 
 def answer_question(

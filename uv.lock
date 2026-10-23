@@ -201,6 +201,51 @@ wheels = [
 ]
 
 [[package]]
+name = "contract-review-agent"
+version = "0.0.1"
+source = { editable = "." }
+dependencies = [
+    { name = "anthropic" },
+    { name = "docling" },
+    { name = "fastapi" },
+    { name = "mcp" },
+    { name = "numpy" },
+    { name = "pypdf" },
+    { name = "sse-starlette" },
+    { name = "torch" },
+    { name = "transformers" },
+    { name = "uvicorn", extra = ["standard"] },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "httpx" },
+    { name = "pytest" },
+    { name = "ruff" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "anthropic", specifier = ">=2.1" },
+    { name = "docling", specifier = ">=2.142,<3" },
+    { name = "fastapi", specifier = ">=0.115" },
+    { name = "mcp", specifier = ">=2.3" },
+    { name = "numpy", specifier = ">=2" },
+    { name = "pypdf", specifier = ">=6.21" },
+    { name = "sse-starlette", specifier = ">=2" },
+    { name = "torch", specifier = ">=2.8" },
+    { name = "transformers", specifier = ">=5" },
+    { name = "uvicorn", extras = ["standard"], specifier = ">=0.30" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "httpx", specifier = ">=0.27" },
+    { name = "pytest", specifier = ">=9.1.1" },
+    { name = "ruff", specifier = ">=0.17.1" },
+]
+
+[[package]]
 name = "cryptography"
 version = "50.0.2"
 source = { registry = "https://pypi.org/simple" }
@@ -485,51 +530,6 @@ standard = [
     { name = "torchvision" },
     { name = "typer" },
     { name = "websockets" },
-]
-
-[[package]]
-name = "docpilot"
-version = "0.0.1"
-source = { editable = "." }
-dependencies = [
-    { name = "anthropic" },
-    { name = "docling" },
-    { name = "fastapi" },
-    { name = "mcp" },
-    { name = "numpy" },
-    { name = "pypdf" },
-    { name = "sse-starlette" },
-    { name = "torch" },
-    { name = "transformers" },
-    { name = "uvicorn", extra = ["standard"] },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "httpx" },
-    { name = "pytest" },
-    { name = "ruff" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "anthropic", specifier = ">=2.1" },
-    { name = "docling", specifier = ">=2.142,<3" },
-    { name = "fastapi", specifier = ">=0.115" },
-    { name = "mcp", specifier = ">=2.3" },
-    { name = "numpy", specifier = ">=2" },
-    { name = "pypdf", specifier = ">=6.21" },
-    { name = "sse-starlette", specifier = ">=2" },
-    { name = "torch", specifier = ">=2.8" },
-    { name = "transformers", specifier = ">=5" },
-    { name = "uvicorn", extras = ["standard"], specifier = ">=0.30" },
-]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "httpx", specifier = ">=0.27" },
-    { name = "pytest", specifier = ">=9.1.1" },
-    { name = "ruff", specifier = ">=0.17.1" },
 ]
 
 [[package]]

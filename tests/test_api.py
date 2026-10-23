@@ -3,9 +3,9 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 
-from docpilot.agent import AgentResult
-from docpilot.api import create_app
-from docpilot.verify import VerifiedAnswer
+from contract_review.agent import AgentResult
+from contract_review.api import create_app
+from contract_review.verify import VerifiedAnswer
 
 
 class FakeEngine:

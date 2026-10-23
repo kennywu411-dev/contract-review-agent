@@ -3,10 +3,10 @@ import sqlite3 as _sq
 
 import pytest as _pt
 
-from docpilot.chunking import Chunk
-from docpilot.datapilot_client import LocalBackend
-from docpilot.retrieve import Hit, SearchResult
-from docpilot.tools import TOOLS, ToolBox, scope_sql
+from contract_review.chunking import Chunk
+from contract_review.datapilot_client import LocalBackend
+from contract_review.retrieve import Hit, SearchResult
+from contract_review.tools import TOOLS, ToolBox, scope_sql
 
 
 def ch(doc, school, text, pages=(5,), articles=()):

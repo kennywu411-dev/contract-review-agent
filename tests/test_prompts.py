@@ -1,4 +1,4 @@
-from docpilot.prompts import system_prompt
+from contract_review.prompts import system_prompt
 
 
 def test_prompt_lists_only_own_and_national_docs():

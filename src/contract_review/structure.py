@@ -8,8 +8,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from docpilot.blocks import Block
-from docpilot.headings import heading_level
+from contract_review.blocks import Block
+from contract_review.headings import heading_level
 
 # 超过这个长度、或以句号结尾的编号行视为正文段落（如"一、……。"）
 MAX_HEADING_CHARS = 40

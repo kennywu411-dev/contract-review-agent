@@ -6,9 +6,9 @@ import re
 from functools import cache
 from pathlib import Path
 
-from docpilot.blocks import Block
-from docpilot.structure import RawItem, assemble, drop_part_navigation, merge_paragraphs
-from docpilot.textclean import normalize, strip_garble
+from contract_review.blocks import Block
+from contract_review.structure import RawItem, assemble, drop_part_navigation, merge_paragraphs
+from contract_review.textclean import normalize, strip_garble
 
 KIND_BY_LABEL = {
     "title": "heading",

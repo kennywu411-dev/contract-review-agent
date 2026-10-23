@@ -7,9 +7,9 @@ from __future__ import annotations
 
 import json
 
-from docpilot.llm import PRICING, SONNET, cost_usd
-from docpilot.prompts import JUDGE_PROMPT
-from docpilot.verify import _source_text
+from contract_review.llm import PRICING, SONNET, cost_usd
+from contract_review.prompts import JUDGE_PROMPT
+from contract_review.verify import _source_text
 
 CORRECT = ["correct", "partially_correct", "incorrect", "not_applicable"]
 JUDGE_SCHEMA = {
@@ -142,7 +142,7 @@ def score_d4(q, raw, ver, j: dict) -> dict:
 
 def result_from_trace(trace: dict):
     """从 trace 还原 agent 的原始回答，用来只换校验策略、重新评判（同一批回答上的对照实验）。"""
-    from docpilot.agent import AgentResult
+    from contract_review.agent import AgentResult
 
     res = trace["result"]
     return AgentResult(
@@ -210,8 +210,8 @@ def run_d4_eval(questions, answer_one, judge: Judge, tag: str, max_cost_usd: flo
     import statistics as st
     from datetime import datetime
 
-    from docpilot.eval_retrieval import RUNS_DIR
-    from docpilot.trace import save_trace
+    from contract_review.eval_retrieval import RUNS_DIR
+    from contract_review.trace import save_trace
 
     out = RUNS_DIR / f"{tag}-{datetime.now():%Y%m%d-%H%M%S}"
     (out / "traces").mkdir(parents=True)

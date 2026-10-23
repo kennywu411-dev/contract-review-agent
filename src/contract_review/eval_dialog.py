@@ -13,11 +13,11 @@ from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
 
-from docpilot.eval_retrieval import RUNS_DIR, is_hit
-from docpilot.evalset import EVAL_DIR, Question
-from docpilot.judge import Judge
-from docpilot.memory import ConversationMemory
-from docpilot.pipeline import answer_question, turn_from
+from contract_review.eval_retrieval import RUNS_DIR, is_hit
+from contract_review.evalset import EVAL_DIR, Question
+from contract_review.judge import Judge
+from contract_review.memory import ConversationMemory
+from contract_review.pipeline import answer_question, turn_from
 
 DIALOGS_PATH = EVAL_DIR / "dialogs.jsonl"
 COMPRESS_BUDGET = 300  # 故意设低：多数 3 轮以上的对话都会触发压缩，才测得出压缩的影响

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from docpilot.embed import pick_device
+from contract_review.embed import pick_device
 
 MODEL = "BAAI/bge-reranker-v2-m3"
 

@@ -7,7 +7,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 DATA_DIR = ROOT / "data"
 RAW_DIR = DATA_DIR / "raw"
-DB_PATH = DATA_DIR / "docpilot.db"
+DB_PATH = DATA_DIR / "contract_review.db"
 CAMPUS_DB = DATA_DIR / "campus" / "campus.sqlite"
 SOURCES_PATH = DATA_DIR / "sources.toml"
 

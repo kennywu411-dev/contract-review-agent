@@ -10,7 +10,7 @@ import json
 import re
 from dataclasses import dataclass, field
 
-from docpilot.config import SCHOOLS
+from contract_review.config import SCHOOLS
 
 SEARCH_K = 5
 SQL_PREVIEW_ROWS = 30

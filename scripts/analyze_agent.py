@@ -9,7 +9,7 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
-from docpilot.evalset import load_questions
+from contract_review.evalset import load_questions
 
 
 def main() -> None:

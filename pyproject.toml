@@ -1,5 +1,5 @@
 [project]
-name = "docpilot"
+name = "contract-review-agent"
 version = "0.0.1"
 description = "DocPilot：高校规章可信问答 agent（逐句出处、查不到就拒答）"
 requires-python = ">=3.12,<3.13"
@@ -17,7 +17,7 @@ dependencies = [
 ]
 
 [project.scripts]
-docpilot = "docpilot.cli:main"
+cra = "contract_review.cli:main"
 
 [build-system]
 requires = ["uv_build>=0.13.0,<0.14.0"]
@@ -45,4 +45,7 @@ dev = [
 
 [tool.ruff.lint.per-file-ignores]
 # 提示词正文按自然段写，不按 100 字折行
-"src/docpilot/prompts.py" = ["E501"]
+"src/contract_review/prompts.py" = ["E501"]
+
+[tool.uv.build-backend]
+module-name = "contract_review"

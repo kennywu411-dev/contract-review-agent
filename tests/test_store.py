@@ -2,9 +2,9 @@ import sqlite3
 
 import pytest
 
-from docpilot import sources, store
-from docpilot.blocks import Block
-from docpilot.sources import Source
+from contract_review import sources, store
+from contract_review.blocks import Block
+from contract_review.sources import Source
 
 
 def src(doc_id="d1", kind="html"):

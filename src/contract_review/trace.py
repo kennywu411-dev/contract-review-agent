@@ -6,7 +6,7 @@ import json
 from datetime import datetime
 from pathlib import Path
 
-from docpilot.config import ROOT
+from contract_review.config import ROOT
 
 TRACE_DIR = ROOT / "runs" / "traces"
 

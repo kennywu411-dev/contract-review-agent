@@ -1,5 +1,5 @@
-from docpilot import store
-from docpilot.quality import doc_quality
+from contract_review import store
+from contract_review.quality import doc_quality
 
 GOOD = "第一条 为维护学校正常的教育教学秩序，保障学生合法权益，制定本规定。" * 3
 

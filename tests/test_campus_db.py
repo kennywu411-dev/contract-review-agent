@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from docpilot.campus_db import REQUIRED_COLUMNS, build_campus_db
-from docpilot.sources import load_sources
+from contract_review.campus_db import REQUIRED_COLUMNS, build_campus_db
+from contract_review.sources import load_sources
 
 CSV_DIR = Path(__file__).parents[1] / "data" / "structured"
 

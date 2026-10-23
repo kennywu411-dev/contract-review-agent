@@ -2,7 +2,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from docpilot.llm import PRICING, cost_usd
+from contract_review.llm import PRICING, cost_usd
 
 
 def usage(inp=0, out=0, read=0, write=0):

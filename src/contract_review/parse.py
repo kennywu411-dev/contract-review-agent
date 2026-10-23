@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from docpilot.blocks import Block
-from docpilot.html_parse import parse_html
-from docpilot.pdf_parse import parse_docling
+from contract_review.blocks import Block
+from contract_review.html_parse import parse_html
+from contract_review.pdf_parse import parse_docling
 
 
 def parse_document(path: Path, doc_id: str, kind: str) -> list[Block]:

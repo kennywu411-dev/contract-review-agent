@@ -2,8 +2,8 @@ import json
 
 import pytest
 
-from docpilot import store
-from docpilot.chunking import embed_text, load_chunks
+from contract_review import store
+from contract_review.chunking import embed_text, load_chunks
 
 
 def make_db(tmp_path, docs):

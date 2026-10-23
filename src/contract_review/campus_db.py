@@ -10,7 +10,7 @@ import re
 import sqlite3
 from pathlib import Path
 
-from docpilot.config import CAMPUS_DB
+from contract_review.config import CAMPUS_DB
 
 REQUIRED_COLUMNS = ("school", "source_doc_id", "source_page")
 _INT = re.compile(r"^-?\d+$")

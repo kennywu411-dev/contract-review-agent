@@ -4,9 +4,9 @@ from types import SimpleNamespace as NS
 import httpx
 import pytest
 
-from docpilot.llm import cost_usd
-from docpilot.openai_compat import OpenAICompatLLM, to_openai_messages, to_openai_tools
-from docpilot.tools import TOOLS
+from contract_review.llm import cost_usd
+from contract_review.openai_compat import OpenAICompatLLM, to_openai_messages, to_openai_tools
+from contract_review.tools import TOOLS
 
 
 def test_tools_converted_to_functions():

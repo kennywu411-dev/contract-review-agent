@@ -6,8 +6,8 @@ import re
 from html.parser import HTMLParser
 from pathlib import Path
 
-from docpilot.blocks import Block
-from docpilot.structure import RawItem, assemble
+from contract_review.blocks import Block
+from contract_review.structure import RawItem, assemble
 
 # 各站正文容器：gov.cn 用 id=UCAP-CONTENT，人大网用 TRS_Editor，博达站群用 v_news_content
 CONTAINERS = (("id", "UCAP-CONTENT"), ("class", "TRS_Editor"), ("class", "v_news_content"))

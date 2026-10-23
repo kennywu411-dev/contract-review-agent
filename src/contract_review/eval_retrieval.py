@@ -10,9 +10,9 @@ from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 
-from docpilot.chunking import Chunk
-from docpilot.config import ROOT
-from docpilot.evalset import Question
+from contract_review.chunking import Chunk
+from contract_review.config import ROOT
+from contract_review.evalset import Question
 
 RUNS_DIR = ROOT / "runs"
 K_LIST = (1, 5, 10)

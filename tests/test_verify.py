@@ -3,8 +3,8 @@ from types import SimpleNamespace as _NS
 
 import pytest
 
-from docpilot.agent import AgentResult
-from docpilot.verify import HaikuVerifier, extract_numbers, numbers_supported, verify_result
+from contract_review.agent import AgentResult
+from contract_review.verify import HaikuVerifier, extract_numbers, numbers_supported, verify_result
 
 
 @pytest.mark.parametrize(

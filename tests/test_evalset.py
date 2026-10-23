@@ -5,9 +5,9 @@ from collections import Counter
 
 import pytest
 
-from docpilot.config import DB_PATH
-from docpilot.evalset import QUESTIONS_PATH, Question, load_questions
-from docpilot.sources import load_sources
+from contract_review.config import DB_PATH
+from contract_review.evalset import QUESTIONS_PATH, Question, load_questions
+from contract_review.sources import load_sources
 
 
 def write(tmp_path, rows):
@@ -135,7 +135,7 @@ def test_real_source_ratio_reported(qs):
 
 
 def test_spot_check_sample_is_deterministic():
-    from docpilot.evalset import spot_check_sample
+    from contract_review.evalset import spot_check_sample
 
     items = [GOOD | {"id": f"bnu-{i:03d}"} for i in range(10)]
     qs_ = [Question(**r) for r in items]
@@ -149,7 +149,7 @@ def test_spot_check_sample_is_deterministic():
 def test_table_gold_queries_return_rows(qs):
     import sqlite3 as sq
 
-    from docpilot.config import CAMPUS_DB
+    from contract_review.config import CAMPUS_DB
 
     conn = sq.connect(CAMPUS_DB)
     bad = []

@@ -1,7 +1,7 @@
 """查结构化表：优先走 DataPilot 的只读 MCP Server（stdio），没有 DataPilot 时退回本地只读 sqlite。
 
 DataPilot 只认 data/dev_databases/<db_id>/<db_id>.sqlite，所以在那里建一个
-指向 data/campus 的软链接，不改 DataPilot 的代码（`docpilot link-datapilot`）。
+指向 data/campus 的软链接，不改 DataPilot 的代码（`cra link-datapilot`）。
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ import threading
 from pathlib import Path
 from typing import Protocol
 
-from docpilot.config import CAMPUS_DB
+from contract_review.config import CAMPUS_DB
 
 DATAPILOT_DIR = Path(os.environ.get("DATAPILOT_DIR", Path.home() / "Documents" / "datapilot"))
 DB_ID = "campus"

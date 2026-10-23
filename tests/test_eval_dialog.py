@@ -1,7 +1,7 @@
 import json
 
-from docpilot.eval_dialog import Dialog, load_dialogs, run_dialog, summarize_dialogs
-from docpilot.verify import HaikuVerifier
+from contract_review.eval_dialog import Dialog, load_dialogs, run_dialog, summarize_dialogs
+from contract_review.verify import HaikuVerifier
 from tests.test_agent import ANSWER, FakeLLM, tool
 from tests.test_judge import FakeSonnet
 from tests.test_tools import box, ch

@@ -1,6 +1,6 @@
 """下载 data/sources.toml 里的文件到 data/raw/，并更新 sources.lock.json。"""
 
-from docpilot.sources import fetch_all, load_sources, write_lock
+from contract_review.sources import fetch_all, load_sources, write_lock
 
 
 def main() -> None:

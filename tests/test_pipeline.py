@@ -1,5 +1,5 @@
-from docpilot.pipeline import answer_question
-from docpilot.verify import HaikuVerifier
+from contract_review.pipeline import answer_question
+from contract_review.verify import HaikuVerifier
 from tests.test_agent import ANSWER, FakeLLM, tool
 from tests.test_tools import box, ch
 from tests.test_verify import FakeJudgeLLM
@@ -18,7 +18,7 @@ def test_pipeline_attaches_verification_to_trace():
 
 
 def test_turn_from_verified_answer():
-    from docpilot.pipeline import turn_from
+    from contract_review.pipeline import turn_from
 
     llm = FakeLLM([[tool("search_docs", {"query": "q"})], [tool("final_answer", ANSWER)]])
     raw, ver = answer_question(

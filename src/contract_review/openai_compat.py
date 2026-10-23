@@ -19,7 +19,7 @@ from typing import Any
 
 import httpx
 
-from docpilot.config import ROOT
+from contract_review.config import ROOT
 
 ENDPOINTS = {"deepseek-flash": ("https://api.deepseek.com/chat/completions", "DEEPSEEK_API_KEY")}
 

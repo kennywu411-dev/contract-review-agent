@@ -1,10 +1,10 @@
 import json
 from types import SimpleNamespace as NS
 
-from docpilot.agent import AgentResult
-from docpilot.evalset import Question
-from docpilot.judge import Judge, score_d4, summarize_d4
-from docpilot.verify import VerifiedAnswer
+from contract_review.agent import AgentResult
+from contract_review.evalset import Question
+from contract_review.judge import Judge, score_d4, summarize_d4
+from contract_review.verify import VerifiedAnswer
 
 DOC = {"kind": "doc", "doc_id": "d", "pages": [5], "articles": [], "text": "一等5000元"}
 
@@ -116,7 +116,7 @@ def test_revised_sentences_judged_on_new_text():
 
 
 def test_agent_result_rebuilt_from_trace():
-    from docpilot.judge import result_from_trace
+    from contract_review.judge import result_from_trace
 
     trace = {
         "question": "q",

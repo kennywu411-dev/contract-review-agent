@@ -12,8 +12,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Literal
 
-from docpilot.llm import cost_usd
-from docpilot.prompts import SUMMARY_PROMPT
+from contract_review.llm import cost_usd
+from contract_review.prompts import SUMMARY_PROMPT
 
 Mode = Literal["none", "full", "compress"]
 SUMMARY_SCHEMA = {

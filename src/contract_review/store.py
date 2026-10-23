@@ -10,9 +10,9 @@ from pathlib import Path
 
 from pypdf import PdfReader
 
-from docpilot.config import DB_PATH
-from docpilot.parse import parse_document
-from docpilot.sources import Source, raw_path, sha256_of
+from contract_review.config import DB_PATH
+from contract_review.parse import parse_document
+from contract_review.sources import Source, raw_path, sha256_of
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS documents (

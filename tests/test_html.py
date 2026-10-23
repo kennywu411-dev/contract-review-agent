@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from docpilot.html_parse import parse_html
+from contract_review.html_parse import parse_html
 
 FIX = Path(__file__).parent / "fixtures"
 

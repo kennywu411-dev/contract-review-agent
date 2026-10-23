@@ -1,4 +1,4 @@
-from docpilot.config import SCHOOLS
+from contract_review.config import SCHOOLS
 
 
 def test_schools():

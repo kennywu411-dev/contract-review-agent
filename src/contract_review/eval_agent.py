@@ -12,8 +12,8 @@ from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
 
-from docpilot.eval_retrieval import RUNS_DIR, is_hit
-from docpilot.evalset import Question
+from contract_review.eval_retrieval import RUNS_DIR, is_hit
+from contract_review.evalset import Question
 
 REFUSED = ("refuse", "fallback")
 
@@ -114,7 +114,7 @@ def summarize_agent(rows: list[dict]) -> dict:
 
 def run_agent_eval(questions: list[Question], run_one, tag: str, max_cost_usd: float = 3.0) -> Path:
     """run_one(question) -> AgentResult。逐题落盘；累计花费超过 max_cost_usd 就停（预算闸门）。"""
-    from docpilot.trace import save_trace
+    from contract_review.trace import save_trace
 
     out = RUNS_DIR / f"{tag}-{datetime.now():%Y%m%d-%H%M%S}"
     (out / "traces").mkdir(parents=True)

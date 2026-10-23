@@ -19,9 +19,9 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
 
-from docpilot.config import DB_PATH, ROOT, SCHOOLS
-from docpilot.eval_retrieval import RUNS_DIR
-from docpilot.sources import load_sources, raw_path
+from contract_review.config import DB_PATH, ROOT, SCHOOLS
+from contract_review.eval_retrieval import RUNS_DIR
+from contract_review.sources import load_sources, raw_path
 
 StudentSchool = Literal["bnu", "upc", "njust", "lzu", "cumt", "zzu"]
 _SAFE = re.compile(r"^[A-Za-z0-9_.-]+$")
@@ -41,10 +41,10 @@ class RealEngine:
     """真实问答：首次请求时加载检索模型和 DataPilot 连接，之后复用。"""
 
     def __init__(self) -> None:
-        from docpilot.cli import _retriever
-        from docpilot.datapilot_client import make_backend
-        from docpilot.llm import HAIKU, AnthropicLLM
-        from docpilot.verify import HaikuVerifier
+        from contract_review.cli import _retriever
+        from contract_review.datapilot_client import make_backend
+        from contract_review.llm import HAIKU, AnthropicLLM
+        from contract_review.verify import HaikuVerifier
 
         self.retriever = _retriever("fixed")
         self.sql = make_backend()
@@ -52,9 +52,9 @@ class RealEngine:
         self.verifier = HaikuVerifier(AnthropicLLM(HAIKU))
 
     def ask(self, question: str, school: str, on_step, history: str = ""):
-        from docpilot.pipeline import answer_question
-        from docpilot.tools import ToolBox
-        from docpilot.trace import save_trace
+        from contract_review.pipeline import answer_question
+        from contract_review.tools import ToolBox
+        from contract_review.trace import save_trace
 
         raw, ver = answer_question(
             question,
@@ -69,8 +69,8 @@ class RealEngine:
         return raw, ver
 
     def new_memory(self):
-        from docpilot.llm import HAIKU, AnthropicLLM
-        from docpilot.memory import ConversationMemory
+        from contract_review.llm import HAIKU, AnthropicLLM
+        from contract_review.memory import ConversationMemory
 
         return ConversationMemory(mode="compress", summarizer=AnthropicLLM(HAIKU))
 
@@ -93,7 +93,7 @@ def _page_sizes(doc_id: str) -> dict[int, tuple[float, float]]:
 
 @cache
 def _chunks(strategy: str) -> dict:
-    from docpilot.chunking import load_chunks
+    from contract_review.chunking import load_chunks
 
     return {c.chunk_id: c for c in load_chunks(DB_PATH, strategy)}
 
@@ -117,7 +117,7 @@ def _run_dir(run: str) -> Path:
 
 @cache
 def _questions() -> dict:
-    from docpilot.evalset import load_questions
+    from contract_review.evalset import load_questions
 
     return {q.id: q for q in load_questions()}
 
@@ -154,7 +154,7 @@ def create_app(engine=None) -> FastAPI:
     from fastapi.middleware.cors import CORSMiddleware
 
     app = FastAPI(title="DocPilot")
-    # 开发时前端跑在 3000 端口；docpilot serve 时同源，不需要 CORS
+    # 开发时前端跑在 3000 端口；cra serve 时同源，不需要 CORS
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
@@ -172,7 +172,7 @@ def create_app(engine=None) -> FastAPI:
         return state["engine"]
 
     def memory_for(body: AskBody):
-        from docpilot.memory import ConversationMemory
+        from contract_review.memory import ConversationMemory
 
         if not body.session_id:
             return None
@@ -202,7 +202,7 @@ def create_app(engine=None) -> FastAPI:
         mem = memory_for(body)
 
         async def work():
-            from docpilot.pipeline import turn_from
+            from contract_review.pipeline import turn_from
 
             try:
                 history = await asyncio.to_thread(mem.render) if mem else ""
@@ -351,7 +351,7 @@ def create_app(engine=None) -> FastAPI:
             raise HTTPException(404, "没有这条 trace")
         return json.loads(p.read_text(encoding="utf-8"))
 
-    if WEB_DIST.exists():  # docpilot serve：托管已构建的前端
+    if WEB_DIST.exists():  # cra serve：托管已构建的前端
         from fastapi.staticfiles import StaticFiles
 
         app.mount("/", StaticFiles(directory=WEB_DIST, html=True), name="web")

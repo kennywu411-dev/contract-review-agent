@@ -1,15 +1,15 @@
-"""命令行入口：uv run docpilot ingest。"""
+"""命令行入口：uv run cra ingest。"""
 
 from __future__ import annotations
 
 import argparse
 import time
 
-from docpilot.campus_db import build_campus_db
-from docpilot.config import CAMPUS_DB, DATA_DIR, DB_PATH, ROOT
-from docpilot.quality import DocQuality, doc_quality
-from docpilot.sources import fetch_all, load_sources, write_lock
-from docpilot.store import ingest
+from contract_review.campus_db import build_campus_db
+from contract_review.config import CAMPUS_DB, DATA_DIR, DB_PATH, ROOT
+from contract_review.quality import DocQuality, doc_quality
+from contract_review.sources import fetch_all, load_sources, write_lock
+from contract_review.store import ingest
 
 REPORT_PATH = ROOT / "docs" / "解析质量.md"
 
@@ -24,7 +24,7 @@ def render_report(
     lines = [
         "# 解析质量报告",
         "",
-        "由 `uv run docpilot ingest` 生成，请勿手改。",
+        "由 `uv run cra ingest` 生成，请勿手改。",
         "",
         "无文字页：PDF 文字层为空（空白页、图片页）；",
         "未解析页：有文字层但没解析出块（多为目录页）。",
@@ -78,19 +78,19 @@ INDEX_DIR = DATA_DIR / "index"
 
 
 def _retriever(strategy: str, rerank: bool = True):
-    from docpilot.chunking import load_chunks
-    from docpilot.embed import BgeM3Encoder
-    from docpilot.rerank import BgeReranker
-    from docpilot.retrieve import Retriever
+    from contract_review.chunking import load_chunks
+    from contract_review.embed import BgeM3Encoder
+    from contract_review.rerank import BgeReranker
+    from contract_review.retrieve import Retriever
 
     reranker = BgeReranker() if rerank else None
     return Retriever(load_chunks(DB_PATH, strategy), BgeM3Encoder(), reranker, INDEX_DIR)
 
 
 def cmd_index(args: argparse.Namespace) -> None:
-    from docpilot.chunking import STRATEGIES, load_chunks
-    from docpilot.embed import BgeM3Encoder
-    from docpilot.retrieve import Retriever
+    from contract_review.chunking import STRATEGIES, load_chunks
+    from contract_review.embed import BgeM3Encoder
+    from contract_review.retrieve import Retriever
 
     encoder = BgeM3Encoder()
     for strategy in args.strategy or STRATEGIES:
@@ -115,12 +115,12 @@ def cmd_search(args: argparse.Namespace) -> None:
 
 
 def cmd_eval_retrieval(args: argparse.Namespace) -> None:
-    from docpilot.chunking import STRATEGIES, load_chunks
-    from docpilot.embed import BgeM3Encoder
-    from docpilot.eval_retrieval import run_retrieval_eval, stratified_sample
-    from docpilot.evalset import load_questions
-    from docpilot.rerank import BgeReranker
-    from docpilot.retrieve import MODES, Retriever
+    from contract_review.chunking import STRATEGIES, load_chunks
+    from contract_review.embed import BgeM3Encoder
+    from contract_review.eval_retrieval import run_retrieval_eval, stratified_sample
+    from contract_review.evalset import load_questions
+    from contract_review.rerank import BgeReranker
+    from contract_review.retrieve import MODES, Retriever
 
     qs = load_questions()
     if args.sample:
@@ -199,12 +199,12 @@ def print_verified(v) -> None:
 
 
 def cmd_ask(args: argparse.Namespace) -> None:
-    from docpilot.datapilot_client import make_backend
-    from docpilot.llm import HAIKU, AnthropicLLM
-    from docpilot.pipeline import answer_question
-    from docpilot.tools import ToolBox
-    from docpilot.trace import save_trace
-    from docpilot.verify import HaikuVerifier
+    from contract_review.datapilot_client import make_backend
+    from contract_review.llm import HAIKU, AnthropicLLM
+    from contract_review.pipeline import answer_question
+    from contract_review.tools import ToolBox
+    from contract_review.trace import save_trace
+    from contract_review.verify import HaikuVerifier
 
     retr, sql = _retriever("fixed"), make_backend()
     try:
@@ -224,7 +224,7 @@ def cmd_ask(args: argparse.Namespace) -> None:
 
 
 def cmd_link(_: argparse.Namespace) -> None:
-    from docpilot.datapilot_client import link_datapilot
+    from contract_review.datapilot_client import link_datapilot
 
     print(f"已链接：{link_datapilot()}")
 
@@ -232,13 +232,13 @@ def cmd_link(_: argparse.Namespace) -> None:
 def cmd_eval_agent(args: argparse.Namespace) -> None:
     import json
 
-    from docpilot.agent import run_agent
-    from docpilot.datapilot_client import make_backend
-    from docpilot.eval_agent import run_agent_eval
-    from docpilot.eval_retrieval import stratified_sample
-    from docpilot.evalset import load_questions
-    from docpilot.llm import make_llm
-    from docpilot.tools import ToolBox
+    from contract_review.agent import run_agent
+    from contract_review.datapilot_client import make_backend
+    from contract_review.eval_agent import run_agent_eval
+    from contract_review.eval_retrieval import stratified_sample
+    from contract_review.evalset import load_questions
+    from contract_review.llm import make_llm
+    from contract_review.tools import ToolBox
 
     qs = load_questions()
     if args.sample:
@@ -280,14 +280,14 @@ def cmd_eval_agent(args: argparse.Namespace) -> None:
 def cmd_eval_d4(args: argparse.Namespace) -> None:
     import json
 
-    from docpilot.datapilot_client import make_backend
-    from docpilot.eval_retrieval import stratified_sample
-    from docpilot.evalset import load_questions
-    from docpilot.judge import Judge, run_d4_eval
-    from docpilot.llm import HAIKU, SONNET, AnthropicLLM
-    from docpilot.pipeline import answer_question
-    from docpilot.tools import ToolBox
-    from docpilot.verify import HaikuVerifier
+    from contract_review.datapilot_client import make_backend
+    from contract_review.eval_retrieval import stratified_sample
+    from contract_review.evalset import load_questions
+    from contract_review.judge import Judge, run_d4_eval
+    from contract_review.llm import HAIKU, SONNET, AnthropicLLM
+    from contract_review.pipeline import answer_question
+    from contract_review.tools import ToolBox
+    from contract_review.verify import HaikuVerifier
 
     qs = load_questions()
     if args.sample:
@@ -341,7 +341,7 @@ def cmd_eval_d4(args: argparse.Namespace) -> None:
 def cmd_serve(args: argparse.Namespace) -> None:
     import uvicorn
 
-    from docpilot.api import WEB_DIST, create_app
+    from contract_review.api import WEB_DIST, create_app
 
     if not WEB_DIST.exists():
         print("提示：web/out 不存在，只启动 API。构建前端：cd web && npm install && npm run build")
@@ -354,11 +354,11 @@ def cmd_reverify_d4(args: argparse.Namespace) -> None:
     import json
     from dataclasses import asdict
 
-    from docpilot.eval_retrieval import RUNS_DIR
-    from docpilot.evalset import load_questions
-    from docpilot.judge import Judge, result_from_trace, run_d4_eval
-    from docpilot.llm import HAIKU, SONNET, AnthropicLLM
-    from docpilot.verify import HaikuVerifier, verify_result
+    from contract_review.eval_retrieval import RUNS_DIR
+    from contract_review.evalset import load_questions
+    from contract_review.judge import Judge, result_from_trace, run_d4_eval
+    from contract_review.llm import HAIKU, SONNET, AnthropicLLM
+    from contract_review.verify import HaikuVerifier, verify_result
 
     src = RUNS_DIR / args.source
     rows = [json.loads(x) for x in (src / "d4_results.jsonl").open(encoding="utf-8")]
@@ -389,11 +389,11 @@ def cmd_reverify_d4(args: argparse.Namespace) -> None:
 def cmd_eval_dialog(args: argparse.Namespace) -> None:
     import json
 
-    from docpilot.datapilot_client import make_backend
-    from docpilot.eval_dialog import load_dialogs, run_dialog_eval
-    from docpilot.llm import HAIKU, SONNET, AnthropicLLM
-    from docpilot.tools import ToolBox
-    from docpilot.verify import HaikuVerifier
+    from contract_review.datapilot_client import make_backend
+    from contract_review.eval_dialog import load_dialogs, run_dialog_eval
+    from contract_review.llm import HAIKU, SONNET, AnthropicLLM
+    from contract_review.tools import ToolBox
+    from contract_review.verify import HaikuVerifier
 
     dialogs = load_dialogs()[: args.limit] if args.limit else load_dialogs()
     retr, sql = _retriever("fixed"), make_backend()
@@ -425,7 +425,7 @@ def cmd_eval_dialog(args: argparse.Namespace) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(prog="docpilot")
+    parser = argparse.ArgumentParser(prog="cra")
     sub = parser.add_subparsers(required=True)
     p = sub.add_parser("ingest", help="下载缺失文件 → 解析入库 → 质量报告 → 结构化表库")
     p.add_argument("--force", action="store_true", help="忽略 sha256，全部重新解析")

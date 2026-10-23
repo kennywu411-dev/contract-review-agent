@@ -15,7 +15,7 @@ from datetime import date
 from pathlib import Path
 from typing import Literal
 
-from docpilot.config import DATA_DIR, RAW_DIR, SCHOOLS, SOURCES_PATH
+from contract_review.config import DATA_DIR, RAW_DIR, SCHOOLS, SOURCES_PATH
 
 LOCK_PATH = DATA_DIR / "sources.lock.json"
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/130 Safari/537.36"

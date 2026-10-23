@@ -5,8 +5,8 @@ from urllib.error import URLError
 
 import pytest
 
-from docpilot import sources
-from docpilot.sources import Source, fetch_all, load_sources
+from contract_review import sources
+from contract_review.sources import Source, fetch_all, load_sources
 
 TOML_ONE = """
 [[source]]

@@ -3,8 +3,8 @@
 import json
 import sqlite3
 
-from docpilot.config import DB_PATH
-from docpilot.evalset import EVAL_DIR, QUESTIONS_PATH, load_questions, spot_check_sample
+from contract_review.config import DB_PATH
+from contract_review.evalset import EVAL_DIR, QUESTIONS_PATH, load_questions, spot_check_sample
 
 # 通知类网页没有"第X条"，条款号统一写成段首原文前缀（evals/README.md）
 CLAUSE_ALIASES = {

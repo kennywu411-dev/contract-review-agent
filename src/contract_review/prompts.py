@@ -5,8 +5,8 @@ from __future__ import annotations
 import sqlite3
 from functools import cache
 
-from docpilot.config import CAMPUS_DB, SCHOOLS
-from docpilot.sources import load_sources
+from contract_review.config import CAMPUS_DB, SCHOOLS
+from contract_review.sources import load_sources
 
 RULES = """你是{school_name}的规章问答助手，回答在校本科生关于学籍、转专业、推免、奖助学金、考试、学位等规章制度的问题。
 

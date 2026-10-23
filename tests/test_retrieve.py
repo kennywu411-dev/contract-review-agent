@@ -1,7 +1,7 @@
 import pytest
 
-from docpilot.chunking import Chunk
-from docpilot.retrieve import Retriever
+from contract_review.chunking import Chunk
+from contract_review.retrieve import Retriever
 
 
 def ch(i, school, text, doc="d"):

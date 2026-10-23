@@ -7,7 +7,7 @@ import random
 from dataclasses import dataclass, fields
 from pathlib import Path
 
-from docpilot.config import ROOT, SCHOOLS
+from contract_review.config import ROOT, SCHOOLS
 
 EVAL_DIR = ROOT / "evals"
 QUESTIONS_PATH = EVAL_DIR / "questions.jsonl"

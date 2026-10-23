@@ -1,5 +1,5 @@
-from docpilot.eval_agent import score_one, summarize_agent
-from docpilot.evalset import Question
+from contract_review.eval_agent import score_one, summarize_agent
+from contract_review.evalset import Question
 
 
 def q(type_="answerable", subtype=None, gold=None):

@@ -1,6 +1,6 @@
 import pytest
 
-from docpilot.headings import heading_level
+from contract_review.headings import heading_level
 
 
 @pytest.mark.parametrize(

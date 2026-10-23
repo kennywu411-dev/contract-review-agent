@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 
-from docpilot.quality import GARBLE_MAP, KNOWN_GARBLE
+from contract_review.quality import GARBLE_MAP, KNOWN_GARBLE
 
 _CJK = r"㐀-鿿＀-￯　-〿"
 _CJK_GAP = re.compile(rf"(?<=[{_CJK}])[ \t]+(?=[{_CJK}])")

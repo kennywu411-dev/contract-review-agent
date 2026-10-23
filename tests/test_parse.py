@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from docpilot.parse import parse_document
+from contract_review.parse import parse_document
 
 FIX = Path(__file__).parent / "fixtures"
 

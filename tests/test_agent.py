@@ -1,8 +1,8 @@
 import json
 from types import SimpleNamespace as NS
 
-from docpilot.agent import run_agent
-from docpilot.trace import load_trace, save_trace
+from contract_review.agent import run_agent
+from contract_review.trace import load_trace, save_trace
 from tests.test_tools import FakeSQL, box, ch
 
 
@@ -155,7 +155,7 @@ def test_stop_reason_recorded_when_no_tool():
 def test_unknown_model_rejected_before_spending():
     import pytest
 
-    from docpilot.llm import AnthropicLLM
+    from contract_review.llm import AnthropicLLM
 
     with pytest.raises(ValueError):
         AnthropicLLM("gpt-x")

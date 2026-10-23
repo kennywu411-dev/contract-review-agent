@@ -1,6 +1,6 @@
-from docpilot.chunking import Chunk
-from docpilot.eval_retrieval import is_hit, summarize
-from docpilot.evalset import Question
+from contract_review.chunking import Chunk
+from contract_review.eval_retrieval import is_hit, summarize
+from contract_review.evalset import Question
 
 
 def ch(doc, pages, text="正文"):

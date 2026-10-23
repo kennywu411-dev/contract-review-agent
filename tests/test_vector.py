@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from docpilot.vector import VectorIndex
+from contract_review.vector import VectorIndex
 
 TEXTS = ["国家奖学金一万元", "转专业申请条件", "缓考办理流程"]
 
@@ -38,14 +38,14 @@ def test_allow_filter(tmp_path, fake_encoder):
 
 @pytest.mark.slow
 def test_bge_m3_similarity_sanity():
-    from docpilot.embed import BgeM3Encoder
+    from contract_review.embed import BgeM3Encoder
 
     v = BgeM3Encoder().encode(["国家奖学金金额", "国奖多少钱", "食堂几点关门"])
     assert v[0] @ v[1] > v[0] @ v[2]
 
 
 def test_length_sorted_batches_restore_order():
-    from docpilot.embed import length_sorted_batches
+    from contract_review.embed import length_sorted_batches
 
     texts = ["aaaa", "b", "ccc", "dd", "eeeee"]
     batches = list(length_sorted_batches(texts, 2))

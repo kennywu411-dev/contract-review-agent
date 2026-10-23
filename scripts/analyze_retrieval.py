@@ -8,9 +8,9 @@ import statistics as st
 import sys
 from pathlib import Path
 
-from docpilot.chunking import load_chunks
-from docpilot.config import DB_PATH
-from docpilot.evalset import load_questions
+from contract_review.chunking import load_chunks
+from contract_review.config import DB_PATH
+from contract_review.evalset import load_questions
 
 
 def quantiles(xs: list[float]) -> str:

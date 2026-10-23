@@ -11,8 +11,8 @@ import re
 import time
 from dataclasses import dataclass, field
 
-from docpilot.llm import cost_usd
-from docpilot.prompts import VERIFY_PROMPT
+from contract_review.llm import cost_usd
+from contract_review.prompts import VERIFY_PROMPT
 
 _CN = {
     "零": 0,

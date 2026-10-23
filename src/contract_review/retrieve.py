@@ -10,9 +10,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal, Protocol
 
-from docpilot.bm25 import BM25, tokenize
-from docpilot.chunking import Chunk, embed_text
-from docpilot.vector import Encoder, VectorIndex
+from contract_review.bm25 import BM25, tokenize
+from contract_review.chunking import Chunk, embed_text
+from contract_review.vector import Encoder, VectorIndex
 
 Mode = Literal["bm25", "vector", "hybrid", "hybrid_rerank"]
 MODES: tuple[Mode, ...] = ("bm25", "vector", "hybrid", "hybrid_rerank")

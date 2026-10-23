@@ -6,7 +6,7 @@
 import sqlite3
 import sys
 
-from docpilot.config import DB_PATH
+from contract_review.config import DB_PATH
 
 
 def main() -> None:

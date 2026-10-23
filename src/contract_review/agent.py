@@ -11,9 +11,9 @@ import time
 import uuid
 from dataclasses import asdict, dataclass, field
 
-from docpilot.llm import LLM, cost_usd
-from docpilot.prompts import system_prompt
-from docpilot.tools import TERMINAL_TOOLS, TOOLS, ToolBox
+from contract_review.llm import LLM, cost_usd
+from contract_review.prompts import system_prompt
+from contract_review.tools import TERMINAL_TOOLS, TOOLS, ToolBox
 
 MAX_STEPS = 6
 MAX_TOKENS = 4000
