@@ -48,15 +48,23 @@ DOC = {
     "articles": [],
     "text": "一等奖学金5000元/人，比例10%。",
 }
+DOC2 = {"kind": "doc", "doc_id": "e", "pages": [6], "articles": [], "text": "二等奖学金3000元/人。"}
 
 
 def agent_result(sentences, kind="answer", unanswered=""):
     return AgentResult(
-        "q", "bnu", kind, sentences=sentences, unanswered=unanswered, citations={"C1": DOC}
+        "q",
+        "bnu",
+        kind,
+        sentences=sentences,
+        unanswered=unanswered,
+        citations={"C1": DOC, "C2": DOC2},
     )
 
 
 class FakeJudgeLLM:
+    """labels: 句子序号 → (标签, 支撑编号)。默认 supported、由 C1 支撑。"""
+
     model = "claude-haiku-5-5"
 
     def __init__(self, labels=None, fail=False):
@@ -66,10 +74,11 @@ class FakeJudgeLLM:
         self.requests.append(kw)
         if self.fail:
             raise TimeoutError("verifier timeout")
-        n = kw["messages"][0]["content"].count("<句子")
-        out = [
-            {"index": i, "label": self.labels.get(i, "supported"), "reason": ""} for i in range(n)
-        ]
+        n = kw["messages"][0]["content"].count("<句子 index=")
+        out = []
+        for i in range(n):
+            label, support = self.labels.get(i, ("supported", ["C1"]))
+            out.append({"index": i, "label": label, "support": support, "reason": ""})
         usage = _NS(
             input_tokens=100,
             output_tokens=20,
@@ -88,32 +97,53 @@ def test_supported_sentences_kept():
     assert v.kind == "answer" and len(v.kept) == 1 and v.dropped == []
 
 
-def test_number_mismatch_dropped_before_llm():
+def test_verifier_sees_all_retrieved_sources():
     llm = FakeJudgeLLM()
+    verify_result(agent_result([fact("一等5000元。")]), HaikuVerifier(llm))
+    prompt = llm.requests[0]["messages"][0]["content"]
+    assert "[C1]" in prompt and "[C2]" in prompt and "二等奖学金3000元" in prompt
+
+
+def test_wrong_citation_is_repaired():
     v = verify_result(
-        agent_result([fact("一等6000元。"), fact("一等5000元。")]), HaikuVerifier(llm)
+        agent_result([fact("二等3000元。", cites=("C1",))]),
+        HaikuVerifier(FakeJudgeLLM({0: ("supported", ["C2"])})),
+    )
+    assert v.kept[0]["citations"] == ["C2"] and v.repaired == 1
+
+
+def test_number_mismatch_dropped_even_if_verifier_agrees():
+    v = verify_result(
+        agent_result([fact("一等6000元。"), fact("一等5000元。")]), HaikuVerifier(FakeJudgeLLM())
     )
     assert [d["reason"] for d in v.dropped] == ["数字与原文不符"] and v.kind == "partial"
-    assert llm.requests[0]["messages"][0]["content"].count("<句子") == 1
 
 
 def test_unsupported_by_verifier_dropped():
     v = verify_result(
         agent_result([fact("一等5000元。"), fact("可以随时申请。")]),
-        HaikuVerifier(FakeJudgeLLM({1: "unsupported"})),
+        HaikuVerifier(FakeJudgeLLM({1: ("unsupported", [])})),
     )
     assert len(v.kept) == 1 and v.dropped[0]["reason"].startswith("校验未通过")
 
 
 def test_all_dropped_becomes_refuse():
-    v = verify_result(agent_result([fact("无引用的话", cites=())]), HaikuVerifier(FakeJudgeLLM()))
+    v = verify_result(
+        agent_result([fact("学校会全额报销路费", cites=())]),
+        HaikuVerifier(FakeJudgeLLM({0: ("unsupported", [])})),
+    )
     assert v.kind == "refuse" and "可靠依据" in v.refuse_reason
+
+
+def test_uncited_but_supported_fact_gets_citation():
+    v = verify_result(agent_result([fact("一等5000元。", cites=())]), HaikuVerifier(FakeJudgeLLM()))
+    assert v.kept[0]["citations"] == ["C1"]
 
 
 def test_note_with_number_becomes_fact():
     note = {"kind": "note", "text": "一般需要3个工作日", "citations": []}
     v = verify_result(agent_result([fact("一等5000元。"), note]), HaikuVerifier(FakeJudgeLLM()))
-    assert len(v.kept) == 1 and v.dropped[0]["reason"] == "无引用"
+    assert len(v.kept) == 1 and v.dropped[0]["reason"] == "数字与原文不符"
 
 
 def test_plain_note_kept_without_citation():

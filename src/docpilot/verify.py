@@ -108,9 +108,10 @@ VERIFY_SCHEMA = {
                 "properties": {
                     "index": {"type": "integer"},
                     "label": {"type": "string", "enum": ["supported", "partial", "unsupported"]},
+                    "support": {"type": "array", "items": {"type": "string"}},
                     "reason": {"type": "string"},
                 },
-                "required": ["index", "label", "reason"],
+                "required": ["index", "label", "support", "reason"],
                 "additionalProperties": False,
             },
         }
@@ -118,7 +119,6 @@ VERIFY_SCHEMA = {
     "required": ["labels"],
     "additionalProperties": False,
 }
-
 
 REFUSE_NO_BASIS = "未能在已收录的学校文件中找到可靠依据，建议咨询学校教务处或学生工作部门。"
 
@@ -132,49 +132,48 @@ class VerifiedAnswer:
     unanswered: str = ""
     clarification: str = ""
     verifier_error: str = ""
+    repaired: int = 0  # 引用被改正的句数
     cost_usd: float = 0.0
     latency_ms: float = 0.0
 
 
-def _sources(sentence: dict, citations: dict) -> tuple[list[str], list[list[list]]]:
-    texts, tables = [], []
-    for cid in sentence["citations"]:
-        c = citations.get(cid)
-        if not c:
-            continue
-        if c["kind"] == "doc":
-            texts.append(c["text"])
-        else:
-            tables.append(c["rows"])
-            texts.append(
-                json.dumps({"columns": c["columns"], "rows": c["rows"]}, ensure_ascii=False)
-            )
-    return texts, tables
+def _source_text(c: dict) -> str:
+    if c["kind"] == "doc":
+        return c["text"]
+    return json.dumps({"columns": c["columns"], "rows": c["rows"]}, ensure_ascii=False)
 
 
 class HaikuVerifier:
+    """一次调用核对整份回答：每句给标签，并指出真正支撑它的编号（可改正挂错的引用）。"""
+
     def __init__(self, llm) -> None:
         self.llm = llm
 
-    def label(self, items: list[tuple[str, list[str]]]) -> tuple[list[str], float]:
-        """items: (句子, 引用原文列表)。返回每句的标签和本次花费。"""
-        parts = [VERIFY_PROMPT]
-        for i, (sent, texts) in enumerate(items):
-            src = "\n---\n".join(texts)
-            parts.append(f'<句子 index="{i}">{sent}</句子>\n<原文>\n{src}\n</原文>\n')
+    def label(
+        self, sentences: list[str], citations: dict
+    ) -> tuple[list[tuple[str, list[str]]], float]:
+        sources = "\n".join(
+            f'[{cid}]\n<原文 id="{cid}">\n{_source_text(c)}\n</原文>'
+            for cid, c in citations.items()
+        )
+        items = "\n".join(f'<句子 index="{i}">{t}</句子>' for i, t in enumerate(sentences))
         resp = self.llm.create(
-            max_tokens=2000,
-            messages=[{"role": "user", "content": "\n".join(parts)}],
+            max_tokens=3000,
+            messages=[
+                {
+                    "role": "user",
+                    "content": f"{VERIFY_PROMPT}\n## 原文\n{sources}\n\n## 待核对\n{items}",
+                }
+            ],
             output_config={
                 "effort": "low",
                 "format": {"type": "json_schema", "schema": VERIFY_SCHEMA},
             },
         )
         text = next(b.text for b in resp.content if b.type == "text")
-        by_index = {x["index"]: x["label"] for x in json.loads(text)["labels"]}
-        return [by_index.get(i, "unsupported") for i in range(len(items))], cost_usd(
-            self.llm.model, resp.usage
-        )
+        by_index = {x["index"]: (x["label"], x["support"]) for x in json.loads(text)["labels"]}
+        out = [by_index.get(i, ("unsupported", [])) for i in range(len(sentences))]
+        return out, cost_usd(self.llm.model, resp.usage)
 
 
 def verify_result(result, verifier: HaikuVerifier) -> VerifiedAnswer:
@@ -185,39 +184,37 @@ def verify_result(result, verifier: HaikuVerifier) -> VerifiedAnswer:
         return VerifiedAnswer(kind, refuse_reason=reason, clarification=result.clarification)
 
     v = VerifiedAnswer(result.kind, unanswered=result.unanswered)
-    candidates: list[tuple[int, dict, list[str]]] = []
-    keep_flags: dict[int, bool] = {}
+    kept: dict[int, dict] = {}
+    facts: list[tuple[int, dict]] = []
     for i, s in enumerate(result.sentences):
-        is_note = s.get("kind") == "note" and not extract_numbers(s["text"])
-        if is_note:
-            keep_flags[i] = True
-            continue
-        valid = [c for c in s["citations"] if c in result.citations]
-        if not valid:
-            v.dropped.append({"sentence": s, "reason": "无引用"})
-            continue
-        texts, tables = _sources({"citations": valid}, result.citations)
-        if not numbers_supported(s["text"], texts, tables):
-            v.dropped.append({"sentence": s, "reason": "数字与原文不符"})
-            continue
-        candidates.append((i, s, texts))
+        if s.get("kind") == "note" and not extract_numbers(s["text"]):
+            kept[i] = s  # 纯说明句（边界、建议咨询哪里）不需要引用
+        else:
+            facts.append((i, s))  # 含数字的 note 句按 fact 处理
 
-    if candidates:
+    if facts:
         try:
-            labels, cost = verifier.label([(s["text"], texts) for _, s, texts in candidates])
+            labels, cost = verifier.label([s["text"] for _, s in facts], result.citations)
             v.cost_usd += cost
         except Exception as e:  # 校验器自己出错：保守处理，不放行未校验的句子
             v.verifier_error = f"{type(e).__name__}: {e}"
-            labels = ["unverified"] * len(candidates)
-        for (i, s, _), label in zip(candidates, labels, strict=True):
-            if label == "supported":
-                keep_flags[i] = True
-            else:
+            labels = [("unverified", [])] * len(facts)
+        for (i, s), (label, support) in zip(facts, labels, strict=True):
+            support = [c for c in dict.fromkeys(support) if c in result.citations]
+            if label != "supported" or not support:
                 v.dropped.append({"sentence": s, "reason": f"校验未通过（{label}）"})
+                continue
+            texts = [_source_text(result.citations[c]) for c in support]
+            tables = [result.citations[c]["rows"] for c in support if c.startswith("T")]
+            if not numbers_supported(s["text"], texts, tables):
+                v.dropped.append({"sentence": s, "reason": "数字与原文不符"})
+                continue
+            if support != s["citations"]:
+                v.repaired += 1
+            kept[i] = s | {"kind": "fact", "citations": support, "cited_by_model": s["citations"]}
 
-    v.kept = [s for i, s in enumerate(result.sentences) if keep_flags.get(i)]
-    facts_kept = [s for s in v.kept if s.get("kind") != "note" or extract_numbers(s["text"])]
-    if not facts_kept:
+    v.kept = [kept[i] for i in sorted(kept)]
+    if not any(s["kind"] == "fact" for s in v.kept):
         v.kind = "refuse"
         v.refuse_reason = (
             f"{result.unanswered}：文件中没有相关规定。" if result.unanswered else REFUSE_NO_BASIS

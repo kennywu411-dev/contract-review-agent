@@ -181,22 +181,45 @@ def print_result(r) -> None:
     print(f"共 {r.steps} 步，${r.cost_usd:.5f}，{r.latency_ms / 1000:.1f}s")
 
 
+def print_verified(v) -> None:
+    label = {"answer": "回答", "partial": "部分回答", "refuse": "拒答", "clarify": "反问"}
+    err = f"（校验器出错：{v.verifier_error}）" if v.verifier_error else ""
+    print(f"\n== 校验后：{label.get(v.kind, v.kind)}{err}")
+    if v.kind == "refuse":
+        print(f"  {v.refuse_reason}")
+    if v.kind == "clarify":
+        print(f"  {v.clarification}")
+    if v.unanswered and v.kind == "partial":
+        print(f"  答不了的部分：{v.unanswered}")
+    for s in v.kept:
+        print(f"  - {s['text']} {''.join(f'[{c}]' for c in s['citations'])}")
+    for d in v.dropped:
+        print(f"  ✗ 已删除（{d['reason']}）：{d['sentence']['text']}")
+    print(f"  校验花费 ${v.cost_usd:.5f}，{v.latency_ms / 1000:.1f}s")
+
+
 def cmd_ask(args: argparse.Namespace) -> None:
-    from docpilot.agent import run_agent
     from docpilot.datapilot_client import make_backend
-    from docpilot.llm import AnthropicLLM
+    from docpilot.llm import HAIKU, AnthropicLLM
+    from docpilot.pipeline import answer_question
     from docpilot.tools import ToolBox
     from docpilot.trace import save_trace
+    from docpilot.verify import HaikuVerifier
 
     retr, sql = _retriever("fixed"), make_backend()
     try:
-        r = run_agent(
-            args.question, args.school, AnthropicLLM(args.model), ToolBox(args.school, retr, sql)
+        r, v = answer_question(
+            args.question,
+            args.school,
+            AnthropicLLM(args.model),
+            ToolBox(args.school, retr, sql),
+            HaikuVerifier(AnthropicLLM(HAIKU)),
         )
     finally:
         if hasattr(sql, "close"):
             sql.close()
     print_result(r)
+    print_verified(v)
     print(f"trace：{save_trace(r).relative_to(ROOT)}（查表后端：{r.trace['sql_backend']}）")
 
 
