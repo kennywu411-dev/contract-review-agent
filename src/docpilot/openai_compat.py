@@ -110,20 +110,38 @@ class OpenAICompatLLM:
         )
 
     def create(self, **kw: Any) -> SimpleNamespace:
+        system = list(kw.get("system", []))
+        fmt = (kw.get("output_config") or {}).get("format")
+        if fmt and fmt.get("type") == "json_schema":
+            # OpenAI 兼容接口没有 json_schema 约束：改用 json_object，并把 schema 写进 system
+            schema = json.dumps(fmt["schema"], ensure_ascii=False)
+            system.append(
+                {"type": "text", "text": f"只输出一个符合此 JSON Schema 的 JSON 对象：{schema}"}
+            )
         body: dict[str, Any] = {
             "model": self.model,
             "max_tokens": kw.get("max_tokens", 4000),
-            "messages": to_openai_messages(kw.get("system", []), kw["messages"]),
+            "messages": to_openai_messages(system, kw["messages"]),
         }
+        if fmt and fmt.get("type") == "json_schema":
+            body["response_format"] = {"type": "json_object"}
         if kw.get("tools"):
             body["tools"] = to_openai_tools(kw["tools"])
-        for attempt in range(4):  # 429 / 5xx 指数退避重试
-            r = self.client.post(self.url, json=body)
-            if r.status_code < 500 and r.status_code != 429:
+        for attempt in range(4):  # 429 / 5xx / 网络错误：指数退避重试
+            try:
+                r = self.client.post(self.url, json=body)
+            except httpx.TransportError:
+                if attempt == 3:
+                    raise
+                time.sleep(2**attempt)
+                continue
+            if r.status_code < 500 and r.status_code != 429 or attempt == 3:
                 break
             time.sleep(2**attempt)
         r.raise_for_status()
         data = r.json()
+        if not data.get("choices"):
+            raise RuntimeError(f"{self.model} 返回了空的 choices")
         choice = data["choices"][0]
         msg = choice["message"]
         blocks: list[SimpleNamespace] = []

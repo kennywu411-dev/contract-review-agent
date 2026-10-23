@@ -370,6 +370,9 @@ def cmd_reverify_d4(args: argparse.Namespace) -> None:
         raw = result_from_trace(json.loads(trace_of[q.id].read_text(encoding="utf-8")))
         ver = verify_result(raw, verifier)
         raw.trace["verify"] = asdict(ver)
+        # trace 里的总花费/耗时 = 原 agent 部分 + 本次新的校验（不能沿用旧校验的数字）
+        raw.trace["cost_usd"] = raw.cost_usd + ver.cost_usd
+        raw.trace["latency_ms"] = raw.latency_ms + ver.latency_ms
         return raw, ver
 
     out = run_d4_eval(

@@ -109,3 +109,26 @@ def test_missing_key_raises_before_request(monkeypatch):
     monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
     with pytest.raises(RuntimeError, match="DEEPSEEK_API_KEY"):
         OpenAICompatLLM("deepseek-flash", env_file=None)
+
+
+def test_json_schema_format_mapped_to_json_object():
+    seen = []
+    reply = {
+        "model": "deepseek-flash",
+        "choices": [
+            {
+                "finish_reason": "stop",
+                "message": {"role": "assistant", "content": '{"summary": "x"}'},
+            }
+        ],
+        "usage": {"prompt_tokens": 10, "completion_tokens": 5},
+    }
+    llm = OpenAICompatLLM("deepseek-flash", api_key="k", transport=fake_transport(reply, seen))
+    schema = {"type": "object", "properties": {"summary": {"type": "string"}}}
+    r = llm.create(
+        max_tokens=10,
+        messages=[{"role": "user", "content": "q"}],
+        output_config={"format": {"type": "json_schema", "schema": schema}},
+    )
+    assert seen[0]["response_format"] == {"type": "json_object"}
+    assert "summary" in seen[0]["messages"][0]["content"] and r.content[0].text.startswith("{")

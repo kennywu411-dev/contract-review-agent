@@ -228,8 +228,10 @@ def create_app(engine=None) -> FastAPI:
                     if name == "done":
                         break
             finally:
-                if not task.done():  # 客户端断开：后台问答跑完即止，不再推送
-                    task.add_done_callback(lambda t: t.exception() if not t.cancelled() else None)
+                if not task.done():
+                    # 客户端断开：取消等待中的任务，不再推送。已进入线程的那次模型调用无法打断，
+                    # 会跑完这一步后结束（在线程里），结果丢弃
+                    task.cancel()
 
         return EventSourceResponse(stream(), ping=15)
 

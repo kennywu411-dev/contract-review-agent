@@ -19,6 +19,8 @@ from docpilot.verify import HaikuVerifier, extract_numbers, numbers_supported, v
         ("绩点3.5及以上", {"3.5"}),
         ("第十二条规定", set()),
         ("转专业要降一级吗", set()),
+        ("最高两万元", {"20000"}),
+        ("十万元以下", {"100000"}),
         ("财教〔2024〕181号", set()),
         ("没有数字", set()),
     ],
@@ -203,3 +205,33 @@ def test_revised_text_still_number_checked():
     llm = FakeJudgeLLM({0: ("partial", ["C1"], "一等奖学金6000元。")})
     v = verify_result(agent_result([fact("一等奖学金6000元，可随时申请。")]), HaikuVerifier(llm))
     assert v.kind == "refuse" and v.dropped[0]["reason"] == "数字与原文不符"
+
+
+def test_note_sentences_are_verified_too():
+    note = {"kind": "note", "text": "研究生也可以申请国家奖学金。", "citations": []}
+    llm = FakeJudgeLLM({1: ("unsupported", [])})
+    v = verify_result(agent_result([fact("一等5000元。"), note]), HaikuVerifier(llm))
+    assert len(v.kept) == 1 and v.dropped[0]["sentence"]["text"].startswith("研究生")
+
+
+def test_table_header_numbers_do_not_support():
+    tbl = {"kind": "table", "sql": "s", "columns": ["year_2024", "amount"], "rows": [["bnu", 100]]}
+    r = AgentResult(
+        "q",
+        "bnu",
+        "answer",
+        sentences=[fact("2024年标准为100元", cites=("T1",))],
+        citations={"T1": tbl},
+    )
+    v = verify_result(r, HaikuVerifier(FakeJudgeLLM({0: ("supported", ["T1"])})))
+    assert v.kind == "refuse" and v.dropped[0]["reason"] == "数字与原文不符"
+
+
+def test_repaired_counts_set_changes_only():
+    v = verify_result(
+        agent_result([fact("一等5000元，二等3000元。", cites=("C2", "C1"))]),
+        HaikuVerifier(FakeJudgeLLM({0: ("supported", ["C1", "C2"])})),
+    )
+    assert v.repaired == 0
+    v = verify_result(agent_result([fact("一等5000元。", cites=())]), HaikuVerifier(FakeJudgeLLM()))
+    assert v.repaired == 0 and v.cited_added == 1

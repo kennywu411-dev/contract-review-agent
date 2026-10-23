@@ -23,9 +23,15 @@ SUMMARY_SCHEMA = {
     "additionalProperties": False,
 }
 
-_DEGREE = [(re.compile(r"研究生|硕士|博士"), "研究生"), (re.compile(r"本科"), "本科")]
-_GRADE = re.compile(r"大[一二三四五]|\d{4}\s*级")
-_MAJOR = re.compile(r"(?:是|读|学)([一-鿿]{2,10}?)专业")
+# 只从第一人称表述里抽"学生身份"：问到的对象（"研究生能拿国奖吗"）不是身份（审查 Important 2）
+_ME = r"(?:我|本人)[^，。？！,.?!]{0,12}?"
+_DEGREE = [
+    (re.compile(_ME + r"(?:研究生|硕士|博士)"), "研究生"),
+    (re.compile(_ME + r"本科"), "本科"),
+]
+_GRADE = re.compile(_ME + r"(大[一二三四五]|\d{4}\s*级)")
+_MAJOR = re.compile(_ME + r"(?:是|读|学)([一-鿿]{2,10}?)专业")
+_MAJOR_STOP = {"什么", "哪个", "校的", "学校的", "这个", "那个", "本", "原"}
 
 
 def extract_slots(text: str) -> dict[str, str]:
@@ -35,8 +41,8 @@ def extract_slots(text: str) -> dict[str, str]:
             slots["degree"] = value
             break
     if m := _GRADE.search(text):
-        slots["grade"] = m.group().replace(" ", "")
-    if m := _MAJOR.search(text):
+        slots["grade"] = m.group(1).replace(" ", "")
+    if (m := _MAJOR.search(text)) and m.group(1) not in _MAJOR_STOP:
         slots["major"] = m.group(1)
     return slots
 

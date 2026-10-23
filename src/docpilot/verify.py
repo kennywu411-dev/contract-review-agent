@@ -35,6 +35,7 @@ _CN_NUM = re.compile(rf"([零〇一二两三四五六七八九十百]+)(?=[{_UNI
 _DOC_NO = re.compile(r"[〔\[［（(]\s*\d{4}\s*[〕\]］）)]\s*\d+\s*号")  # 文号：财教〔2024〕181号
 _CLAUSE = re.compile(r"第[零〇一二两三四五六七八九十百千\d]+[条章节款项部分]")  # 条款编号不算事实
 _WAN = re.compile(r"(\d+(?:\.\d+)?)\s*万")
+_CN_WAN = re.compile(r"([零〇一二两三四五六七八九十百]+)万")  # "两万元""十万"
 _ARABIC = re.compile(r"\d+(?:,\d{3})*(?:\.\d+)?")
 
 
@@ -70,6 +71,14 @@ def extract_numbers(text: str) -> set[str]:
         return " "
 
     text = _WAN.sub(wan, text)
+
+    def cn_wan(m: re.Match) -> str:
+        n = _cn_to_int(m.group(1))
+        if n is not None:
+            out.add(str(n * 10000))
+        return " "
+
+    text = _CN_WAN.sub(cn_wan, text)
     for m in _CN_NUM.finditer(text):
         n = _cn_to_int(m.group(1))
         if n is not None:
@@ -134,8 +143,9 @@ class VerifiedAnswer:
     unanswered: str = ""
     clarification: str = ""
     verifier_error: str = ""
-    repaired: int = 0  # 引用被改正的句数
+    repaired: int = 0  # 引用集合被改正的句数（只是顺序不同不算；原本无引用另计 cited_added）
     revised: int = 0  # partial 句被改写成只含有依据部分的句数
+    cited_added: int = 0  # 模型没给引用、由校验器补上引用的句数
     cost_usd: float = 0.0
     latency_ms: float = 0.0
 
@@ -192,11 +202,10 @@ def verify_result(result, verifier: HaikuVerifier) -> VerifiedAnswer:
     v = VerifiedAnswer(result.kind, unanswered=result.unanswered)
     kept: dict[int, dict] = {}
     facts: list[tuple[int, dict]] = []
+    # note 句也交给校验器：无数字的"研究生也能申请国奖"被标成 note 也不能免检（审查 Important 1）
+    # 校验器对只说明边界、建议咨询部门的 note 句标 supported、support 可为空。
     for i, s in enumerate(result.sentences):
-        if s.get("kind") == "note" and not extract_numbers(s["text"]):
-            kept[i] = s | {"index": i}  # 纯说明句（边界、建议咨询哪里）不需要引用
-        else:
-            facts.append((i, s))  # 含数字的 note 句按 fact 处理
+        facts.append((i, s))
 
     if facts:
         try:
@@ -207,17 +216,32 @@ def verify_result(result, verifier: HaikuVerifier) -> VerifiedAnswer:
             labels = [("unverified", [], "")] * len(facts)
         for (i, s), (label, support, revised) in zip(facts, labels, strict=True):
             support = [c for c in dict.fromkeys(support) if c in result.citations]
+            if s.get("kind") == "note" and not extract_numbers(s["text"]):
+                if label == "supported" or (label == "partial" and not support):
+                    kept[i] = s | {"index": i}
+                else:
+                    v.dropped.append({"sentence": s, "reason": f"校验未通过（note，{label}）"})
+                continue
             # partial：校验器给出只含有依据部分的改写时，保留改写（整句删除会丢掉答案要点，ADR 004）
             text = revised.strip() if label == "partial" and revised.strip() else s["text"]
             if not support or not (label == "supported" or text != s["text"]):
                 v.dropped.append({"sentence": s, "reason": f"校验未通过（{label}）"})
                 continue
-            texts = [_source_text(result.citations[c]) for c in support]
-            tables = [result.citations[c]["rows"] for c in support if c.startswith("T")]
+            # 数字检查：文档用原文，表格只用数据行（表头里的数字不算依据，审查 Important 3）
+            texts = [
+                result.citations[c]["text"] for c in support if result.citations[c]["kind"] == "doc"
+            ]
+            tables = [
+                result.citations[c]["rows"]
+                for c in support
+                if result.citations[c]["kind"] == "table"
+            ]
             if not numbers_supported(text, texts, tables):
                 v.dropped.append({"sentence": s, "reason": "数字与原文不符"})
                 continue
-            if support != s["citations"]:
+            if not s["citations"]:
+                v.cited_added += 1
+            elif set(support) != set(s["citations"]):
                 v.repaired += 1
             item = s | {
                 "index": i,
@@ -231,7 +255,7 @@ def verify_result(result, verifier: HaikuVerifier) -> VerifiedAnswer:
             kept[i] = item
 
     v.kept = [kept[i] for i in sorted(kept)]
-    if not any(s["kind"] == "fact" for s in v.kept):
+    if not any(s.get("kind", "fact") == "fact" for s in v.kept):
         v.kind = "refuse"
         v.refuse_reason = (
             f"{result.unanswered}：文件中没有相关规定。" if result.unanswered else REFUSE_NO_BASIS

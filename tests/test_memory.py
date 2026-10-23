@@ -7,7 +7,8 @@ from docpilot.memory import ConversationMemory, Turn, extract_slots
 def test_extract_slots():
     s = extract_slots("我是计算机专业大二的本科生，想转专业")
     assert s == {"degree": "本科", "grade": "大二", "major": "计算机"}
-    assert extract_slots("研究生能拿国奖吗")["degree"] == "研究生"
+    assert extract_slots("我是研究生，能拿国奖吗")["degree"] == "研究生"
+    assert extract_slots("研究生能拿国奖吗") == {}  # 问到的对象不是学生身份
     assert extract_slots("我是2023级的")["grade"] == "2023级"
     assert extract_slots("缓考怎么办") == {}
 
@@ -20,7 +21,7 @@ def test_slots_accumulate_and_latest_wins():
     m = ConversationMemory()
     m.add(turn("我是大一的，能转专业吗"))
     m.add(turn("我是计算机专业的，那大二呢？"))
-    assert m.slots == {"grade": "大二", "major": "计算机"}
+    assert m.slots == {"grade": "大一", "major": "计算机"}  # "那大二呢"是在问大二，不是身份
 
 
 def test_render_window_keeps_recent_turns_verbatim():
@@ -94,3 +95,10 @@ def test_summarizer_error_falls_back_to_truncation():
     m.add(turn("问题二", "答" * 50))
     r = m.render()
     assert "问题二" in r and m.compress_errors == 1
+
+
+def test_slot_false_positives():
+    assert extract_slots("学校的专业设置是怎样的") == {}
+    assert extract_slots("读什么专业好") == {}
+    assert extract_slots("违约金放大三倍合理吗") == {}
+    assert extract_slots("我大三了")["grade"] == "大三"
