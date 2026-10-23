@@ -190,6 +190,7 @@ export type VerifiedReview = {
 };
 
 export type ReviewEvent =
+  | { event: "session"; data: { session_id: string } }
   | { event: "step"; data: Step }
   | { event: "review"; data: ReviewResult }
   | { event: "verified"; data: VerifiedReview }
@@ -223,7 +224,7 @@ export const RISK_TYPES: Record<string, string> = {
 
 /** 合同审查或追问：首轮传 contract，追问传 question（同一 sessionId）。 */
 export function review(
-  body: { contract?: string; question?: string; tenant: string; session_id: string },
+  body: { contract?: string; question?: string; tenant: string; session_id?: string },
   onEvent: (e: ReviewEvent) => void,
 ): () => void {
   return streamPost("/api/review", body, onEvent as (e: { event: string; data: unknown }) => void);

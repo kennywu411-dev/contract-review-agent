@@ -21,6 +21,7 @@ import {
   type Tenant,
   type VerifiedReview,
 } from "@/lib/api";
+import { splitClauses } from "@/lib/clauses.mjs";
 import { cn } from "@/lib/utils";
 
 type Turn = {
@@ -47,19 +48,6 @@ const FLAG_TEXT: Record<string, string> = {
 };
 const flagText = (f: string) =>
   f.startsWith("unretrieved:") ? `点名的条文未被检索到（${f.slice(12)}）` : (FLAG_TEXT[f] ?? f);
-
-const newSession = () => Math.random().toString(36).slice(2, 12);
-
-/** 把合同切成"首部 + 各条"，条款号来自行首的"第X条"。 */
-function splitClauses(text: string) {
-  const out: { no: string | null; lines: string[] }[] = [{ no: null, lines: [] }];
-  for (const line of text.split("\n")) {
-    const m = line.match(/^(第[零一二三四五六七八九十百]+条)\s/);
-    if (m) out.push({ no: m[1], lines: [line] });
-    else out[out.length - 1].lines.push(line);
-  }
-  return out.filter((c) => c.lines.some((l) => l.trim()));
-}
 
 function ContractView({ text, findings, active, onPick }: { text: string; findings: Finding[]; active: string | null; onPick: (no: string) => void }) {
   const byClause = useMemo(() => {
@@ -191,7 +179,7 @@ export default function ReviewPage() {
   const [input, setInput] = useState("");
   const [open, setOpen] = useState<{ turnId: number; cid: string } | null>(null);
   const [activeClause, setActiveClause] = useState<string | null>(null);
-  const [sessionId, setSessionId] = useState(newSession);
+  const [sessionId, setSessionId] = useState(""); // 服务端在首轮审查时签发
   const bottom = useRef<HTMLDivElement>(null);
   const busy = turns.some((t) => !t.done);
 
@@ -207,12 +195,13 @@ export default function ReviewPage() {
   const lastReview = [...turns].reverse().find((t) => t.result?.kind === "review");
   const findings = lastReview?.verified?.findings.length ? lastReview.verified.findings : (lastReview?.result?.findings ?? []);
 
-  const run = (body: { contract?: string; question?: string }, question = "", sid = sessionId) => {
+  const run = (body: { contract?: string; question?: string }, question = "") => {
     const id = Date.now();
     setTurns((ts) => [...ts, { id, question, steps: [], done: false }]);
     const patch = (f: (t: Turn) => Turn) => setTurns((ts) => ts.map((t) => (t.id === id ? f(t) : t)));
-    review({ ...body, tenant, session_id: sid }, (e) => {
-      if (e.event === "step") patch((t) => ({ ...t, steps: [...t.steps, e.data] }));
+    review({ ...body, tenant, session_id: body.question ? sessionId : undefined }, (e) => {
+      if (e.event === "session") setSessionId(e.data.session_id);
+      else if (e.event === "step") patch((t) => ({ ...t, steps: [...t.steps, e.data] }));
       else if (e.event === "review") patch((t) => ({ ...t, result: e.data }));
       else if (e.event === "verified") patch((t) => ({ ...t, verified: e.data }));
       else if (e.event === "error") patch((t) => ({ ...t, error: e.data.message }));
@@ -222,13 +211,13 @@ export default function ReviewPage() {
 
   const start = () => {
     if (!contract.trim() || busy) return;
-    // 每份合同一个新会话；setState 要到下次渲染才生效，所以把新 id 直接传给 run
-    const sid = newSession();
-    setSessionId(sid);
+    // 每份合同一个新会话，id 由服务端在 session 事件里下发
+    setSessionId("");
     setTurns([]);
     setOpen(null);
+    setActiveClause(null);
     setEditing(false);
-    run({ contract }, "", sid);
+    run({ contract });
   };
 
   const ask = (q: string) => {
@@ -277,7 +266,7 @@ export default function ReviewPage() {
                 </button>
               </>
             ) : (
-              <button onClick={() => { setEditing(true); setTurns([]); setOpen(null); }} disabled={busy}
+              <button onClick={() => { setEditing(true); setTurns([]); setOpen(null); setActiveClause(null); setSessionId(""); }} disabled={busy}
                 className="hover:bg-accent ml-auto inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-md border px-3 text-sm disabled:opacity-40">
                 <Pencil className="size-3.5" />换一份合同
               </button>
@@ -293,7 +282,15 @@ export default function ReviewPage() {
                   className="bg-background focus-visible:ring-ring h-full min-h-80 w-full resize-none rounded-md border p-3 text-sm leading-7 outline-none focus-visible:ring-2" />
               </>
             ) : (
-              <ContractView text={contract} findings={findings} active={activeClause} onPick={pickClause} />
+              <>
+                {lastReview?.result && (
+                  <p className="text-muted-foreground mb-2 text-xs">
+                    高亮按“我方是{lastReview.result.our_side}方”的审查结果
+                    {turns.filter((t) => t.result?.kind === "review").length > 1 && "（已按追问重新审查）"}
+                  </p>
+                )}
+                <ContractView text={contract} findings={findings} active={activeClause} onPick={pickClause} />
+              </>
             )}
           </div>
         </section>
