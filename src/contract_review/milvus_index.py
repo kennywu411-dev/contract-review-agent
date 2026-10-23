@@ -6,9 +6,8 @@
 
 连接方式（ADR 008）：
 - 默认：在本机 127.0.0.1 起一个 Milvus Lite 服务子进程，用 URI 连接。
-  Milvus Lite 3.x 是进程内纯 Python
-  实现，检索用 faiss（自带 libomp），和 torch 自带的 libomp 同进程会报 OMP #15；分进程从根上隔离，
-  连接方式也和生产环境的 Milvus Standalone 一样；
+  Milvus Lite 3.x 是进程内纯 Python 实现，检索用 faiss（自带 libomp），和 torch 自带的 libomp
+  同进程会报 OMP #15；分进程从根上隔离，连接方式也和生产环境的 Milvus Standalone 一样；
 - 环境变量 MILVUS_URI：直接连外部 Milvus（如 Docker 里的 Standalone）；
 - 传 .db 路径：进程内模式（测试用，不跑 torch 推理时可用）。
 """
