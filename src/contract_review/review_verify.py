@@ -1,12 +1,19 @@
 """合同审查意见的依据校验（合同场景的 D4）。
 
+模型层：Haiku 逐条核对理由能否由检索原文支撑；依据不足的意见改为转人工复核，不删除。
 规则层：从意见的理由和修改建议里抽出"《民法典》第X条""本公司规范第X条"这类点名引用，
 核对它是否真出现在本次检索到的原文里。点名了却没检索到的条文，是编造或凭记忆错引的直接信号。
 """
 
 from __future__ import annotations
 
+import json
 import re
+import time
+from dataclasses import dataclass, field
+
+from contract_review.llm import cost_usd
+from contract_review.verify import VERIFY_SCHEMA, _source_text
 
 _DIGITS = "零一二三四五六七八九"
 _NUM = r"[0-9零〇一二两三四五六七八九十百千]+"
@@ -89,3 +96,104 @@ def unretrieved_refs(finding: dict, citations: dict, tenant: str) -> list[tuple[
         if key not in have:
             missing.append(key)
     return missing
+
+
+# ---------------- 模型层：Haiku 核对理由能否由检索原文支撑 + 降级策略 ----------------
+
+
+class ReviewVerifier:
+    """一次调用核对一份合同的全部意见：每条给标签，并指出真正支撑它的原文编号。"""
+
+    def __init__(self, llm) -> None:
+        self.llm = llm
+
+    def label(self, findings: list[dict], citations: dict, contract: str = ""):
+        from contract_review.prompts import REVIEW_VERIFY_PROMPT
+
+        sources = (
+            "\n".join(
+                f'[{cid}]\n<原文 id="{cid}">\n{_source_text(c)}\n</原文>'
+                for cid, c in citations.items()
+            )
+            or "（没有检索到原文）"
+        )
+        items = "\n".join(
+            f'<意见 index="{i}">条款：{f["clause_raw"] if f.get("clause_raw") else f["clause"]}\n'
+            f"合同原文摘录：{f['quote']}\n理由：{f['reason']}</意见>"
+            for i, f in enumerate(findings)
+        )
+        resp = self.llm.create(
+            max_tokens=4000,
+            messages=[
+                {
+                    "role": "user",
+                    "content": (
+                        f"{REVIEW_VERIFY_PROMPT}\n## 原文\n{sources}\n\n## 待核对意见\n{items}"
+                    ),
+                }
+            ],
+            output_config={
+                "effort": "low",
+                "format": {"type": "json_schema", "schema": VERIFY_SCHEMA},
+            },
+        )
+        text = next(b.text for b in resp.content if b.type == "text")
+        by_index = {
+            x["index"]: (x["label"], x["support"], x.get("revised", ""))
+            for x in json.loads(text)["labels"]
+        }
+        out = [by_index.get(i, ("unsupported", [], "")) for i in range(len(findings))]
+        return out, cost_usd(self.llm.model, resp.usage)
+
+
+@dataclass
+class VerifiedReview:
+    findings: list[dict] = field(default_factory=list)
+    flagged: int = 0  # 因依据问题改为转人工的意见数
+    revised: int = 0  # 理由被改写成只含有依据部分的意见数
+    repaired: int = 0  # 引用编号被改正的意见数
+    verifier_error: str = ""
+    cost_usd: float = 0.0
+    latency_ms: float = 0.0
+
+
+def verify_review(r: dict, verifier, tenant: str, contract: str = "") -> VerifiedReview:
+    """依据不足的意见不删除（漏报一处风险比多一条待复核意见代价大），改为转法务人工复核并注明原因。"""
+    t0 = time.perf_counter()
+    v = VerifiedReview()
+    if r["kind"] != "review" or not r["findings"]:
+        return v
+    citations = r["citations"]
+    try:
+        labels, v.cost_usd = verifier.label(r["findings"], citations, contract)
+    except Exception as e:  # 校验器出错：保守处理，全部转人工
+        v.verifier_error = f"{type(e).__name__}: {e}"
+        labels = [("unverified", [], "")] * len(r["findings"])
+    for f, (label, support, revised) in zip(r["findings"], labels, strict=True):
+        item = dict(f)
+        flags: list[str] = []
+        support = [c for c in dict.fromkeys(support) if c in citations]
+        if label in ("unsupported", "unverified") or not support:
+            flags.append(label if label != "supported" else "unsupported")
+        else:
+            if label == "partial" and revised.strip():
+                item["revised_from"] = f["reason"]
+                item["reason"] = revised.strip()
+                v.revised += 1
+            elif label == "partial":
+                flags.append("partial")
+            if set(support) != set(f["citations"]):
+                item["cited_by_model"] = f["citations"]
+                item["citations"] = support
+                v.repaired += 1
+        flags += [f"unretrieved:{d}{a}" for d, a in unretrieved_refs(item, citations, tenant)]
+        if not f.get("quote_found", True):
+            flags.append("quote_mismatch")
+        if flags:
+            item["verify_flags"] = flags
+            if not f["needs_human_review"]:
+                v.flagged += 1
+            item["needs_human_review"] = True
+        v.findings.append(item)
+    v.latency_ms = (time.perf_counter() - t0) * 1000
+    return v
