@@ -32,7 +32,7 @@ export function TraceDrawer({ run, traceId, onClose }: { run: string; traceId: s
             <p className="font-medium">{t?.question ?? "加载中…"}</p>
             {t && (
               <p className="text-muted-foreground mt-1 text-xs">
-                {t.school} · {t.model} · 结束：{t.end} · {fmtMs(t.latency_ms)} · {fmtUsd(t.cost_usd)}
+                {t.tenant} · {t.model} · 结束：{t.end} · {fmtMs(t.latency_ms)} · {fmtUsd(t.cost_usd)}
               </p>
             )}
           </div>

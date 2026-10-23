@@ -1,0 +1,19 @@
+tenant,supplier_id,supplier_name,credit_code,category,status,blacklist_reason,qualification,qual_valid_until,source
+huaxin,HU-S01,苏州恒锐金属材料有限公司,9188Q6HB7JB0D2UCR6,原材料,正常,,ISO9001,2027-06-30,构造
+huaxin,HU-S02,无锡精联轴承有限公司,919B9J8JYUB1JC04EU,零部件,正常,,ISO9001,2027-03-31,构造
+huaxin,HU-S03,常州驰远电机有限公司,91WKTC49PY197JD8TQ,零部件,正常,,CCC 认证,2026-12-31,构造
+huaxin,HU-S04,南通海拓润滑油有限公司,91BNA1J0NUY88UWTXQ,辅料,正常,,ISO9001,2026-05-31,构造
+huaxin,HU-S05,昆山铭泰精密机械有限公司,91M4PGLNYGKNYJYM7A,外协加工,正常,,ISO9001,2027-09-30,构造
+huaxin,HU-S06,嘉兴宏途钢管有限公司,91GP89QNB08QN48YT7,原材料,黑名单,2025 年两次交付不合格品且拒不退换,ISO9001,2027-01-31,构造
+yunqi,YU-S01,杭州数衡信息技术有限公司,9163X1TXARKKN4LXK1,数据服务,正常,,DCMM 二级,2027-08-31,构造
+yunqi,YU-S02,成都标点智能科技有限公司,91PH50T7LM2L4A8RN8,数据服务,正常,,ISO27001,2026-04-30,构造
+yunqi,YU-S03,北京启明软件开发有限公司,911ECFCGC2JUY5LA46,软件开发,正常,,CMMI 3,2027-05-31,构造
+yunqi,YU-S04,上海云栈网络科技有限公司,91E8DGHTE0TN63HFJY,云资源,正常,,等保三级,2026-05-31,构造
+yunqi,YU-S05,合肥语库数据有限公司,917907RJ5LRAEXU5BE,数据产品,正常,,ISO27001,2026-11-30,构造
+yunqi,YU-S06,深圳极讯外包服务有限公司,912HL7B5BEP1LRKL1D,运维外包,黑名单,2025 年泄露客户数据被通报,ISO27001,2027-03-31,构造
+ruifeng,RU-S01,黑龙江北垦粮食购销有限公司,91F13LG18WYDAQJ1R9,粮食,正常,,粮食收购资格,2027-04-30,构造
+ruifeng,RU-S02,吉林丰禾农产品有限公司,91J7UJQ3E8U3Y9B32W,粮食,正常,,粮食收购资格,2026-08-31,构造
+ruifeng,RU-S03,山东鲁穗粮油贸易有限公司,91AN558XJB7TNTKN2R,粮食,正常,,食品经营许可,2027-07-31,构造
+ruifeng,RU-S04,河南中原冷链物流有限公司,915T26PR8352CTBTR0,物流仓储,正常,,道路运输许可,2026-08-31,构造
+ruifeng,RU-S05,安徽谷仓仓储服务有限公司,91Q1YJL5GL6PQM6GGR,物流仓储,正常,,仓储备案,2027-10-31,构造
+ruifeng,RU-S06,江西赣丰米业有限公司,91T1BH708NDGUN9UHU,粮食,黑名单,2025 年以次充好、虚开发票,食品生产许可,2027-05-31,构造

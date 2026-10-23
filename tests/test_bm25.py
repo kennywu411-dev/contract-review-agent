@@ -1,4 +1,4 @@
-from docpilot.bm25 import BM25, tokenize
+from contract_review.bm25 import BM25, tokenize
 
 DOCS = [
     "本科生转专业管理办法 第三条 学生可以申请转专业一次",

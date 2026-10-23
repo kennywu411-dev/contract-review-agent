@@ -1,5 +1,5 @@
-from docpilot.config import SCHOOLS
+from contract_review.config import TENANTS
 
 
 def test_schools():
-    assert set(SCHOOLS) == {"national", "bnu", "upc", "njust", "lzu", "cumt", "zzu"}
+    assert set(TENANTS) == {"common", "huaxin", "yunqi", "ruifeng"}

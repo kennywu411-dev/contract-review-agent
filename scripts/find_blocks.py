@@ -6,20 +6,20 @@
 import sqlite3
 import sys
 
-from docpilot.config import DB_PATH
+from contract_review.config import DB_PATH
 
 
 def main() -> None:
-    school, kws = sys.argv[1], sys.argv[2:]
+    tenant, kws = sys.argv[1], sys.argv[2:]
     conn = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
     sql = (
         "SELECT b.doc_id, b.page, b.seq, b.level, b.text "
         "FROM blocks b JOIN documents d USING(doc_id) "
-        "WHERE d.school IN (?, 'national') AND b.kind != 'heading'"
+        "WHERE d.tenant IN (?, 'common') AND b.kind != 'heading'"
         + "".join(" AND b.text LIKE ?" for _ in kws)
-        + " ORDER BY d.school='national', b.doc_id, b.seq LIMIT 10"
+        + " ORDER BY d.tenant='common', b.doc_id, b.seq LIMIT 10"
     )
-    for doc, page, seq, lvl, text in conn.execute(sql, [school] + [f"%{k}%" for k in kws]):
+    for doc, page, seq, lvl, text in conn.execute(sql, [tenant] + [f"%{k}%" for k in kws]):
         print(f"{doc} p{page} s{seq} L{lvl} | {text[:150]}")
 
 

@@ -1,4 +1,4 @@
-from docpilot.structure import RawItem, assemble, merge_paragraphs
+from contract_review.structure import RawItem, assemble, merge_paragraphs
 
 
 def test_unnumbered_parser_heading_becomes_document_title():
@@ -82,7 +82,7 @@ def test_title_keeps_part_and_does_not_reset_on_non_titles():
 
 
 def test_part_cover_page_navigation_keeps_only_its_own_part():
-    from docpilot.structure import drop_part_navigation
+    from contract_review.structure import drop_part_navigation
 
     cover = [
         RawItem("heading", "第三部分学生管理", page=231),
@@ -99,7 +99,7 @@ def test_part_cover_page_navigation_keeps_only_its_own_part():
 
 
 def test_part_tab_split_into_fragments_is_still_dropped():
-    from docpilot.structure import drop_part_navigation
+    from contract_review.structure import drop_part_navigation
 
     items = [
         RawItem("heading", "第一部分政策法规、学校章程", page=9),

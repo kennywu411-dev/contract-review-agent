@@ -3,8 +3,8 @@ from types import SimpleNamespace as _NS
 
 import pytest
 
-from docpilot.agent import AgentResult
-from docpilot.verify import HaikuVerifier, extract_numbers, numbers_supported, verify_result
+from contract_review.agent import AgentResult
+from contract_review.verify import HaikuVerifier, extract_numbers, numbers_supported, verify_result
 
 
 @pytest.mark.parametrize(
@@ -39,7 +39,7 @@ def test_numbers_must_appear_in_sources():
 
 
 def test_numbers_checked_against_table_rows():
-    rows = [["bnu", "京师奖学金", "一等", 5000, 10]]
+    rows = [["huaxin", "京师奖学金", "一等", 5000, 10]]
     assert numbers_supported("京师一等5000元，比例10%", [], [rows])
     assert not numbers_supported("京师一等6000元", [], [rows])
 
@@ -57,7 +57,7 @@ DOC2 = {"kind": "doc", "doc_id": "e", "pages": [6], "articles": [], "text": "二
 def agent_result(sentences, kind="answer", unanswered=""):
     return AgentResult(
         "q",
-        "bnu",
+        "huaxin",
         kind,
         sentences=sentences,
         unanswered=unanswered,
@@ -180,7 +180,7 @@ def test_partial_kept_when_unanswered_declared():
 
 def test_refuse_and_clarify_pass_through():
     for k in ("refuse", "clarify", "fallback"):
-        r = AgentResult("q", "bnu", k)
+        r = AgentResult("q", "huaxin", k)
         llm = FakeJudgeLLM()
         assert verify_result(r, HaikuVerifier(llm)).kind == (k if k != "fallback" else "refuse")
         assert llm.requests == []
@@ -215,10 +215,15 @@ def test_note_sentences_are_verified_too():
 
 
 def test_table_header_numbers_do_not_support():
-    tbl = {"kind": "table", "sql": "s", "columns": ["year_2024", "amount"], "rows": [["bnu", 100]]}
+    tbl = {
+        "kind": "table",
+        "sql": "s",
+        "columns": ["year_2024", "amount"],
+        "rows": [["huaxin", 100]],
+    }
     r = AgentResult(
         "q",
-        "bnu",
+        "huaxin",
         "answer",
         sentences=[fact("2024年标准为100元", cites=("T1",))],
         citations={"T1": tbl},

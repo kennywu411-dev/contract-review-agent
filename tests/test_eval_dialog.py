@@ -1,7 +1,7 @@
 import json
 
-from docpilot.eval_dialog import Dialog, load_dialogs, run_dialog, summarize_dialogs
-from docpilot.verify import HaikuVerifier
+from contract_review.eval_dialog import Dialog, load_dialogs, run_dialog, summarize_dialogs
+from contract_review.verify import HaikuVerifier
 from tests.test_agent import ANSWER, FakeLLM, tool
 from tests.test_judge import FakeSonnet
 from tests.test_tools import box, ch
@@ -9,7 +9,7 @@ from tests.test_verify import FakeJudgeLLM
 
 DLG = {
     "id": "dlg-001",
-    "school": "bnu",
+    "tenant": "huaxin",
     "pattern": "coreference",
     "turns": [
         {
@@ -57,7 +57,7 @@ def run(mode):
     rows = run_dialog(
         d,
         mode,
-        lambda school: box([ch("d", "bnu", "国奖1万元")]),
+        lambda tenant: box([ch("d", "huaxin", "国奖1万元")]),
         llm,
         HaikuVerifier(FakeJudgeLLM()),
         judge_llm=judge,

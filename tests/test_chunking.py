@@ -2,18 +2,18 @@ import json
 
 import pytest
 
-from docpilot import store
-from docpilot.chunking import embed_text, load_chunks
+from contract_review import store
+from contract_review.chunking import embed_text, load_chunks
 
 
 def make_db(tmp_path, docs):
-    """docs: {doc_id: (school, title, [(kind, level, text, page, section_path), ...])}"""
+    """docs: {doc_id: (tenant, title, [(kind, level, text, page, section_path), ...])}"""
     db = tmp_path / "c.db"
     conn = store.init_db(db)
-    for doc_id, (school, title, blocks) in docs.items():
+    for doc_id, (tenant, title, blocks) in docs.items():
         conn.execute(
             "INSERT INTO documents VALUES (?,?,?,'u','i','2025',NULL,'pdf','s',NULL,'n')",
-            (doc_id, school, title),
+            (doc_id, tenant, title),
         )
         for seq, (kind, level, text, page, path) in enumerate(blocks):
             conn.execute(
@@ -27,7 +27,7 @@ def make_db(tmp_path, docs):
 T = "北京师范大学本科生学籍管理规定"
 DOC = {
     "d1": (
-        "bnu",
+        "huaxin",
         "北师大学生手册",
         [
             ("heading", 0, T, 10, []),
@@ -39,7 +39,7 @@ DOC = {
             ("paragraph", 4, "第四条 " + "丁" * 100, 13, [T, "第二章 注册"]),
         ],
     ),
-    "d2": ("upc", "中石油手册", [("paragraph", None, "无标题正文" * 30, 1, [])]),
+    "d2": ("yunqi", "中石油手册", [("paragraph", None, "无标题正文" * 30, 1, [])]),
 }
 
 
@@ -118,7 +118,7 @@ def test_fixed_chunk_ignores_pages_and_articles_with_tiny_overlap(tmp_path):
         tmp_path,
         {
             "f": (
-                "bnu",
+                "huaxin",
                 "办法",
                 [
                     ("paragraph", 4, "第一条 " + "甲" * 392, 1, ["办法"]),

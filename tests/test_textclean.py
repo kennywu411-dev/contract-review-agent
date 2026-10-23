@@ -1,5 +1,5 @@
-from docpilot.structure import RawItem, merge_paragraphs
-from docpilot.textclean import normalize
+from contract_review.structure import RawItem, merge_paragraphs
+from contract_review.textclean import normalize
 
 
 def test_removes_garble_space_marker():
@@ -48,13 +48,13 @@ def test_merged_bbox_covers_both_lines_top_left_origin():
 
 
 def test_strip_garble_keeps_table_spacing():
-    from docpilot.textclean import strip_garble
+    from contract_review.textclean import strip_garble
 
     assert strip_garble("| 备暋注 | 学 分 |") == "| 备注 | 学 分 |"
 
 
 def test_garble_mapped_to_real_characters():
-    from docpilot.textclean import strip_garble
+    from contract_review.textclean import strip_garble
 
     assert strip_garble("财教暡2024暢181号") == "财教〔2024〕181号"
     assert strip_garble("等级为“B暠及以上") == "等级为“B”及以上"

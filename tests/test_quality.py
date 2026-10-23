@@ -1,5 +1,5 @@
-from docpilot import store
-from docpilot.quality import doc_quality
+from contract_review import store
+from contract_review.quality import doc_quality
 
 GOOD = "第一条 为维护学校正常的教育教学秩序，保障学生合法权益，制定本规定。" * 3
 
@@ -9,7 +9,7 @@ def make_db(tmp_path, blocks: dict[int, str], layer: dict[int, int]):
     db = tmp_path / "q.db"
     conn = store.init_db(db)
     conn.execute(
-        "INSERT INTO documents VALUES ('d','bnu','t','u','i','2025',NULL,'pdf','sha',?, 'now')",
+        "INSERT INTO documents VALUES ('d','huaxin','t','u','i','2025',NULL,'pdf','sha',?, 'now')",
         (max(layer),),
     )
     for seq, (page, text) in enumerate(blocks.items()):
@@ -55,7 +55,7 @@ def test_html_doc_has_no_page_checks(tmp_path):
     db = tmp_path / "q.db"
     conn = store.init_db(db)
     conn.execute(
-        "INSERT INTO documents VALUES ('d','bnu','t','u','i','2025',NULL,'html','s',NULL,'n')"
+        "INSERT INTO documents VALUES ('d','huaxin','t','u','i','2025',NULL,'html','s',NULL,'n')"
     )
     conn.execute(
         "INSERT INTO blocks VALUES ('d',0,'paragraph',NULL,?,NULL,NULL,NULL,'[]')", (GOOD,)

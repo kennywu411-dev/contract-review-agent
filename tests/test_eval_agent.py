@@ -1,12 +1,12 @@
-from docpilot.eval_agent import score_one, summarize_agent
-from docpilot.evalset import Question
+from contract_review.eval_agent import score_one, summarize_agent
+from contract_review.evalset import Question
 
 
 def q(type_="answerable", subtype=None, gold=None):
     gold = gold if gold is not None else [{"doc_id": "d", "page": 5, "clause": None}]
     return Question(
         "bnu-001",
-        "bnu",
+        "huaxin",
         "问",
         type_,
         subtype,

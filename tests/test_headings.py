@@ -1,6 +1,6 @@
 import pytest
 
-from docpilot.headings import heading_level
+from contract_review.headings import heading_level
 
 
 @pytest.mark.parametrize(
@@ -29,3 +29,15 @@ def test_heading_level(text, level):
 def test_decimal_numbering():
     assert heading_level("3.1 个人类荣誉称号") == 9
     assert heading_level("2025.9 发布") is None or heading_level("2025.9 发布") != 9
+
+
+def test_civil_code_book_levels():
+    # 民法典：编 > 分编 > 章，编号与"部分"之类不冲突
+    assert heading_level("第三编　合同") == 10
+    assert heading_level("第一分编　通则") == 11
+
+
+def test_book_ranks_above_chapter():
+    from contract_review.structure import _rank
+
+    assert _rank(10) < _rank(11) < _rank(2)

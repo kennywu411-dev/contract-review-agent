@@ -1,82 +1,54 @@
 {
-  "bnu-handbook-2025": {
+  "huaxin-contract-policy": {
     "downloaded_at": "2026-10-23",
-    "sha256": "42d412c50cab2678ff0dcea7537ae160cadfc939eccc0d7b43fc46a308b5f7f9"
+    "sha256": "8d6ec6c13c35bbd3023aa5254b2aed6e239e0fa92ac9ddf72865964b7cac03ee"
   },
-  "bnu-xuewei-2025": {
+  "law-civil-code": {
     "downloaded_at": "2026-10-23",
-    "sha256": "fe66ac2634d39396e610173d73a374798ce388825e87017b575f4ba978841dfe"
+    "sha256": "16fb30a132114600f32059367dae0d6dd274519aa154126eae0ef9600cf4074e"
   },
-  "cumt-tuimian-2021": {
+  "law-civil-procedure": {
     "downloaded_at": "2026-10-23",
-    "sha256": "c7860e52652064463397d49047c49ebeeab660f65bd4724e307f795a9c2292bb"
+    "sha256": "553095be018f74f899e6c00377c787cc7d4e8bfe8dae0816c80e6ea9bbeade72"
   },
-  "cumt-xiaoli-2026": {
+  "law-contract-interp-2023": {
     "downloaded_at": "2026-10-23",
-    "sha256": "b41c37a7267423171007d658608596c670e6194ff754d42e93538c049a7102f8"
+    "sha256": "4c3b05e6796f435518b6e65e97cb38c26e09ee89ef04d8ee8696d3a870a45519"
   },
-  "cumt-xueji-2021": {
+  "ruifeng-contract-policy": {
     "downloaded_at": "2026-10-23",
-    "sha256": "dc2b1ebfae1b650914f7b17313eda690ea3f12c75162cf5ff3cc42d7d0285034"
+    "sha256": "7e05ba8e4cb9f08a17dfc020405f23a1f0ce879b52e019ce8d33b0a4f2ac39cc"
   },
-  "cumt-xuewei-2025": {
+  "tpl-agri-products-2025": {
     "downloaded_at": "2026-10-23",
-    "sha256": "0e1274adc2debe69685802654e456b71ec9885bf0294388d282d31e572193bdf"
+    "sha256": "d504a9b7a76cf0cb6bdbab7cd05ceabf6a87d8e08b26f6d313c453a252f886da"
   },
-  "cumt-zhuanye-2021": {
+  "tpl-data-dev-2025": {
     "downloaded_at": "2026-10-23",
-    "sha256": "6f49fb7a8ad611e846806376a2f9903709e89821e88b513ae1d789dcac73e7b4"
+    "sha256": "074241d667e12697031d05c9c6fbcff65a32c5dde1c937258364bacb42dab5e4"
   },
-  "lzu-jiangxuejin-2022": {
+  "tpl-data-processing-2025": {
     "downloaded_at": "2026-10-23",
-    "sha256": "39c360e3947495d22ac2423e853474c5ef81aa292bb1e6fa094fd202c2c4bb82"
+    "sha256": "403ff3d365a01bc572bd8ea37bf2b0fd75c17c7ba20c01284a5ddb0492bb90fe"
   },
-  "lzu-tuimian-2026": {
+  "tpl-data-supply-2025": {
     "downloaded_at": "2026-10-23",
-    "sha256": "196661bc816dad498028ab78ff6432a0c51ee6a7736ace359e2d29c136f49479"
+    "sha256": "7bff8e981b318a59c487971a8b58948f5ad7583df10d088ae4fa82bd8d9a082c"
   },
-  "lzu-xueji-2026": {
+  "tpl-entrustment-2025": {
     "downloaded_at": "2026-10-23",
-    "sha256": "7ee903d6f5ff946371cf0a159b2e986ba0141cbe5f85448688d20c09b670fe77"
+    "sha256": "58f7cd38beff837cee1a5b79b68a2da1058d596cc021f7fa5b66807875bcd9e6"
   },
-  "lzu-xuewei-2025": {
+  "tpl-industrial-goods-2023": {
     "downloaded_at": "2026-10-23",
-    "sha256": "2dd920067fe21d3ce21192296ec186ff9c06ba0e6d7a77457499f7b8a644894e"
+    "sha256": "635bf49d6134ee2ce1bac7aacacb814199464f1a10fdb3938984270f237199a6"
   },
-  "lzu-zhuanye-2025": {
+  "tpl-work-2024": {
     "downloaded_at": "2026-10-23",
-    "sha256": "f432e4a090e7d5a7a3f6c28093061424a8ac0c254e2e5553e52aa90160262342"
+    "sha256": "6b67d23ec645990a41e977f0a4ef6b6279169a2ac6d677f2d78b3a989b84a3b0"
   },
-  "national-jzxj-2024": {
+  "yunqi-contract-policy": {
     "downloaded_at": "2026-10-23",
-    "sha256": "0dcdc47865e83fc832b0ec3d8f5a9e0dde0e1117e867aa35dc86b378ac9c8bd8"
-  },
-  "national-xsglgd": {
-    "downloaded_at": "2026-10-23",
-    "sha256": "f16b58af6430e468fff61892c01cda94bab4e4b79691f209ae6770a4eeabd757"
-  },
-  "national-xwf": {
-    "downloaded_at": "2026-10-23",
-    "sha256": "8a085ceaec7524e297f618b0ce601627e9ed84826747b9700170edf6edfc5f2a"
-  },
-  "njust-zhuanye-2024": {
-    "downloaded_at": "2026-10-23",
-    "sha256": "fc665cf0349bfea3b00525b0a030b76daecc18cf7b19ad769abd1f44fcaed4ee"
-  },
-  "upc-handbook-2025": {
-    "downloaded_at": "2026-10-23",
-    "sha256": "cd872db816e55960522782d354cefd9bf5c3b762fc24dc761b86af5c70f34314"
-  },
-  "zzu-jiangxuejin-2017": {
-    "downloaded_at": "2026-10-23",
-    "sha256": "b0abcb2e1073df6c4ff889e5c84373ee475a274dcbe9b187fecf729b0f317375"
-  },
-  "zzu-xueji-2017": {
-    "downloaded_at": "2026-10-23",
-    "sha256": "8c377a6e7f55eaf3fb3c60f5044a3d2079bc3b74cc15fe5d2c0f5459779de43d"
-  },
-  "zzu-zhuanye-2025": {
-    "downloaded_at": "2026-10-23",
-    "sha256": "9b41a87e227c36ac7b01004800b4dc2b3c55c6506085b2c87031e3ccb07e6ab0"
+    "sha256": "5d172bafa232aa1a9f9b25ff4edfb366f0b59241894c60bd5d0d5b539191c681"
   }
 }

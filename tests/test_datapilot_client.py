@@ -2,22 +2,22 @@ import sqlite3
 
 import pytest
 
-from docpilot.datapilot_client import DATAPILOT_DIR, LocalBackend, MCPBackend, link_datapilot
+from contract_review.datapilot_client import DATAPILOT_DIR, LocalBackend, MCPBackend, link_datapilot
 
 
 @pytest.fixture
 def db(tmp_path):
     p = tmp_path / "campus.sqlite"
     conn = sqlite3.connect(p)
-    conn.execute("create table t (school text, v int)")
-    conn.executemany("insert into t values (?,?)", [("bnu", 1), ("upc", 2)])
+    conn.execute("create table t (tenant text, v int)")
+    conn.executemany("insert into t values (?,?)", [("huaxin", 1), ("yunqi", 2)])
     conn.commit()
     return p
 
 
 def test_local_backend_select(db):
-    res = LocalBackend(db).run("select school, v from t order by v")
-    assert res["columns"] == ["school", "v"] and res["rows"] == [["bnu", 1], ["upc", 2]]
+    res = LocalBackend(db).run("select tenant, v from t order by v")
+    assert res["columns"] == ["tenant", "v"] and res["rows"] == [["huaxin", 1], ["yunqi", 2]]
 
 
 @pytest.mark.parametrize(
@@ -34,7 +34,7 @@ def test_local_backend_reports_sql_errors(db):
 
 
 def test_link_is_idempotent(tmp_path, monkeypatch):
-    import docpilot.datapilot_client as dc
+    import contract_review.datapilot_client as dc
 
     monkeypatch.setattr(dc, "DATAPILOT_DIR", tmp_path / "datapilot")
     (tmp_path / "datapilot" / "data" / "dev_databases").mkdir(parents=True)
@@ -47,9 +47,9 @@ def test_mcp_backend_roundtrip():
     link_datapilot()
     backend = MCPBackend()
     try:
-        res = backend.run("select count(*) as n from national_aid")
+        res = backend.run("select count(*) as n from suppliers")
         assert res["rows"][0][0] >= 1
-        assert "error" in backend.run("delete from national_aid")
+        assert "error" in backend.run("delete from suppliers")
     finally:
         backend.close()
 
@@ -70,18 +70,18 @@ class Flaky:
 
 
 def test_resilient_backend_falls_back_after_repeated_errors(db):
-    from docpilot.datapilot_client import ResilientBackend
+    from contract_review.datapilot_client import ResilientBackend
 
     primary = Flaky()
     b = ResilientBackend(primary, LocalBackend(db), max_errors=2)
     assert "error" in b.run("select 1")
-    res = b.run("select school from t")
+    res = b.run("select tenant from t")
     assert res["rows"] and b.name == "local(fallback)" and primary.closed
     assert primary.calls == 2
 
 
 def test_sql_errors_do_not_trigger_fallback(db):
-    from docpilot.datapilot_client import ResilientBackend
+    from contract_review.datapilot_client import ResilientBackend
 
     class Strict(Flaky):
         def run(self, sql):

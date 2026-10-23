@@ -2,19 +2,19 @@ from pathlib import Path
 
 import pytest
 
-from docpilot.parse import parse_document
+from contract_review.parse import parse_document
 
 FIX = Path(__file__).parent / "fixtures"
 
 
 @pytest.fixture(scope="module")
 def bnu():
-    return parse_document(FIX / "bnu_sample.pdf", "bnu", "pdf")
+    return parse_document(FIX / "bnu_sample.pdf", "huaxin", "pdf")
 
 
 @pytest.fixture(scope="module")
 def upc():
-    return parse_document(FIX / "upc_sample.pdf", "upc", "pdf")
+    return parse_document(FIX / "upc_sample.pdf", "yunqi", "pdf")
 
 
 def test_pdf_blocks_have_pages_and_bbox(bnu, upc):
@@ -66,3 +66,15 @@ def test_docx_blocks_have_no_page():
     blocks = parse_document(path, "lzu", "docx")
     assert blocks and all(b.page is None for b in blocks)
     assert any(b.level == 4 for b in blocks)
+
+
+def test_txt_lines_become_blocks(tmp_path):
+    from contract_review.parse import parse_document
+
+    p = tmp_path / "c.txt"
+    p.write_text(
+        "采购合同\n\n第一章 总则\n第一条 甲方应当付款。\n第二条 乙方应当交货。\n", encoding="utf-8"
+    )
+    blocks = parse_document(p, "c", "txt")
+    art = next(b for b in blocks if b.text.startswith("第二条"))
+    assert art.page is None and [s.replace("　", " ") for s in art.section_path] == ["第一章 总则"]

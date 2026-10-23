@@ -1,7 +1,7 @@
 import json
 from types import SimpleNamespace as NS
 
-from docpilot.memory import ConversationMemory, Turn, extract_slots
+from contract_review.memory import ConversationMemory, Turn, extract_slots
 
 
 def test_extract_slots():

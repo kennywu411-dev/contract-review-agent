@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { EChart } from "@/components/echart";
 import { Metric } from "@/components/metric";
+import { ContractRetrievalView, ReviewD4View, ReviewDialogView, ReviewView } from "@/components/review-eval";
 import { TopNav } from "@/components/top-nav";
 import { TraceDrawer } from "@/components/trace-drawer";
 import { getJSON, pct, type RunDetail, type RunInfo } from "@/lib/api";
@@ -12,10 +13,14 @@ import { cn } from "@/lib/utils";
 type Row = Record<string, unknown>;
 type ChartTheme = { series: string[]; axis: string; split: string };
 const KIND_LABEL = {
-  retrieval: "检索（D2）",
-  agent: "Agent（D3）",
-  d4: "校验与拒答（D4）",
-  dialog: "多轮对话记忆",
+  review: "合同审查",
+  review_d4: "合同·依据校验",
+  review_dialog: "合同·多轮追问",
+  contract_retrieval: "合同·检索",
+  retrieval: "高校·检索（D2）",
+  agent: "高校·Agent（D3）",
+  d4: "高校·校验与拒答（D4）",
+  dialog: "高校·多轮对话记忆",
 } as const;
 const MODE_LABEL: Record<string, string> = { none: "不带记忆", full: "完整历史", compress: "历史 + 压缩" };
 
@@ -274,9 +279,9 @@ export default function EvalPage() {
   useEffect(() => {
     getJSON<RunInfo[]>("/api/runs").then((rs) => {
       setRuns(rs);
-      // 优先看最新的全量 D4，其次最新的全量 agent 运行
-      const full = (k: RunInfo["kind"]) => rs.find((r) => r.kind === k && (r.n ?? 0) >= 100);
-      const pref = full("d4") ?? full("agent") ?? rs[0];
+      // 优先看最新的全量合同审查（48 份），其次高校场景的全量 D4
+      const full = (k: RunInfo["kind"], n: number) => rs.find((r) => r.kind === k && (r.n ?? 0) >= n);
+      const pref = full("review", 48) ?? full("d4", 100) ?? rs[0];
       if (pref) setSel(pref.run);
     });
   }, []);
@@ -302,17 +307,17 @@ export default function EvalPage() {
         <div className="flex flex-wrap items-end gap-3">
           <div>
             <h1 className="text-xl font-semibold">评测看板</h1>
-            <p className="text-muted-foreground text-sm">174 题评测集（真实来源 67%）；每次运行的指标与逐题 trace 都可回放、可对比</p>
+            <p className="text-muted-foreground text-sm">合同场景：48 份构造合同；高校场景（方法验证）的运行也保留在列表里。每次运行的指标与 trace 都可回放</p>
           </div>
           <div className="ml-auto flex flex-wrap gap-2 text-sm">
             <label className="flex items-center gap-1.5">
               <span className="text-muted-foreground text-xs">运行</span>
               <select value={sel} onChange={(e) => setSel(e.target.value)} className="bg-background h-9 cursor-pointer rounded-md border px-2">
-                {(["d4", "dialog", "agent", "retrieval"] as const).map((k) => (
+                {(["review", "review_d4", "review_dialog", "contract_retrieval", "d4", "dialog", "agent", "retrieval"] as const).map((k) => (
                   <optgroup key={k} label={KIND_LABEL[k]}>
                     {runs.filter((r) => r.kind === k).map((r) => (
                       <option key={r.run} value={r.run}>
-                        {r.run}（{r.n ?? "?"} 题）
+                        {r.run}（{r.n ?? "?"}）
                       </option>
                     ))}
                   </optgroup>
@@ -340,6 +345,10 @@ export default function EvalPage() {
             {detail.kind === "d4" && <D4Metrics s={detail.summary} />}
             {detail.kind === "agent" && <AgentMetrics s={detail.summary} />}
             {detail.kind === "dialog" && <DialogView s={detail.summary} />}
+            {detail.kind === "review" && <ReviewView d={detail} onOpen={setTrace} />}
+            {detail.kind === "review_d4" && <ReviewD4View d={detail} />}
+            {detail.kind === "review_dialog" && <ReviewDialogView d={detail} onOpen={setTrace} />}
+            {detail.kind === "contract_retrieval" && <ContractRetrievalView d={detail} />}
             {(detail.kind === "agent" || detail.kind === "d4") && (
               <QuestionTable d={detail} compare={cmpDetail} onOpen={setTrace} />
             )}
