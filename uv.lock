@@ -401,7 +401,10 @@ version = "0.0.1"
 source = { editable = "." }
 dependencies = [
     { name = "docling" },
+    { name = "numpy" },
     { name = "pypdf" },
+    { name = "torch" },
+    { name = "transformers" },
 ]
 
 [package.dev-dependencies]
@@ -413,7 +416,10 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "docling", specifier = ">=2.142,<3" },
+    { name = "numpy", specifier = ">=2" },
     { name = "pypdf", specifier = ">=6.21" },
+    { name = "torch", specifier = ">=2.8" },
+    { name = "transformers", specifier = ">=5" },
 ]
 
 [package.metadata.requires-dev]
