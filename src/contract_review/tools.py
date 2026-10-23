@@ -18,11 +18,18 @@ SQL_PREVIEW_ROWS = 30
 # 不管模型怎么写 SQL（不选 tenant 列、别名、IN、JOIN），都只能看到本租户的行
 SCOPED_TABLES = ("suppliers", "purchase_history")
 _WITH = re.compile(r"^\s*with\s+(recursive\s+)?", re.IGNORECASE)
+# 带 schema 的限定名（main.suppliers、"main"."x"、[temp].x）直接解析到真实表，
+# CTE 遮蔽不生效，一律拒绝（全分支审查 Critical 1）
+_SCHEMA = re.compile(
+    r"""(?:\b(?:main|temp|temporary)\b|["`\[](?:main|temp|temporary)["`\]])\s*\.""", re.I
+)
 
 
 def scope_sql(sql: str, tenant: str) -> str:
     if tenant not in TENANTS:  # tenant 会拼进 SQL，只接受固定取值
         raise ValueError(f"未知租户：{tenant}")
+    if _SCHEMA.search(sql):
+        raise ValueError("不允许带 schema 前缀的表名（如 main.suppliers），请直接写表名")
     ctes = ", ".join(
         f"{t} AS (SELECT * FROM main.{t} WHERE tenant IN ('{tenant}', 'common'))"
         for t in SCOPED_TABLES

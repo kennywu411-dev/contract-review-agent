@@ -123,6 +123,12 @@ def campus(tmp_path):
         "SELECT a.name FROM purchase_history a JOIN suppliers b ON 1=1 WHERE a.tenant='yunqi'",
         "WITH x AS (SELECT * FROM purchase_history) SELECT name FROM x",
         "select name from PURCHASE_HISTORY",
+        # 审查 Critical 1：schema 限定名会绕过同名 CTE，直接读到真实表
+        "SELECT name FROM main.purchase_history",
+        'SELECT name FROM "main"."purchase_history"',
+        "SELECT name FROM [main].purchase_history",
+        "SELECT name FROM purchase_history UNION ALL SELECT name FROM main.purchase_history",
+        "SELECT name FROM temp.purchase_history",
     ],
 )
 def test_sql_scope_enforced_without_tenant_column(campus, sql):
