@@ -132,3 +132,43 @@ def test_json_schema_format_mapped_to_json_object():
     )
     assert seen[0]["response_format"] == {"type": "json_object"}
     assert "summary" in seen[0]["messages"][0]["content"] and r.content[0].text.startswith("{")
+
+
+def test_strict_tools_use_beta_endpoint():
+    # DeepSeek 的 strict 工具调用是 Beta 功能：走 /beta 端点，每个函数带 strict（官网 Tool Calls 指南）
+    seen, urls = [], []
+
+    def handler(request: httpx.Request):
+        urls.append(str(request.url))
+        seen.append(json.loads(request.content))
+        return httpx.Response(200, json=REPLY)
+
+    llm = OpenAICompatLLM("deepseek-flash", api_key="k", transport=httpx.MockTransport(handler))
+    llm.create(max_tokens=10, system=[], tools=TOOLS, messages=[{"role": "user", "content": "q"}])
+    assert "/beta/" in urls[0] and all(t["function"]["strict"] is True for t in seen[0]["tools"])
+    assert "/beta/" not in OpenAICompatLLM("deepseek-flash", api_key="k").url_for(strict=False)
+
+
+def test_unescaped_inner_quotes_repaired():
+    # DeepSeek 曾在中文字符串里直接写英文双引号（"逾期视为合格"），导致参数 JSON 不合法（P22）
+    from contract_review.openai_compat import repair_json
+
+    raw = '{"summary": "约定"逾期视为合格"对我方不利", "findings": [{"quote": "a"}]}'
+    assert json.loads(repair_json(raw)) == {
+        "summary": '约定"逾期视为合格"对我方不利',
+        "findings": [{"quote": "a"}],
+    }
+    good = '{"a": "x", "b": ["y", "z"]}'
+    assert repair_json(good) == good
+
+
+def test_malformed_arguments_repaired_into_tool_use():
+    bad = json.loads(json.dumps(REPLY))
+    bad["choices"][0]["message"]["tool_calls"][0]["function"]["arguments"] = (
+        '{"refuse_reason": "文件里没有"缓考"的规定"}'
+    )
+    llm = OpenAICompatLLM("deepseek-flash", api_key="k", transport=fake_transport(bad, []))
+    r = llm.create(
+        max_tokens=10, system=[], tools=TOOLS, messages=[{"role": "user", "content": "q"}]
+    )
+    assert r.content[0].type == "tool_use" and "缓考" in r.content[0].input["refuse_reason"]

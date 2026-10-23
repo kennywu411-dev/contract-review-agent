@@ -2,11 +2,12 @@
 create(**Anthropic 风格参数) → Anthropic 形状的消息。
 
 这样 agent、工具循环、trace 都不用改（ADR 006 记录两边的差异）：
-- 工具：Anthropic 的 {name, description, input_schema} → OpenAI 的 function；
-  官网未说明是否支持 strict，因此不传。
+- 工具：Anthropic 的 {name, description, input_schema} → OpenAI 的 function；全部工具都是 strict 时
+  透传 strict 并走 DeepSeek 的 Beta 端点（官网 Tool Calls 指南：strict 是 Beta 功能）。
 - 消息：tool_use 块 → assistant.tool_calls；tool_result 块 → role=tool 消息。
 - effort、cache_control 没有对应参数，忽略（DeepSeek 的前缀缓存是自动的）。
-- 工具参数不是合法 JSON 时，当作普通文本返回，交给 agent 按"没调终止工具"处理（不让整题崩）。
+- 工具参数不是合法 JSON 时先做保守修复（字符串里未转义的英文双引号，问题日志 P22）；
+  仍然不合法才当作普通文本返回，交给 agent 按"没调终止工具"处理（不让整题崩）。
 """
 
 from __future__ import annotations
@@ -21,7 +22,36 @@ import httpx
 
 from contract_review.config import ROOT
 
-ENDPOINTS = {"deepseek-flash": ("https://api.deepseek.com/chat/completions", "DEEPSEEK_API_KEY")}
+# 模型 → (API 根地址, key 的环境变量名)
+ENDPOINTS = {"deepseek-flash": ("https://api.deepseek.com", "DEEPSEEK_API_KEY")}
+_STRUCTURAL = set(",}]:")
+
+
+def repair_json(raw: str) -> str:
+    """修复字符串内部未转义的英文双引号：字符串里的 " 后面（跳过空白）不是 , } ] : 或结尾，
+    就当作正文里的引号转义掉。合法 JSON 原样返回。"""
+    out: list[str] = []
+    in_str = esc = False
+    n = len(raw)
+    for i, ch in enumerate(raw):
+        if not in_str:
+            in_str = ch == '"'
+            out.append(ch)
+            continue
+        if esc:
+            esc = False
+        elif ch == "\\":
+            esc = True
+        elif ch == '"':
+            j = i + 1
+            while j < n and raw[j] in " \t\r\n":
+                j += 1
+            if j >= n or raw[j] in _STRUCTURAL:
+                in_str = False
+            else:
+                out.append("\\")
+        out.append(ch)
+    return "".join(out)
 
 
 def _get(b, key, default=None):
@@ -29,17 +59,14 @@ def _get(b, key, default=None):
 
 
 def to_openai_tools(tools: list[dict]) -> list[dict]:
-    return [
-        {
-            "type": "function",
-            "function": {
-                "name": t["name"],
-                "description": t["description"],
-                "parameters": t["input_schema"],
-            },
-        }
-        for t in tools
-    ]
+    strict = bool(tools) and all(t.get("strict") for t in tools)
+    out = []
+    for t in tools:
+        fn = {"name": t["name"], "description": t["description"], "parameters": t["input_schema"]}
+        if strict:
+            fn["strict"] = True
+        out.append({"type": "function", "function": fn})
+    return out
 
 
 def to_openai_messages(system: list[dict], messages: list[dict]) -> list[dict]:
@@ -100,14 +127,17 @@ class OpenAICompatLLM:
     def __init__(
         self, model: str, api_key: str | None = None, env_file=ROOT / ".env", transport=None
     ):
-        url, env_name = ENDPOINTS[model]
+        base, env_name = ENDPOINTS[model]
         key = api_key or _read_key(env_name, env_file)
         if not key:
             raise RuntimeError(f"缺少 {env_name}：请写进环境变量或仓库根目录的 .env")
-        self.model, self.url = model, url
+        self.model, self.base = model, base
         self.client = httpx.Client(
             headers={"Authorization": f"Bearer {key}"}, timeout=120, transport=transport
         )
+
+    def url_for(self, strict: bool) -> str:
+        return f"{self.base}{'/beta' if strict else ''}/chat/completions"
 
     def create(self, **kw: Any) -> SimpleNamespace:
         system = list(kw.get("system", []))
@@ -125,11 +155,13 @@ class OpenAICompatLLM:
         }
         if fmt and fmt.get("type") == "json_schema":
             body["response_format"] = {"type": "json_object"}
+        strict = False
         if kw.get("tools"):
             body["tools"] = to_openai_tools(kw["tools"])
+            strict = all(t["function"].get("strict") for t in body["tools"])
         for attempt in range(4):  # 429 / 5xx / 网络错误：指数退避重试
             try:
-                r = self.client.post(self.url, json=body)
+                r = self.client.post(self.url_for(strict), json=body)
             except httpx.TransportError:
                 if attempt == 3:
                     raise
@@ -149,9 +181,15 @@ class OpenAICompatLLM:
             blocks.append(SimpleNamespace(type="text", text=msg["content"]))
         malformed = False
         for c in msg.get("tool_calls") or []:
+            raw = c["function"]["arguments"] or "{}"
             try:
-                args = json.loads(c["function"]["arguments"] or "{}")
+                args = json.loads(raw)
             except json.JSONDecodeError:
+                try:
+                    args = json.loads(repair_json(raw))
+                except json.JSONDecodeError:
+                    args = None
+            if args is None:
                 malformed = True
                 blocks.append(SimpleNamespace(type="text", text=c["function"]["arguments"]))
                 continue
