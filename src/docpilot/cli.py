@@ -383,6 +383,44 @@ def cmd_reverify_d4(args: argparse.Namespace) -> None:
     print((out / "summary.json").read_text(encoding="utf-8")[:1500])
 
 
+def cmd_eval_dialog(args: argparse.Namespace) -> None:
+    import json
+
+    from docpilot.datapilot_client import make_backend
+    from docpilot.eval_dialog import load_dialogs, run_dialog_eval
+    from docpilot.llm import HAIKU, SONNET, AnthropicLLM
+    from docpilot.tools import ToolBox
+    from docpilot.verify import HaikuVerifier
+
+    dialogs = load_dialogs()[: args.limit] if args.limit else load_dialogs()
+    retr, sql = _retriever("fixed"), make_backend()
+    try:
+        out = run_dialog_eval(
+            dialogs,
+            args.mode or ["none", "full", "compress"],
+            lambda school: ToolBox(school, retr, sql),
+            AnthropicLLM(HAIKU),
+            HaikuVerifier(AnthropicLLM(HAIKU)),
+            AnthropicLLM(SONNET, fallbacks=True),
+            AnthropicLLM(HAIKU),
+            args.tag,
+            args.max_cost,
+        )
+    finally:
+        if hasattr(sql, "close"):
+            sql.close()
+    s = json.loads((out / "summary.json").read_text(encoding="utf-8"))
+    print(f"{out.relative_to(ROOT)}：{s['dialogs']} 组对话，花费 ${s['spent_usd']:.3f}")
+    for mode in ("none", "full", "compress"):
+        if mode in s:
+            m = s[mode]
+            print(
+                f"{mode:9} 追问正确 {m['followup_correct']:.1%}（{m['followup_n']}）  "
+                f"历史 {m['history_tokens_mean']:.0f} 字  输入 {m['input_tokens_mean']:.0f} token  "
+                f"压缩 {m['compressions']} 次  作答花费 ${m['cost_usd']:.3f}"
+            )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="docpilot")
     sub = parser.add_subparsers(required=True)
@@ -437,6 +475,12 @@ def main() -> None:
     p.add_argument("--tag", default="d4-reverify")
     p.add_argument("--max-cost", type=float, default=2.5)
     p.set_defaults(func=cmd_reverify_d4)
+    p = sub.add_parser("eval-dialog", help="多轮对话评测：none / full / compress 三种记忆对比")
+    p.add_argument("--limit", type=int, help="只跑前 N 组对话")
+    p.add_argument("--mode", action="append", choices=["none", "full", "compress"])
+    p.add_argument("--tag", default="dialog")
+    p.add_argument("--max-cost", type=float, default=5.0)
+    p.set_defaults(func=cmd_eval_dialog)
     sub.add_parser("link-datapilot", help="把 campus 库链接进 DataPilot").set_defaults(
         func=cmd_link
     )
