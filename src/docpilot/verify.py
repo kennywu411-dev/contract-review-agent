@@ -188,7 +188,7 @@ def verify_result(result, verifier: HaikuVerifier) -> VerifiedAnswer:
     facts: list[tuple[int, dict]] = []
     for i, s in enumerate(result.sentences):
         if s.get("kind") == "note" and not extract_numbers(s["text"]):
-            kept[i] = s  # 纯说明句（边界、建议咨询哪里）不需要引用
+            kept[i] = s | {"index": i}  # 纯说明句（边界、建议咨询哪里）不需要引用
         else:
             facts.append((i, s))  # 含数字的 note 句按 fact 处理
 
@@ -211,7 +211,12 @@ def verify_result(result, verifier: HaikuVerifier) -> VerifiedAnswer:
                 continue
             if support != s["citations"]:
                 v.repaired += 1
-            kept[i] = s | {"kind": "fact", "citations": support, "cited_by_model": s["citations"]}
+            kept[i] = s | {
+                "index": i,
+                "kind": "fact",
+                "citations": support,
+                "cited_by_model": s["citations"],
+            }
 
     v.kept = [kept[i] for i in sorted(kept)]
     if not any(s["kind"] == "fact" for s in v.kept):

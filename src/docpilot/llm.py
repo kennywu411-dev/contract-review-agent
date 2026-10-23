@@ -47,14 +47,25 @@ def _load_dotenv() -> None:
 
 
 class AnthropicLLM:
-    def __init__(self, model: str = DEFAULT_MODEL) -> None:
+    """fallbacks=True 时走 beta 接口并开启服务端 refusal fallback（claude-api skill 对
+    Sonnet 5.5 的默认要求）；被拒时由服务端换模型重跑，响应的 model 字段会变。"""
+
+    def __init__(self, model: str = DEFAULT_MODEL, fallbacks: bool = False) -> None:
         import anthropic
 
         if model not in PRICING:  # 先校验，避免花了钱才发现算不了成本
             raise ValueError(f"未登记价格的模型：{model}（可选：{', '.join(PRICING)}）")
         _load_dotenv()
         self.model = model
+        self.fallbacks = fallbacks
         self.client = anthropic.Anthropic(max_retries=3)
 
     def create(self, **kwargs: Any) -> Any:
+        if self.fallbacks:
+            return self.client.beta.messages.create(
+                model=self.model,
+                betas=["server-side-fallback-2026-07-01"],
+                fallbacks="default",
+                **kwargs,
+            )
         return self.client.messages.create(model=self.model, **kwargs)

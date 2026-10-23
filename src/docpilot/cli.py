@@ -275,6 +275,67 @@ def cmd_eval_agent(args: argparse.Namespace) -> None:
     )
 
 
+def cmd_eval_d4(args: argparse.Namespace) -> None:
+    import json
+
+    from docpilot.datapilot_client import make_backend
+    from docpilot.eval_retrieval import stratified_sample
+    from docpilot.evalset import load_questions
+    from docpilot.judge import Judge, run_d4_eval
+    from docpilot.llm import HAIKU, SONNET, AnthropicLLM
+    from docpilot.pipeline import answer_question
+    from docpilot.tools import ToolBox
+    from docpilot.verify import HaikuVerifier
+
+    qs = load_questions()
+    if args.sample:
+        qs = stratified_sample(qs, args.sample)
+    retr, sql = _retriever("fixed"), make_backend()
+    llm, verifier = AnthropicLLM(args.model), HaikuVerifier(AnthropicLLM(HAIKU))
+    judge = Judge(AnthropicLLM(SONNET, fallbacks=True))
+    try:
+        out = run_d4_eval(
+            qs,
+            lambda q: answer_question(
+                q.question, q.school, llm, ToolBox(q.school, retr, sql), verifier
+            ),
+            judge,
+            args.tag,
+            args.max_cost,
+        )
+    finally:
+        if hasattr(sql, "close"):
+            sql.close()
+    s = json.loads((out / "summary.json").read_text(encoding="utf-8"))
+    print(
+        f"{out.relative_to(ROOT)}：{s['n']} 题"
+        + ("（预算闸门提前停止）" if s["stopped_by_budget"] else "")
+    )
+    for name, key in [("引用准确率", "citation_accuracy"), ("幻觉率", "hallucination_rate")]:
+        print(f"{name}：原始 {s[key]['raw']:.1%} → 校验后 {s[key]['verified']:.1%}")
+    a, r = s["answerable"], s["refuse"]
+    print(
+        f"答案正确（可回答 {a['n']}）：原始 {a['correct']['raw']:.1%} → 校验后 "
+        f"{a['correct']['verified']:.1%}；含部分正确 {a['correct_or_partial']['verified']:.1%}；"
+        f"误拒 {a['false_refusal']['raw']:.1%} → {a['false_refusal']['verified']:.1%}"
+    )
+    print(
+        f"拒答正确（{r['n']}）：严格 {r['strict_rate']['raw']:.1%} → "
+        f"{r['strict_rate']['verified']:.1%}；"
+        f"宽口径 {r['lenient_rate']['raw']:.1%} → {r['lenient_rate']['verified']:.1%}"
+    )
+    print(
+        f"删句 {s['dropped_sentences']}，改正引用 {s['repaired_citations']}；"
+        f"反问率 {s['clarify_rate']:.0%}"
+    )
+    print(
+        f"耗时 P50 {s['latency_ms']['p50'] / 1000:.1f}s / P95 {s['latency_ms']['p95'] / 1000:.1f}s"
+        f"（校验均值 {s['latency_ms']['verify_mean'] / 1000:.1f}s）；问答花费 "
+        f"${s['answer_cost_usd']['total']:.3f}（P50 ${s['answer_cost_usd']['p50']:.5f}），"
+        f"评判花费 ${s['judge_cost_usd']:.3f}"
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="docpilot")
     sub = parser.add_subparsers(required=True)
@@ -311,6 +372,12 @@ def main() -> None:
     p.add_argument("--tag", default="agent")
     p.add_argument("--max-cost", type=float, default=3.0, help="累计花费上限（美元）")
     p.set_defaults(func=cmd_eval_agent)
+    p = sub.add_parser("eval-d4", help="引用校验与拒答评测（Haiku 作答+校验，Sonnet 评判）")
+    p.add_argument("--sample", type=int)
+    p.add_argument("--model", default="claude-haiku-5-5")
+    p.add_argument("--tag", default="d4")
+    p.add_argument("--max-cost", type=float, default=5.0)
+    p.set_defaults(func=cmd_eval_d4)
     sub.add_parser("link-datapilot", help="把 campus 库链接进 DataPilot").set_defaults(
         func=cmd_link
     )
