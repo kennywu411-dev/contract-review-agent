@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronRight, Loader2, SendHorizonal, X } from "lucide-react";
+import { ChevronRight, Loader2, MessageSquarePlus, SendHorizonal, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { AnswerView } from "@/components/answer-view";
@@ -123,6 +123,13 @@ export default function AskPage() {
   const [input, setInput] = useState("");
   const [turns, setTurns] = useState<Turn[]>([]);
   const [open, setOpen] = useState<{ turnId: number; cid: string } | null>(null);
+  // 同一会话内的追问共享记忆（后端按 session_id 保存最近几轮和摘要）；新对话或换学校时重置
+  const [sessionId, setSessionId] = useState(() => Math.random().toString(36).slice(2, 12));
+  const newChat = () => {
+    setTurns([]);
+    setOpen(null);
+    setSessionId(Math.random().toString(36).slice(2, 12));
+  };
   const bottom = useRef<HTMLDivElement>(null);
   const busy = turns.some((t) => !t.done);
 
@@ -151,7 +158,7 @@ export default function AskPage() {
       else if (e.event === "verified") patch((t) => ({ ...t, verified: e.data }));
       else if (e.event === "error") patch((t) => ({ ...t, error: e.data.message }));
       else if (e.event === "done") patch((t) => ({ ...t, done: true }));
-    });
+    }, sessionId);
   };
 
   const openTurn = turns.find((t) => t.id === open?.turnId);
@@ -196,12 +203,25 @@ export default function AskPage() {
             className="border-t p-3"
           >
             <div className="mx-auto flex max-w-3xl items-end gap-2">
+              {turns.length > 0 && (
+                <button
+                  type="button"
+                  onClick={newChat}
+                  disabled={busy}
+                  aria-label="新对话"
+                  title="新对话（清空上下文）"
+                  className="hover:bg-accent inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-md border disabled:opacity-40"
+                >
+                  <MessageSquarePlus className="size-4" />
+                </button>
+              )}
               <label className="sr-only" htmlFor="school">学校</label>
               <select
                 id="school"
                 value={school}
                 onChange={(e) => {
                   setSchool(e.target.value);
+                  newChat();
                   try {
                     localStorage.setItem("dp-school", e.target.value);
                   } catch {}
@@ -218,7 +238,7 @@ export default function AskPage() {
                 value={input}
                 maxLength={2000}
                 rows={1}
-                placeholder="例如：缓考怎么申请？（Enter 发送，Shift+Enter 换行）"
+                placeholder={turns.length ? "可以接着追问，例如：那研究生呢？" : "例如：缓考怎么申请？（Enter 发送，Shift+Enter 换行）"}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {

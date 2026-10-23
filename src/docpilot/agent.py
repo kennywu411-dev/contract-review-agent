@@ -67,6 +67,7 @@ def run_agent(
     max_steps: int = MAX_STEPS,
     on_step=None,
     cache: str = "prefix",
+    history: str = "",
 ) -> AgentResult:
     """on_step(record)：每步结束时回调（Web 端用它流式推送步骤）。
 
@@ -77,7 +78,8 @@ def run_agent(
     system = [
         {"type": "text", "text": system_prompt(school), "cache_control": {"type": "ephemeral"}}
     ]
-    messages: list[dict] = [{"role": "user", "content": question}]
+    content = f"{history}\n\n当前问题：{question}" if history else question
+    messages: list[dict] = [{"role": "user", "content": content}]
     result = AgentResult(question, school, "fallback")
     trace = {
         "trace_id": uuid.uuid4().hex[:12],
@@ -86,6 +88,7 @@ def run_agent(
         "school": school,
         "max_steps": max_steps,
         "cache": cache,
+        "history": history,
         "steps": [],
         "end": "max_steps",
     }

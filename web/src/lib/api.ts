@@ -144,6 +144,7 @@ export function ask(
   question: string,
   school: string,
   onEvent: (e: AskEvent) => void,
+  sessionId?: string,
 ): () => void {
   const ctrl = new AbortController();
   (async () => {
@@ -157,7 +158,7 @@ export function ask(
       const r = await fetch(`${API_BASE}/api/ask`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question, school }),
+        body: JSON.stringify({ question, school, session_id: sessionId }),
         signal: ctrl.signal,
       });
       if (!r.ok || !r.body) throw new Error(`${r.status} ${await r.text()}`);

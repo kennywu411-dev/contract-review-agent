@@ -24,6 +24,15 @@ JUDGE_SCHEMA = {
                 "additionalProperties": False,
             },
         },
+        "revised": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {"index": {"type": "integer"}, "supported": {"type": "boolean"}},
+                "required": ["index", "supported"],
+                "additionalProperties": False,
+            },
+        },
         "raw_correct": {"type": "string", "enum": CORRECT},
         "verified_correct": {"type": "string", "enum": CORRECT},
         "raw_refusal_ok": {"type": "boolean"},
@@ -65,6 +74,12 @@ class Judge:
             ver_desc = f"校验后：{ver.kind}，{ver.refuse_reason or ver.clarification}"
         else:
             ver_desc = f"校验后保留的句子编号：{[s['index'] for s in ver.kept]}"
+            revised = [s for s in ver.kept if s.get("revised_from")]
+            if revised:
+                ver_desc += (
+                    "\n其中以下句子被校验器改写过（按改写后的文本判断 supported，填进 revised）：\n"
+                )
+                ver_desc += "\n".join(f"{s['index']}. {s['text']}" for s in revised)
         content = (
             f"{JUDGE_PROMPT}\n\n## 问题\n{q.question}\n\n## 评测标注\n{expect}\n\n"
             f"## 原文\n{sources}\n\n## 原始回答\n{raw_desc}\n\n## {ver_desc}"
@@ -87,6 +102,12 @@ class Judge:
 
 def score_d4(q, raw, ver, j: dict) -> dict:
     sup = {x["index"]: x["supported"] for x in j["sentences"]}
+    rev_sup = {x["index"]: x["supported"] for x in j.get("revised", [])}
+    revised = {s["index"] for s in ver.kept if s.get("revised_from")}
+
+    def ver_ok(i: int) -> bool:
+        return rev_sup.get(i, False) if i in revised else bool(sup.get(i))
+
     raw_facts = (
         [i for i, s in enumerate(raw.sentences) if s.get("kind", "fact") == "fact"]
         if raw.kind in ANSWERED
@@ -104,18 +125,42 @@ def score_d4(q, raw, ver, j: dict) -> dict:
         "raw_fact_n": len(raw_facts),
         "raw_fact_supported": sum(1 for i in raw_facts if sup.get(i)),
         "ver_fact_n": len(ver_facts),
-        "ver_fact_supported": sum(1 for i in ver_facts if sup.get(i)),
+        "ver_fact_supported": sum(1 for i in ver_facts if ver_ok(i)),
         "raw_hallucinated": any(not sup.get(i) for i in raw_facts),
-        "ver_hallucinated": any(not sup.get(i) for i in ver_facts),
+        "ver_hallucinated": any(not ver_ok(i) for i in ver_facts),
         "raw_correct": j["raw_correct"],
         "ver_correct": j["verified_correct"],
         "raw_refusal_ok": j["raw_refusal_ok"],
         "ver_refusal_ok": j["verified_refusal_ok"],
         "dropped": len(ver.dropped),
         "repaired": ver.repaired,
+        "revised": ver.revised,
         "judge_cost_usd": j["cost_usd"],
         "judge_model": j["judge_model"],
     }
+
+
+def result_from_trace(trace: dict):
+    """从 trace 还原 agent 的原始回答，用来只换校验策略、重新评判（同一批回答上的对照实验）。"""
+    from docpilot.agent import AgentResult
+
+    res = trace["result"]
+    return AgentResult(
+        question=trace["question"],
+        school=trace["school"],
+        kind=res["kind"],
+        sentences=res.get("sentences", []),
+        refuse_reason=res.get("refuse_reason", ""),
+        unanswered=res.get("unanswered", ""),
+        clarification=res.get("clarification", ""),
+        invalid_citations=res.get("invalid_citations", []),
+        citations=trace.get("citations", {}),
+        steps=len(trace.get("steps", [])),
+        cost_usd=trace.get("cost_usd", 0.0) - (trace.get("verify") or {}).get("cost_usd", 0.0),
+        latency_ms=trace.get("latency_ms", 0.0)
+        - (trace.get("verify") or {}).get("latency_ms", 0.0),
+        trace={k: v for k, v in trace.items() if k not in ("verify", "judge")},
+    )
 
 
 def _rate(n: int, d: int) -> float:
@@ -155,6 +200,7 @@ def summarize_d4(rows: list[dict]) -> dict:
         )
     out["dropped_sentences"] = sum(r["dropped"] for r in rows)
     out["repaired_citations"] = sum(r["repaired"] for r in rows)
+    out["revised_sentences"] = sum(r.get("revised", 0) for r in rows)
     out["judge_cost_usd"] = sum(r["judge_cost_usd"] for r in rows)
     return out
 

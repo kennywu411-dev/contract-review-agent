@@ -349,6 +349,40 @@ def cmd_serve(args: argparse.Namespace) -> None:
     uvicorn.run(create_app(), host=args.host, port=args.port, log_level="warning")
 
 
+def cmd_reverify_d4(args: argparse.Namespace) -> None:
+    """只换校验策略：复用旧运行里 agent 的原始回答，重新校验 + 评判（不重跑 agent）。"""
+    import json
+    from dataclasses import asdict
+
+    from docpilot.eval_retrieval import RUNS_DIR
+    from docpilot.evalset import load_questions
+    from docpilot.judge import Judge, result_from_trace, run_d4_eval
+    from docpilot.llm import HAIKU, SONNET, AnthropicLLM
+    from docpilot.verify import HaikuVerifier, verify_result
+
+    src = RUNS_DIR / args.source
+    rows = [json.loads(x) for x in (src / "d4_results.jsonl").open(encoding="utf-8")]
+    qs = {q.id: q for q in load_questions()}
+    trace_of = {r["qid"]: src / "traces" / f"{r['trace_id']}.json" for r in rows}
+    verifier = HaikuVerifier(AnthropicLLM(HAIKU))
+
+    def answer_one(q):
+        raw = result_from_trace(json.loads(trace_of[q.id].read_text(encoding="utf-8")))
+        ver = verify_result(raw, verifier)
+        raw.trace["verify"] = asdict(ver)
+        return raw, ver
+
+    out = run_d4_eval(
+        [qs[r["qid"]] for r in rows],
+        answer_one,
+        Judge(AnthropicLLM(SONNET, fallbacks=True)),
+        args.tag,
+        args.max_cost,
+    )
+    print(f"{out.relative_to(ROOT)}（复用 {args.source} 的原始回答）")
+    print((out / "summary.json").read_text(encoding="utf-8")[:1500])
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="docpilot")
     sub = parser.add_subparsers(required=True)
@@ -398,6 +432,11 @@ def main() -> None:
     p.add_argument("--host", default="127.0.0.1")
     p.add_argument("--port", type=int, default=8000)
     p.set_defaults(func=cmd_serve)
+    p = sub.add_parser("reverify-d4", help="复用某次 D4 运行的原始回答，只换校验策略重评")
+    p.add_argument("source", help="runs/ 下的 D4 运行目录名")
+    p.add_argument("--tag", default="d4-reverify")
+    p.add_argument("--max-cost", type=float, default=2.5)
+    p.set_defaults(func=cmd_reverify_d4)
     sub.add_parser("link-datapilot", help="把 campus 库链接进 DataPilot").set_defaults(
         func=cmd_link
     )

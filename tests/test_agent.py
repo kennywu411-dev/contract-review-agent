@@ -179,3 +179,18 @@ def test_system_only_cache_mode():
     run_agent("q", "bnu", llm, box(), cache="system")
     req = llm.requests[0]
     assert "cache_control" not in req and req["system"][0]["cache_control"] == {"type": "ephemeral"}
+
+
+def test_history_prepended_to_question():
+    llm = FakeLLM([[tool("final_answer", ANSWER | {"sentences": []})]])
+    run_agent(
+        "那研究生呢？", "bnu", llm, box(), history="<对话历史>\n学生：国奖多少钱\n</对话历史>"
+    )
+    first = llm.requests[0]["messages"][0]["content"]
+    assert first.startswith("<对话历史>") and first.endswith("当前问题：那研究生呢？")
+
+
+def test_no_history_keeps_plain_question():
+    llm = FakeLLM([[tool("final_answer", ANSWER | {"sentences": []})]])
+    run_agent("缓考怎么办", "bnu", llm, box())
+    assert llm.requests[0]["messages"][0]["content"] == "缓考怎么办"

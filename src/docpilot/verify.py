@@ -29,7 +29,8 @@ _CN = {
     "九": 9,
 }
 # 中文数字后面跟这些量词时才当数字（避免把"一般""统一"当成 1）
-_UNITS = "年个次学期周天门学分元倍名级档小时周岁月日人项等"
+# 不含"级"：会把"降一级"误读成数字 1（问题日志 P15），"2023级"这类年级是阿拉伯数字，不受影响
+_UNITS = "年个次学期周天门学分元倍名档小时周岁月日人项等"
 _CN_NUM = re.compile(rf"([零〇一二两三四五六七八九十百]+)(?=[{_UNITS}])")
 _DOC_NO = re.compile(r"[〔\[［（(]\s*\d{4}\s*[〕\]］）)]\s*\d+\s*号")  # 文号：财教〔2024〕181号
 _CLAUSE = re.compile(r"第[零〇一二两三四五六七八九十百千\d]+[条章节款项部分]")  # 条款编号不算事实
@@ -109,9 +110,10 @@ VERIFY_SCHEMA = {
                     "index": {"type": "integer"},
                     "label": {"type": "string", "enum": ["supported", "partial", "unsupported"]},
                     "support": {"type": "array", "items": {"type": "string"}},
+                    "revised": {"type": "string"},
                     "reason": {"type": "string"},
                 },
-                "required": ["index", "label", "support", "reason"],
+                "required": ["index", "label", "support", "revised", "reason"],
                 "additionalProperties": False,
             },
         }
@@ -133,6 +135,7 @@ class VerifiedAnswer:
     clarification: str = ""
     verifier_error: str = ""
     repaired: int = 0  # 引用被改正的句数
+    revised: int = 0  # partial 句被改写成只含有依据部分的句数
     cost_usd: float = 0.0
     latency_ms: float = 0.0
 
@@ -171,8 +174,11 @@ class HaikuVerifier:
             },
         )
         text = next(b.text for b in resp.content if b.type == "text")
-        by_index = {x["index"]: (x["label"], x["support"]) for x in json.loads(text)["labels"]}
-        out = [by_index.get(i, ("unsupported", [])) for i in range(len(sentences))]
+        by_index = {
+            x["index"]: (x["label"], x["support"], x.get("revised", ""))
+            for x in json.loads(text)["labels"]
+        }
+        out = [by_index.get(i, ("unsupported", [], "")) for i in range(len(sentences))]
         return out, cost_usd(self.llm.model, resp.usage)
 
 
@@ -198,25 +204,31 @@ def verify_result(result, verifier: HaikuVerifier) -> VerifiedAnswer:
             v.cost_usd += cost
         except Exception as e:  # 校验器自己出错：保守处理，不放行未校验的句子
             v.verifier_error = f"{type(e).__name__}: {e}"
-            labels = [("unverified", [])] * len(facts)
-        for (i, s), (label, support) in zip(facts, labels, strict=True):
+            labels = [("unverified", [], "")] * len(facts)
+        for (i, s), (label, support, revised) in zip(facts, labels, strict=True):
             support = [c for c in dict.fromkeys(support) if c in result.citations]
-            if label != "supported" or not support:
+            # partial：校验器给出只含有依据部分的改写时，保留改写（整句删除会丢掉答案要点，ADR 004）
+            text = revised.strip() if label == "partial" and revised.strip() else s["text"]
+            if not support or not (label == "supported" or text != s["text"]):
                 v.dropped.append({"sentence": s, "reason": f"校验未通过（{label}）"})
                 continue
             texts = [_source_text(result.citations[c]) for c in support]
             tables = [result.citations[c]["rows"] for c in support if c.startswith("T")]
-            if not numbers_supported(s["text"], texts, tables):
+            if not numbers_supported(text, texts, tables):
                 v.dropped.append({"sentence": s, "reason": "数字与原文不符"})
                 continue
             if support != s["citations"]:
                 v.repaired += 1
-            kept[i] = s | {
+            item = s | {
                 "index": i,
                 "kind": "fact",
                 "citations": support,
                 "cited_by_model": s["citations"],
             }
+            if text != s["text"]:
+                item |= {"text": text, "revised_from": s["text"]}
+                v.revised += 1
+            kept[i] = item
 
     v.kept = [kept[i] for i in sorted(kept)]
     if not any(s["kind"] == "fact" for s in v.kept):

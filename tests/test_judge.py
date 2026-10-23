@@ -90,3 +90,51 @@ def test_summary_citation_accuracy_and_false_refusal():
     assert s["citation_accuracy"]["raw"] == 2 / 3 and s["citation_accuracy"]["verified"] == 1.0
     assert s["answerable"]["false_refusal"]["verified"] == 0.5
     assert s["hallucination_rate"]["verified"] == 0.0
+
+
+def test_revised_sentences_judged_on_new_text():
+    out = OUT | {"revised": [{"index": 1, "supported": True}]}
+    r = raw([S0, S1])
+    v = VerifiedAnswer(
+        "answer",
+        kept=[
+            S0 | {"index": 0},
+            {
+                "kind": "fact",
+                "text": "一等5000元",
+                "citations": ["C1"],
+                "index": 1,
+                "revised_from": "可随时申请",
+            },
+        ],
+        revised=1,
+    )
+    llm = FakeSonnet(out)
+    row = score_d4(q(), r, v, Judge(llm).judge(q(), r, v))
+    assert row["ver_fact_n"] == 2 and row["ver_fact_supported"] == 2 and not row["ver_hallucinated"]
+    assert "改写" in llm.requests[0]["messages"][0]["content"]
+
+
+def test_agent_result_rebuilt_from_trace():
+    from docpilot.judge import result_from_trace
+
+    trace = {
+        "question": "q",
+        "school": "bnu",
+        "cost_usd": 0.001,
+        "latency_ms": 5000,
+        "result": {
+            "kind": "partial",
+            "sentences": [S0],
+            "refuse_reason": "",
+            "unanswered": "难度",
+            "clarification": "",
+            "invalid_citations": [],
+        },
+        "citations": {"C1": DOC},
+        "steps": [{"step": 1}],
+        "trace_id": "t1",
+    }
+    r = result_from_trace(trace)
+    assert r.kind == "partial" and r.unanswered == "难度" and r.citations["C1"] == DOC
+    assert r.steps == 1 and r.trace["trace_id"] == "t1"

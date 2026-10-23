@@ -31,6 +31,10 @@ WEB_DIST = ROOT / "web" / "out"
 class AskBody(BaseModel):
     question: str = Field(min_length=1, max_length=2000)
     school: StudentSchool
+    session_id: str | None = Field(default=None, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")
+
+
+MAX_SESSIONS = 200  # 内存里最多保留这么多会话，超出就丢最早的（本地单机演示足够）
 
 
 class RealEngine:
@@ -47,7 +51,7 @@ class RealEngine:
         self.llm = AnthropicLLM(HAIKU)
         self.verifier = HaikuVerifier(AnthropicLLM(HAIKU))
 
-    def ask(self, question: str, school: str, on_step):
+    def ask(self, question: str, school: str, on_step, history: str = ""):
         from docpilot.pipeline import answer_question
         from docpilot.tools import ToolBox
         from docpilot.trace import save_trace
@@ -59,9 +63,16 @@ class RealEngine:
             ToolBox(school, self.retriever, self.sql),
             self.verifier,
             on_step=on_step,
+            history=history,
         )
         save_trace(raw)
         return raw, ver
+
+    def new_memory(self):
+        from docpilot.llm import HAIKU, AnthropicLLM
+        from docpilot.memory import ConversationMemory
+
+        return ConversationMemory(mode="compress", summarizer=AnthropicLLM(HAIKU))
 
 
 @cache
@@ -149,11 +160,30 @@ def create_app(engine=None) -> FastAPI:
         allow_headers=["*"],
     )
     state = {"engine": engine}
+    app.state.engine = engine
+    sessions: dict[str, tuple[str, object]] = {}  # session_id → (学校, ConversationMemory)
 
     def get_engine():
         if state["engine"] is None:
             state["engine"] = RealEngine()
+            app.state.engine = state["engine"]
         return state["engine"]
+
+    def memory_for(body: AskBody):
+        from docpilot.memory import ConversationMemory
+
+        if not body.session_id:
+            return None
+        school, mem = sessions.get(body.session_id, (None, None))
+        if mem is None or school != body.school:  # 换学校就开新会话，不把别校的上下文带过来
+            eng = get_engine()
+            mem = (
+                eng.new_memory() if hasattr(eng, "new_memory") else ConversationMemory(mode="full")
+            )
+            sessions[body.session_id] = (body.school, mem)
+            while len(sessions) > MAX_SESSIONS:
+                sessions.pop(next(iter(sessions)))
+        return mem
 
     @app.get("/api/schools")
     def schools():
@@ -167,11 +197,18 @@ def create_app(engine=None) -> FastAPI:
         def on_step(record):
             loop.call_soon_threadsafe(queue.put_nowait, ("step", record))
 
+        mem = memory_for(body)
+
         async def work():
+            from docpilot.pipeline import turn_from
+
             try:
+                history = await asyncio.to_thread(mem.render) if mem else ""
                 raw, ver = await asyncio.to_thread(
-                    get_engine().ask, body.question, body.school, on_step
+                    get_engine().ask, body.question, body.school, on_step, history
                 )
+                if mem:
+                    mem.add(turn_from(raw, ver))
                 await queue.put(
                     ("answer", raw.to_dict() | {"trace": {"trace_id": raw.trace.get("trace_id")}})
                 )

@@ -12,8 +12,8 @@ class FakeEngine:
     def __init__(self):
         self.calls = []
 
-    def ask(self, question, school, on_step):
-        self.calls.append((question, school))
+    def ask(self, question, school, on_step, history=""):
+        self.calls.append((question, school, history))
         on_step({"step": 1, "tool_calls": [{"name": "search_docs", "input": {"query": question}}]})
         raw = AgentResult(
             question,
@@ -138,3 +138,21 @@ def test_cors_allows_dev_frontend(client):
         headers={"Origin": "http://localhost:3000", "Access-Control-Request-Method": "GET"},
     )
     assert r.headers.get("access-control-allow-origin") == "http://localhost:3000"
+
+
+def test_followup_in_same_session_gets_history(client):
+    eng = client.app.state.engine
+    client.post(
+        "/api/ask", json={"question": "北师大国奖多少钱", "school": "bnu", "session_id": "s1"}
+    )
+    client.post("/api/ask", json={"question": "那研究生呢", "school": "bnu", "session_id": "s1"})
+    client.post("/api/ask", json={"question": "缓考怎么办", "school": "bnu", "session_id": "s2"})
+    first, second, other = eng.calls
+    assert first[2] == "" and "北师大国奖多少钱" in second[2] and other[2] == ""
+
+
+def test_switching_school_resets_session(client):
+    eng = client.app.state.engine
+    client.post("/api/ask", json={"question": "国奖多少钱", "school": "bnu", "session_id": "s3"})
+    client.post("/api/ask", json={"question": "那研究生呢", "school": "upc", "session_id": "s3"})
+    assert eng.calls[-1][2] == ""

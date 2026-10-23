@@ -18,6 +18,7 @@ from docpilot.verify import HaikuVerifier, extract_numbers, numbers_supported, v
         ("10,000元", {"10000"}),
         ("绩点3.5及以上", {"3.5"}),
         ("第十二条规定", set()),
+        ("转专业要降一级吗", set()),
         ("财教〔2024〕181号", set()),
         ("没有数字", set()),
     ],
@@ -63,7 +64,7 @@ def agent_result(sentences, kind="answer", unanswered=""):
 
 
 class FakeJudgeLLM:
-    """labels: 句子序号 → (标签, 支撑编号)。默认 supported、由 C1 支撑。"""
+    """labels: 句子序号 → (标签, 支撑编号[, 改写])。默认 supported、由 C1 支撑。"""
 
     model = "claude-haiku-5-5"
 
@@ -77,8 +78,16 @@ class FakeJudgeLLM:
         n = kw["messages"][0]["content"].count("<句子 index=")
         out = []
         for i in range(n):
-            label, support = self.labels.get(i, ("supported", ["C1"]))
-            out.append({"index": i, "label": label, "support": support, "reason": ""})
+            label, support, *rest = self.labels.get(i, ("supported", ["C1"]))
+            out.append(
+                {
+                    "index": i,
+                    "label": label,
+                    "support": support,
+                    "revised": rest[0] if rest else "",
+                    "reason": "",
+                }
+            )
         usage = _NS(
             input_tokens=100,
             output_tokens=20,
@@ -173,3 +182,24 @@ def test_refuse_and_clarify_pass_through():
         llm = FakeJudgeLLM()
         assert verify_result(r, HaikuVerifier(llm)).kind == (k if k != "fallback" else "refuse")
         assert llm.requests == []
+
+
+def test_partial_sentence_revised_and_kept():
+    llm = FakeJudgeLLM({0: ("partial", ["C1"], "一等奖学金5000元。")})
+    v = verify_result(agent_result([fact("一等奖学金5000元，可随时申请。")]), HaikuVerifier(llm))
+    assert v.kind == "answer" and v.kept[0]["text"] == "一等奖学金5000元。"
+    assert v.kept[0]["revised_from"] == "一等奖学金5000元，可随时申请。" and v.revised == 1
+
+
+def test_partial_without_revision_dropped():
+    v = verify_result(
+        agent_result([fact("一等5000元。"), fact("可随时申请。")]),
+        HaikuVerifier(FakeJudgeLLM({1: ("partial", ["C1"], "")})),
+    )
+    assert len(v.kept) == 1 and v.dropped[0]["reason"].startswith("校验未通过")
+
+
+def test_revised_text_still_number_checked():
+    llm = FakeJudgeLLM({0: ("partial", ["C1"], "一等奖学金6000元。")})
+    v = verify_result(agent_result([fact("一等奖学金6000元，可随时申请。")]), HaikuVerifier(llm))
+    assert v.kind == "refuse" and v.dropped[0]["reason"] == "数字与原文不符"
