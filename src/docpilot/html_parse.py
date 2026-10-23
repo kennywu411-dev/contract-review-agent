@@ -13,6 +13,23 @@ from docpilot.structure import RawItem, assemble
 CONTAINERS = (("id", "UCAP-CONTENT"), ("class", "TRS_Editor"), ("class", "v_news_content"))
 BREAK_TAGS = {"p", "div", "br", "h1", "h2", "h3", "h4", "h5", "h6", "li", "tr"}
 SKIP_TAGS = {"script", "style"}
+# 没有闭合标签的空元素：不能计入深度，否则正文容器永远关不上，页脚会被当成正文
+VOID_TAGS = {
+    "area",
+    "base",
+    "br",
+    "col",
+    "embed",
+    "hr",
+    "img",
+    "input",
+    "link",
+    "meta",
+    "param",
+    "source",
+    "track",
+    "wbr",
+}
 
 
 class _BodyParser(HTMLParser):
@@ -41,11 +58,15 @@ class _BodyParser(HTMLParser):
             self.skip += 1
         if tag in BREAK_TAGS:
             self._flush()
-        if tag != "br":
+        if tag not in VOID_TAGS:
             self.depth += 1
 
+    def handle_startendtag(self, tag, attrs):
+        if self.depth and tag in BREAK_TAGS:
+            self._flush()
+
     def handle_endtag(self, tag):
-        if self.depth == 0:
+        if self.depth == 0 or tag in VOID_TAGS:
             return
         if tag in SKIP_TAGS:
             self.skip = max(0, self.skip - 1)

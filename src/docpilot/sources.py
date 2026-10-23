@@ -20,6 +20,8 @@ from docpilot.config import DATA_DIR, RAW_DIR, SCHOOLS, SOURCES_PATH
 LOCK_PATH = DATA_DIR / "sources.lock.json"
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/130 Safari/537.36"
 KINDS = ("pdf", "html", "docx")
+# 反爬站常返回 200 + HTML 页面；按文件头校验，避免把挑战页存成 .pdf
+MAGIC = {"pdf": b"%PDF", "docx": b"PK\x03\x04"}
 
 
 @dataclass(frozen=True)
@@ -89,6 +91,10 @@ def fetch_all(sources: list[Source], opener=urllib.request.urlopen) -> FetchRepo
             req = urllib.request.Request(src.url, headers={"User-Agent": UA})
             data = opener(req, timeout=30).read()
         except OSError:
+            report.failed.append(src.doc_id)
+            continue
+        magic = MAGIC.get(src.kind)
+        if magic and not data.startswith(magic):
             report.failed.append(src.doc_id)
             continue
         path.parent.mkdir(parents=True, exist_ok=True)

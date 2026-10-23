@@ -24,3 +24,14 @@ def test_html_articles_nest_under_chapters():
         "第四节 休学与复学",
     ]
     assert art.level == 4 and art.kind == "paragraph"
+
+
+def test_void_elements_do_not_leak_footer(tmp_path):
+    page = tmp_path / "p.html"
+    page.write_text(
+        '<html><body><div id="UCAP-CONTENT"><p><img src="x">第一条 正文。</p><hr>'
+        '<p>第二条 正文二。<br></p></div><div class="footer">版权所有 页脚垃圾</div></body></html>',
+        encoding="utf-8",
+    )
+    text = "".join(b.text for b in parse_html(page, "x"))
+    assert "第一条" in text and "第二条" in text and "页脚" not in text

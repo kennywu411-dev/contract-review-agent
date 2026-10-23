@@ -87,3 +87,27 @@ def test_pdf_text_layer_recorded(tmp_path, monkeypatch):
         .fetchall()
     )
     assert [p for p, _ in rows] == [1, 2, 3] and all(n > 100 for _, n in rows)
+
+
+def test_parse_error_is_reported_not_raised(env, monkeypatch):
+    tmp, _ = env
+    put(tmp, src("bad"), b"x")
+    put(tmp, src("good"), b"ab")
+
+    def flaky(path, doc_id, kind):
+        if doc_id == "bad":
+            raise RuntimeError("坏文件")
+        return [Block(doc_id, 0, "paragraph", "段落")]
+
+    monkeypatch.setattr(store, "parse_document", flaky)
+    report = store.ingest([src("bad"), src("good")], tmp / "t.db")
+    assert list(report.failed) == ["bad"] and "坏文件" in report.failed["bad"]
+    assert report.parsed == ["good"]
+
+
+def test_force_reparses_unchanged(env):
+    tmp, calls = env
+    db = tmp / "t.db"
+    put(tmp, src(), b"abc")
+    store.ingest([src()], db)
+    assert store.ingest([src()], db, force=True).parsed == ["d1"]

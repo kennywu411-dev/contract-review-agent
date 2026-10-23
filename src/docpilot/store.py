@@ -39,6 +39,7 @@ class IngestReport:
     parsed: list[str] = field(default_factory=list)
     unchanged: list[str] = field(default_factory=list)
     missing: list[str] = field(default_factory=list)
+    failed: dict[str, str] = field(default_factory=dict)  # doc_id → 错误信息
 
 
 def init_db(db: Path) -> sqlite3.Connection:
@@ -53,7 +54,8 @@ def text_layer_chars(path: Path) -> list[int]:
     return [len("".join((p.extract_text() or "").split())) for p in PdfReader(path).pages]
 
 
-def ingest(sources: list[Source], db: Path = DB_PATH) -> IngestReport:
+def ingest(sources: list[Source], db: Path = DB_PATH, force: bool = False) -> IngestReport:
+    """force=True 时忽略 sha256，全部重新解析（解析规则改了之后用）。"""
     report = IngestReport()
     conn = init_db(db)
     for src in sources:
@@ -63,11 +65,15 @@ def ingest(sources: list[Source], db: Path = DB_PATH) -> IngestReport:
             continue
         sha = sha256_of(path)
         row = conn.execute("SELECT sha256 FROM documents WHERE doc_id=?", (src.doc_id,)).fetchone()
-        if row and row[0] == sha:
+        if row and row[0] == sha and not force:
             report.unchanged.append(src.doc_id)
             continue
-        blocks = parse_document(path, src.doc_id, src.kind)
-        layer = text_layer_chars(path) if src.kind == "pdf" else []
+        try:
+            blocks = parse_document(path, src.doc_id, src.kind)
+            layer = text_layer_chars(path) if src.kind == "pdf" else []
+        except Exception as e:  # 一份坏文件不能拖垮整批入库，记下来汇总报告
+            report.failed[src.doc_id] = f"{type(e).__name__}: {e}"
+            continue
         with conn:  # 一个事务：先删旧块再写新块，中途失败不会留下半份文档
             conn.execute("DELETE FROM blocks WHERE doc_id=?", (src.doc_id,))
             conn.execute("DELETE FROM pages WHERE doc_id=?", (src.doc_id,))

@@ -45,3 +45,9 @@ def test_merged_bbox_covers_both_lines_top_left_origin():
         RawItem("paragraph", "下半句。", page=1, bbox=(20, 114, 135, 126)),
     ]
     assert merge_paragraphs(items)[0].bbox == (20, 100, 290, 126)
+
+
+def test_strip_garble_keeps_table_spacing():
+    from docpilot.textclean import strip_garble
+
+    assert strip_garble("| 备暋注 | 学 分 |") == "| 备注 | 学 分 |"

@@ -99,7 +99,7 @@ def test_failed_download_reported(raw):
     def boom(req, timeout=None):
         if "bad" in req.full_url:
             raise URLError("down")
-        return io.BytesIO(b"ok")
+        return io.BytesIO(b"%PDF-ok")
 
     srcs = [make_source(doc_id="bad", url="https://x/bad.pdf"), make_source(doc_id="good")]
     report = fetch_all(srcs, opener=boom)
@@ -113,3 +113,13 @@ def test_manual_file_replaced_by_hand_is_accepted(raw):
     src = make_source(manual=True, sha256="old-sha")
     report = fetch_all([src], opener=fake_opener(b"", []))
     assert report.skipped == ["d1"] and report.sha256["d1"] == hashlib.sha256(b"new").hexdigest()
+
+
+def test_html_saved_as_pdf_is_rejected(raw):
+    report = fetch_all([make_source()], opener=fake_opener(b"<html>blocked</html>", []))
+    assert report.failed == ["d1"] and not (raw / "bnu" / "d1.pdf").exists()
+
+
+def test_docx_magic_accepted(raw):
+    report = fetch_all([make_source(kind="docx")], opener=fake_opener(b"PK\x03\x04..", []))
+    assert report.downloaded == ["d1"]

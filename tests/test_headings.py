@@ -24,3 +24,8 @@ from docpilot.headings import heading_level
 )
 def test_heading_level(text, level):
     assert heading_level(text) == level
+
+
+def test_decimal_numbering():
+    assert heading_level("3.1 个人类荣誉称号") == 9
+    assert heading_level("2025.9 发布") is None or heading_level("2025.9 发布") != 9

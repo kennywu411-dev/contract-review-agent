@@ -7,8 +7,8 @@ from functools import cache
 from pathlib import Path
 
 from docpilot.blocks import Block
-from docpilot.structure import RawItem, assemble, merge_paragraphs
-from docpilot.textclean import normalize
+from docpilot.structure import RawItem, assemble, drop_part_navigation, merge_paragraphs
+from docpilot.textclean import normalize, strip_garble
 
 KIND_BY_LABEL = {
     "title": "heading",
@@ -48,7 +48,7 @@ def parse_docling(path: Path, doc_id: str) -> list[Block]:
         prov = item.prov[0] if getattr(item, "prov", None) else None
         page = prov.page_no if prov else None
         if kind == "table":
-            text = item.export_to_markdown(doc)
+            text = strip_garble(item.export_to_markdown(doc))
         else:
             text = normalize(getattr(item, "text", "") or "")
         if not text:
@@ -65,7 +65,7 @@ def parse_docling(path: Path, doc_id: str) -> list[Block]:
             bb = prov.bbox.to_top_left_origin(height)
             bbox = (round(bb.l, 1), round(bb.t, 1), round(bb.r, 1), round(bb.b, 1))
         items.append(RawItem(kind, text, page, bbox))
-    blocks = assemble(doc_id, merge_paragraphs(items))
+    blocks = assemble(doc_id, drop_part_navigation(merge_paragraphs(items)))
     for b in blocks:
         if b.page is not None:
             b.page_label = labels.get(b.page)
