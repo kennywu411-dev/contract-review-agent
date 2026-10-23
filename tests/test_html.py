@@ -42,7 +42,7 @@ def test_court_gov_container(tmp_path):
     page = tmp_path / "c.html"
     page.write_text(
         '<html><body><div class="nav">首页 导航</div><div class="txt_txt"><p>第五百八十五条　'
-        "当事人可以约定违约金。</p></div><div class=\"share\">分享</div></body></html>",
+        '当事人可以约定违约金。</p></div><div class="share">分享</div></body></html>',
         encoding="utf-8",
     )
     text = "".join(b.text for b in parse_html(page, "x"))

@@ -90,7 +90,8 @@ def fetch_all(sources: list[Source], opener=urllib.request.urlopen) -> FetchRepo
             report.missing_manual.append(src.doc_id)
             continue
         try:
-            data = _read_repo(src.url) if src.url.startswith(REPO_PREFIX) else _download(src, opener)
+            local = src.url.startswith(REPO_PREFIX)
+            data = _read_repo(src.url) if local else _download(src, opener)
         except (OSError, ValueError):
             report.failed.append(src.doc_id)
             continue

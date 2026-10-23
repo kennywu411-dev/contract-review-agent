@@ -140,5 +140,7 @@ def test_repo_url_copies_local_file(raw, tmp_path, monkeypatch):
 def test_repo_url_cannot_escape_root(raw, tmp_path, monkeypatch):
     monkeypatch.setattr(sources, "ROOT", tmp_path / "repo")
     (tmp_path / "secret.txt").write_text("x", encoding="utf-8")
-    report = fetch_all([make_source(kind="txt", url="repo:../secret.txt")], opener=fake_opener(b"", []))
+    report = fetch_all(
+        [make_source(kind="txt", url="repo:../secret.txt")], opener=fake_opener(b"", [])
+    )
     assert report.failed == ["d1"]
