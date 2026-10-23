@@ -237,13 +237,13 @@ def cmd_eval_agent(args: argparse.Namespace) -> None:
     from docpilot.eval_agent import run_agent_eval
     from docpilot.eval_retrieval import stratified_sample
     from docpilot.evalset import load_questions
-    from docpilot.llm import AnthropicLLM
+    from docpilot.llm import make_llm
     from docpilot.tools import ToolBox
 
     qs = load_questions()
     if args.sample:
         qs = stratified_sample(qs, args.sample)
-    retr, sql, llm = _retriever("fixed"), make_backend(), AnthropicLLM(args.model)
+    retr, sql, llm = _retriever("fixed"), make_backend(), make_llm(args.model)
     try:
         out = run_agent_eval(
             qs,

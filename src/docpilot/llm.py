@@ -15,6 +15,8 @@ DEFAULT_MODEL = HAIKU
 PRICING = {
     HAIKU: (0.10, 0.50, 0.01),
     SONNET: (2.00, 10.00, 0.20),
+    # DeepSeek 官网（2026-10-23 核实）：高峰价，非高峰为一半；这里统一按高峰价计，花费只会偏高
+    "deepseek-flash": (0.30, 1.20, 0.006),
 }
 
 
@@ -69,3 +71,12 @@ class AnthropicLLM:
                 **kwargs,
             )
         return self.client.messages.create(model=self.model, **kwargs)
+
+
+def make_llm(model: str):
+    """按模型名选封装：claude-* 走 Anthropic SDK，其余走 OpenAI 兼容接口（agent 代码不用改）。"""
+    if model.startswith("claude-"):
+        return AnthropicLLM(model)
+    from docpilot.openai_compat import OpenAICompatLLM
+
+    return OpenAICompatLLM(model)
