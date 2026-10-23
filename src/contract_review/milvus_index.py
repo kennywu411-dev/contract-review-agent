@@ -1,10 +1,10 @@
-"""Milvus Lite 向量后端（可选依赖 `uv sync --extra milvus`），与 numpy 后端可切换（ADR 008）。
+"""Milvus Lite 向量后端（可选依赖 `uv sync --extra milvus`），与 numpy 后端可切换（ADR 009）。
 
 向量本身仍走 VectorIndex 的 sha1 缓存（不重复编码）；这里只负责把向量和租户同步进 Milvus Lite，
 检索时把租户条件下推成过滤表达式，而不是取回后再删，保证前 k 个里不会被别家租户占位。
 内容指纹（全部文本 sha1 + 租户）不变时直接复用集合，变了才重建。
 
-连接方式（ADR 008）：
+连接方式（ADR 009）：
 - 默认：在本机 127.0.0.1 起一个 Milvus Lite 服务子进程，用 URI 连接。
   Milvus Lite 3.x 是进程内纯 Python 实现，检索用 faiss（自带 libomp），和 torch 自带的 libomp
   同进程会报 OMP #15；分进程从根上隔离，连接方式也和生产环境的 Milvus Standalone 一样；
