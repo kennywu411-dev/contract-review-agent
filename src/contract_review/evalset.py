@@ -7,20 +7,22 @@ import random
 from dataclasses import dataclass, fields
 from pathlib import Path
 
-from contract_review.config import ROOT, SCHOOLS
+from contract_review.config import ROOT, TENANTS
 
-EVAL_DIR = ROOT / "evals"
+EVAL_DIR = ROOT / "archive" / "campus" / "evals"  # 高校场景评测集（ADR 007 后存档，仍可复现）
 QUESTIONS_PATH = EVAL_DIR / "questions.jsonl"
 TYPES = ("answerable", "table", "refuse")
 SUBTYPES = (None, "cross_school", "version", "conflict", "clarify")
 SOURCE_TYPES = ("faq", "public", "doc")
-STUDENT_SCHOOLS = tuple(s for s in SCHOOLS if s != "national")
+CLIENT_TENANTS = tuple(s for s in TENANTS if s != "common")
+# 高校场景存档评测集里的租户（学校）id，只用于复现存档运行（ADR 007）
+ARCHIVED_TENANTS = ("bnu", "upc", "njust", "lzu", "cumt", "zzu")
 
 
 @dataclass
 class Question:
     id: str
-    school: str
+    tenant: str
     question: str
     type: str
     subtype: str | None
@@ -35,10 +37,10 @@ def _check(q: Question) -> None:
     def bad(field: str, why: str) -> ValueError:
         return ValueError(f"{q.id}: {field} {why}")
 
-    if q.school not in STUDENT_SCHOOLS:
-        raise bad("school", f"不是学生所在学校：{q.school}")
-    if not q.id.startswith(("national-", f"{q.school}-")):
-        raise bad("id", f"前缀应为 {q.school}- 或 national-")
+    if q.tenant not in CLIENT_TENANTS + ARCHIVED_TENANTS:
+        raise bad("tenant", f"不是学生所在学校：{q.tenant}")
+    if not q.id.startswith(("common-", "national-", f"{q.tenant}-")):
+        raise bad("id", f"前缀应为 {q.tenant}- 或 common-")
     if q.type not in TYPES:
         raise bad("type", f"取值非法：{q.type}")
     if q.subtype not in SUBTYPES:
@@ -68,6 +70,8 @@ def load_questions(path: Path = QUESTIONS_PATH) -> list[Question]:
         if not line.strip():
             continue
         row = json.loads(line)
+        if "school" in row:  # 存档文件用的旧字段名
+            row["tenant"] = row.pop("school")
         unknown = set(row) - names
         if unknown:
             raise ValueError(f"{row.get('id')}: 未知字段 {sorted(unknown)}（字段名拼错？）")

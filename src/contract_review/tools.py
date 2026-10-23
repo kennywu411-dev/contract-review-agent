@@ -1,7 +1,7 @@
 """Agent 的工具：检索文档、查表（DataPilot）、反问、作答。
 
-安全边界：学校由会话注入（ToolBox.school），工具参数里没有 school，模型改不了检索范围；
-查表结果里带 school 列的行只保留本校和国家层面。
+安全边界：学校由会话注入（ToolBox.tenant），工具参数里没有 tenant，模型改不了检索范围；
+查表结果里带 tenant 列的行只保留本校和国家层面。
 """
 
 from __future__ import annotations
@@ -10,21 +10,21 @@ import json
 import re
 from dataclasses import dataclass, field
 
-from contract_review.config import SCHOOLS
+from contract_review.config import TENANTS
 
 SEARCH_K = 5
 SQL_PREVIEW_ROWS = 30
-# campus 库的表都带 school 列。查询前用同名 CTE 把它们遮住（CTE 名优先于同名表），
-# 不管模型怎么写 SQL（不选 school 列、别名、IN、JOIN），都只能看到本校和国家层面的行
+# campus 库的表都带 tenant 列。查询前用同名 CTE 把它们遮住（CTE 名优先于同名表），
+# 不管模型怎么写 SQL（不选 tenant 列、别名、IN、JOIN），都只能看到本校和国家层面的行
 SCOPED_TABLES = ("calendar", "graduation_rules", "national_aid", "scholarships")
 _WITH = re.compile(r"^\s*with\s+(recursive\s+)?", re.IGNORECASE)
 
 
-def scope_sql(sql: str, school: str) -> str:
-    if school not in SCHOOLS:  # school 会拼进 SQL，只接受固定取值
-        raise ValueError(f"未知学校：{school}")
+def scope_sql(sql: str, tenant: str) -> str:
+    if tenant not in TENANTS:  # tenant 会拼进 SQL，只接受固定取值
+        raise ValueError(f"未知学校：{tenant}")
     ctes = ", ".join(
-        f"{t} AS (SELECT * FROM main.{t} WHERE school IN ('{school}', 'national'))"
+        f"{t} AS (SELECT * FROM main.{t} WHERE tenant IN ('{tenant}', 'common'))"
         for t in SCOPED_TABLES
     )
     body = sql.strip().rstrip(";")
@@ -58,7 +58,7 @@ TOOLS = [
     _tool(
         "run_sql",
         "在 campus 结构化表上执行单条只读 SELECT（经 DataPilot MCP）。用于金额、比例、名额、"
-        "学制、校历等数字。结果带编号 [T1]…，作答时引用。WHERE 里要带 school 条件。",
+        "学制、校历等数字。结果带编号 [T1]…，作答时引用。WHERE 里要带 tenant 条件。",
         {"sql": {"type": "string"}},
     ),
     _tool(
@@ -105,8 +105,8 @@ class ToolOutput:
 
 
 class ToolBox:
-    def __init__(self, school: str, retriever, sql) -> None:
-        self.school = school
+    def __init__(self, tenant: str, retriever, sql) -> None:
+        self.tenant = tenant
         self.retriever = retriever
         self.sql = sql
         self.citations: dict[str, dict] = {}
@@ -122,11 +122,11 @@ class ToolBox:
             return ToolOutput(f"工具执行出错：{type(e).__name__}: {e}", is_error=True)
 
     def _search(self, query: str) -> ToolOutput:
-        res = self.retriever.search(query, self.school, k=SEARCH_K)
+        res = self.retriever.search(query, self.tenant, k=SEARCH_K)
         lines: list[str] = []
-        if res.school_mismatch:
+        if res.tenant_mismatch:
             lines.append(
-                f"注意：问题提到了{SCHOOLS[res.school_mismatch]}，但学生选择的是{SCHOOLS[self.school]}，"
+                f"注意：问题提到了{TENANTS[res.tenant_mismatch]}，但学生选择的是{TENANTS[self.tenant]}，"
                 "检索只覆盖本校和国家层面文件。"
             )
         if not res.hits:
@@ -141,7 +141,7 @@ class ToolBox:
                 "kind": "doc",
                 "chunk_id": c.chunk_id,
                 "doc_id": c.doc_id,
-                "school": c.school,
+                "tenant": c.tenant,
                 "title": c.title,
                 "section_path": c.section_path,
                 "pages": c.pages,
@@ -153,7 +153,7 @@ class ToolBox:
             where = (
                 f"第{','.join(map(str, c.pages))}页" if c.pages else "、".join(c.articles) or "网页"
             )
-            scope = "国家层面" if c.school == "national" else SCHOOLS[c.school]
+            scope = "国家层面" if c.tenant == "common" else TENANTS[c.tenant]
             path = " > ".join(c.section_path[1:]) if len(c.section_path) > 1 else ""
             lines.append(
                 f"[{cid}] 《{c.title}》{path}｜{scope}｜{where}\n"
@@ -162,15 +162,15 @@ class ToolBox:
         return ToolOutput("\n\n".join(lines), new_citations=new)
 
     def _run_sql(self, sql: str) -> ToolOutput:
-        res = self.sql.run(scope_sql(sql, self.school))
+        res = self.sql.run(scope_sql(sql, self.tenant))
         if "error" in res:
             return ToolOutput(
                 f"SQL 出错（{res['error']}）：{res.get('message', '')}", is_error=True
             )
         columns, rows = res["columns"], res["rows"]
-        if "school" in columns:
-            i = columns.index("school")
-            rows = [r for r in rows if r[i] in (self.school, "national")]
+        if "tenant" in columns:
+            i = columns.index("tenant")
+            rows = [r for r in rows if r[i] in (self.tenant, "common")]
         self._t += 1
         tid = f"T{self._t}"
         self.citations[tid] = {"kind": "table", "sql": sql, "columns": columns, "rows": rows}

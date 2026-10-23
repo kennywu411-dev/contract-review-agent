@@ -47,7 +47,7 @@ def score_one(q: Question, r: dict) -> dict:
         "qid": q.id,
         "type": q.type,
         "subtype": q.subtype,
-        "school": q.school,
+        "tenant": q.tenant,
         "source_type": q.source_type,
         "kind": r["kind"],
         "answered": r["kind"] == "answer",

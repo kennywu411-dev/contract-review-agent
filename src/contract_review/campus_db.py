@@ -12,7 +12,7 @@ from pathlib import Path
 
 from contract_review.config import CAMPUS_DB
 
-REQUIRED_COLUMNS = ("school", "source_doc_id", "source_page")
+REQUIRED_COLUMNS = ("tenant", "source_doc_id", "source_page")
 _INT = re.compile(r"^-?\d+$")
 _REAL = re.compile(r"^-?\d+\.\d+$")
 

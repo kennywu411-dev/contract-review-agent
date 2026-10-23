@@ -4,7 +4,7 @@ from contract_review.evalset import Question
 
 
 def ch(doc, pages, text="正文"):
-    return Chunk(f"{doc}:section:0", doc, "bnu", "t", [], text, pages, [0])
+    return Chunk(f"{doc}:section:0", doc, "huaxin", "t", [], text, pages, [0])
 
 
 def test_pdf_gold_matches_by_page():
@@ -24,10 +24,10 @@ def test_table_only_gold_entries_are_ignored():
     assert is_hit(ch("a", [3]), gold)
 
 
-def q(id_, type_, school="bnu", source="doc", subtype=None):
+def q(id_, type_, tenant="huaxin", source="doc", subtype=None):
     gold = [] if type_ == "refuse" else [{"doc_id": "a", "page": 1, "clause": None}]
     return Question(
-        id_, school, "问", type_, subtype, source, "u" if source != "doc" else None, gold, "", ""
+        id_, tenant, "问", type_, subtype, source, "u" if source != "doc" else None, gold, "", ""
     )
 
 
@@ -43,9 +43,9 @@ def test_refuse_questions_excluded_from_recall():
 
 def test_summary_groups():
     qs = {
-        "1": q("1", "answerable", "bnu", "public"),
-        "2": q("2", "table", "upc", "doc"),
-        "3": q("3", "answerable", "upc", "doc", "cross_school"),
+        "1": q("1", "answerable", "huaxin", "public"),
+        "2": q("2", "table", "yunqi", "doc"),
+        "3": q("3", "answerable", "yunqi", "doc", "cross_school"),
     }
     rows = [
         {"qid": "1", "config": "c", "rank": 2, "top_score": 0.8},
@@ -56,7 +56,7 @@ def test_summary_groups():
     assert s["overall"]["recall@1"] == 0 and round(s["overall"]["recall@5"], 3) == 0.333
     assert s["overall"]["recall@10"] == 2 / 3
     assert s["by_type"]["table"]["recall@10"] == 1.0
-    assert s["by_school"]["bnu"]["recall@5"] == 1.0
+    assert s["by_school"]["huaxin"]["recall@5"] == 1.0
     assert s["by_source_type"]["public"]["n"] == 1
     assert s["by_subtype"]["cross_school"]["recall@10"] == 0.0
     assert round(s["overall"]["mrr"], 4) == round((1 / 2 + 1 / 7) / 3, 4)

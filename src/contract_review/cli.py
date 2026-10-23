@@ -32,9 +32,9 @@ def render_report(
         "| 学校 | doc_id | 页数 | 块数 | 标题 | 表格 | 无文字页 | 未解析页 | 乱码比例 | 标记 |",
         "|---|---|---|---|---|---|---|---|---|---|",
     ]
-    for school, doc_id, q in rows:
+    for tenant, doc_id, q in rows:
         lines.append(
-            f"| {school} | {doc_id} | {q.n_pages or '-'} | {q.n_blocks} | {q.n_headings} | "
+            f"| {tenant} | {doc_id} | {q.n_pages or '-'} | {q.n_blocks} | {q.n_headings} | "
             f"{q.n_tables} | {_pages(q.no_text_pages)} | {_pages(q.unparsed_pages)} | "
             f"{q.garbled_ratio:.2%} | {'、'.join(q.flags) or '-'} |"
         )
@@ -64,7 +64,7 @@ def cmd_ingest(args: argparse.Namespace) -> None:
         f"耗时 {time.perf_counter() - t0:.1f}s"
     )
     present = [s for s in sources if s.doc_id in report.parsed + report.unchanged]
-    rows = [(s.school, s.doc_id, doc_quality(DB_PATH, s.doc_id)) for s in present]
+    rows = [(s.tenant, s.doc_id, doc_quality(DB_PATH, s.doc_id)) for s in present]
     REPORT_PATH.write_text(render_report(rows, report.missing, report.failed), encoding="utf-8")
     print(f"质量报告已写入 {REPORT_PATH.relative_to(ROOT)}")
     counts = build_campus_db(DATA_DIR / "structured", CAMPUS_DB)
@@ -102,9 +102,9 @@ def cmd_index(args: argparse.Namespace) -> None:
 
 def cmd_search(args: argparse.Namespace) -> None:
     retr = _retriever(args.strategy)
-    res = retr.search(args.query, args.school, k=args.k, mode=args.mode)
-    if res.school_mismatch:
-        print(f"注意：问题提到了 {res.school_mismatch}，只检索了 {args.school} 和通用层")
+    res = retr.search(args.query, args.tenant, k=args.k, mode=args.mode)
+    if res.tenant_mismatch:
+        print(f"注意：问题提到了 {res.tenant_mismatch}，只检索了 {args.tenant} 和通用层")
     for h in res.hits:
         c = h.chunk
         print(
@@ -210,9 +210,9 @@ def cmd_ask(args: argparse.Namespace) -> None:
     try:
         r, v = answer_question(
             args.question,
-            args.school,
+            args.tenant,
             AnthropicLLM(args.model),
-            ToolBox(args.school, retr, sql),
+            ToolBox(args.tenant, retr, sql),
             HaikuVerifier(AnthropicLLM(HAIKU)),
         )
     finally:
@@ -248,7 +248,7 @@ def cmd_eval_agent(args: argparse.Namespace) -> None:
         out = run_agent_eval(
             qs,
             lambda q: run_agent(
-                q.question, q.school, llm, ToolBox(q.school, retr, sql), cache=args.cache
+                q.question, q.tenant, llm, ToolBox(q.tenant, retr, sql), cache=args.cache
             ),
             args.tag,
             args.max_cost,
@@ -299,7 +299,7 @@ def cmd_eval_d4(args: argparse.Namespace) -> None:
         out = run_d4_eval(
             qs,
             lambda q: answer_question(
-                q.question, q.school, llm, ToolBox(q.school, retr, sql), verifier
+                q.question, q.tenant, llm, ToolBox(q.tenant, retr, sql), verifier
             ),
             judge,
             args.tag,
@@ -401,7 +401,7 @@ def cmd_eval_dialog(args: argparse.Namespace) -> None:
         out = run_dialog_eval(
             dialogs,
             args.mode or ["none", "full", "compress"],
-            lambda school: ToolBox(school, retr, sql),
+            lambda tenant: ToolBox(tenant, retr, sql),
             AnthropicLLM(HAIKU),
             HaikuVerifier(AnthropicLLM(HAIKU)),
             AnthropicLLM(SONNET, fallbacks=True),
@@ -435,7 +435,7 @@ def main() -> None:
     p.set_defaults(func=cmd_index)
     p = sub.add_parser("search", help="检索调试")
     p.add_argument("query")
-    p.add_argument("--school", required=True)
+    p.add_argument("--tenant", required=True)
     p.add_argument("--strategy", default="fixed", choices=["block", "fixed", "section"])
     p.add_argument(
         "--mode", default="hybrid_rerank", choices=["bm25", "vector", "hybrid", "hybrid_rerank"]
@@ -451,7 +451,7 @@ def main() -> None:
     p.set_defaults(func=cmd_eval_retrieval)
     p = sub.add_parser("ask", help="向 agent 提问")
     p.add_argument("question")
-    p.add_argument("--school", required=True, choices=["bnu", "upc", "njust", "lzu", "cumt", "zzu"])
+    p.add_argument("--tenant", required=True, choices=["huaxin", "yunqi", "ruifeng"])
     p.add_argument("--model", default="claude-haiku-5-5")
     p.set_defaults(func=cmd_ask)
     p = sub.add_parser("eval-agent", help="agent 评测（会调用 Claude API）")

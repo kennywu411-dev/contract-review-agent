@@ -6,7 +6,7 @@ def q(type_="answerable", subtype=None, gold=None):
     gold = gold if gold is not None else [{"doc_id": "d", "page": 5, "clause": None}]
     return Question(
         "bnu-001",
-        "bnu",
+        "huaxin",
         "问",
         type_,
         subtype,

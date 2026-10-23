@@ -12,12 +12,12 @@ class FakeEngine:
     def __init__(self):
         self.calls = []
 
-    def ask(self, question, school, on_step, history=""):
-        self.calls.append((question, school, history))
+    def ask(self, question, tenant, on_step, history=""):
+        self.calls.append((question, tenant, history))
         on_step({"step": 1, "tool_calls": [{"name": "search_docs", "input": {"query": question}}]})
         raw = AgentResult(
             question,
-            school,
+            tenant,
             "answer",
             sentences=[{"kind": "fact", "text": "考前申请", "citations": ["C1"]}],
             citations={
@@ -53,14 +53,14 @@ def events(resp):
 
 
 def test_schools(client):
-    data = client.get("/api/schools").json()
-    assert {"id": "bnu", "name": "北京师范大学"} in data and all(
-        s["id"] != "national" for s in data
+    data = client.get("/api/tenants").json()
+    assert {"id": "huaxin", "name": "华信制造有限公司（构造）"} in data and all(
+        s["id"] != "common" for s in data
     )
 
 
 def test_ask_streams_steps_and_answer(client):
-    r = client.post("/api/ask", json={"question": "缓考怎么办", "school": "bnu"})
+    r = client.post("/api/ask", json={"question": "缓考怎么办", "tenant": "huaxin"})
     names = [n for n, _ in events(r)]
     assert names[0] == "step" and "answer" in names and names[-1] == "done"
     verified = dict(events(r))["verified"]
@@ -70,18 +70,16 @@ def test_ask_streams_steps_and_answer(client):
 @pytest.mark.parametrize(
     "body",
     [
-        {"question": "", "school": "bnu"},
-        {"question": "x" * 2001, "school": "bnu"},
-        {"question": "q", "school": "pku"},
+        {"question": "", "tenant": "huaxin"},
+        {"question": "x" * 2001, "tenant": "huaxin"},
+        {"question": "q", "tenant": "pku"},
     ],
 )
 def test_ask_validation(client, body):
     assert client.post("/api/ask", json=body).status_code == 422
 
 
-@pytest.mark.parametrize(
-    "doc", ["../../etc/passwd", "%2e%2e%2fsecret", "not-a-doc", "national-xwf"]
-)
+@pytest.mark.parametrize("doc", ["../../etc/passwd", "%2e%2e%2fsecret", "not-a-doc", "common-xwf"])
 def test_pdf_path_traversal_rejected(client, doc):
     assert client.get(f"/api/docs/{doc}/pdf").status_code == 404
 
@@ -99,7 +97,7 @@ def test_highlight_returns_page_boxes(client):
 
 
 def test_html_doc_blocks(client):
-    data = client.get("/api/docs/national-xwf/html").json()
+    data = client.get("/api/docs/common-xwf/html").json()
     assert data["title"] and any(b["text"].startswith("第一条") for b in data["blocks"])
 
 
@@ -134,7 +132,7 @@ def test_bad_run_name_404(client):
 
 def test_cors_allows_dev_frontend(client):
     r = client.options(
-        "/api/schools",
+        "/api/tenants",
         headers={"Origin": "http://localhost:3000", "Access-Control-Request-Method": "GET"},
     )
     assert r.headers.get("access-control-allow-origin") == "http://localhost:3000"
@@ -143,16 +141,16 @@ def test_cors_allows_dev_frontend(client):
 def test_followup_in_same_session_gets_history(client):
     eng = client.app.state.engine
     client.post(
-        "/api/ask", json={"question": "北师大国奖多少钱", "school": "bnu", "session_id": "s1"}
+        "/api/ask", json={"question": "北师大国奖多少钱", "tenant": "huaxin", "session_id": "s1"}
     )
-    client.post("/api/ask", json={"question": "那研究生呢", "school": "bnu", "session_id": "s1"})
-    client.post("/api/ask", json={"question": "缓考怎么办", "school": "bnu", "session_id": "s2"})
+    client.post("/api/ask", json={"question": "那研究生呢", "tenant": "huaxin", "session_id": "s1"})
+    client.post("/api/ask", json={"question": "缓考怎么办", "tenant": "huaxin", "session_id": "s2"})
     first, second, other = eng.calls
     assert first[2] == "" and "北师大国奖多少钱" in second[2] and other[2] == ""
 
 
 def test_switching_school_resets_session(client):
     eng = client.app.state.engine
-    client.post("/api/ask", json={"question": "国奖多少钱", "school": "bnu", "session_id": "s3"})
-    client.post("/api/ask", json={"question": "那研究生呢", "school": "upc", "session_id": "s3"})
+    client.post("/api/ask", json={"question": "国奖多少钱", "tenant": "huaxin", "session_id": "s3"})
+    client.post("/api/ask", json={"question": "那研究生呢", "tenant": "yunqi", "session_id": "s3"})
     assert eng.calls[-1][2] == ""

@@ -19,13 +19,13 @@ MODES: tuple[Mode, ...] = ("bm25", "vector", "hybrid", "hybrid_rerank")
 RRF_K = 60
 
 # 问题里提到的学校（全称或常用简称）→ 学校 id，用来发现"选的是 A 校、问的是 B 校"
-SCHOOL_ALIASES = {
-    "bnu": ("北京师范大学", "北师大"),
-    "upc": ("中国石油大学", "中石油", "石大华东", "石油大学"),
+TENANT_ALIASES = {
+    "huaxin": ("北京师范大学", "北师大"),
+    "yunqi": ("中国石油大学", "中石油", "石大华东", "石油大学"),
     "njust": ("南京理工大学", "南理工"),
     "lzu": ("兰州大学", "兰大"),
     "cumt": ("中国矿业大学", "矿大"),
-    "zzu": ("郑州大学", "郑大"),
+    "ruifeng": ("郑州大学", "郑大"),
 }
 
 
@@ -45,15 +45,15 @@ class Hit:
 @dataclass
 class SearchResult:
     hits: list[Hit]
-    school_mismatch: str | None = None
+    tenant_mismatch: str | None = None
     latency_ms: dict[str, float] = field(default_factory=dict)
 
 
-def mentioned_school(query: str, school: str) -> str | None:
-    for sid, names in SCHOOL_ALIASES.items():
-        if sid != school and any(n in query for n in names):
+def mentioned_tenant(query: str, tenant: str) -> str | None:
+    for sid, names in TENANT_ALIASES.items():
+        if sid != tenant and any(n in query for n in names):
             # "中国石油大学"里没有别校简称；但"北京师范大学"不能被当成别的学校
-            if not any(n in query for n in SCHOOL_ALIASES.get(school, ())):
+            if not any(n in query for n in TENANT_ALIASES.get(tenant, ())):
                 return sid
     return None
 
@@ -77,7 +77,7 @@ class Retriever:
     def search(
         self,
         query: str,
-        school: str,
+        tenant: str,
         k: int = 5,
         mode: Mode = "hybrid_rerank",
         pool: int = 15,  # ADR 002：候选 15 与 30 的 R@5 相同，耗时减半
@@ -87,10 +87,10 @@ class Retriever:
         if not tokenize(query):
             # 空串、纯标点没有任何信息；向量路仍会返回"最近"的块，那是噪声，不是答案
             return SearchResult([], None, {"total": (time.perf_counter() - t0) * 1000})
-        allowed = {school, "national"}
+        allowed = {tenant, "common"}
 
         def allow(i: int) -> bool:
-            return self.chunks[i].school in allowed
+            return self.chunks[i].tenant in allowed
 
         bm_ranks: dict[int, int] = {}
         vec_ranks: dict[int, int] = {}
@@ -122,4 +122,4 @@ class Retriever:
             hits = sorted(cand, key=lambda h: -h.score)
             lat["rerank"] = (time.perf_counter() - t) * 1000
         lat["total"] = (time.perf_counter() - t0) * 1000
-        return SearchResult(hits[:k], mentioned_school(query, school), lat)
+        return SearchResult(hits[:k], mentioned_tenant(query, tenant), lat)

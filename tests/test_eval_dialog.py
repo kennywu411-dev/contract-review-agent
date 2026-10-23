@@ -9,7 +9,7 @@ from tests.test_verify import FakeJudgeLLM
 
 DLG = {
     "id": "dlg-001",
-    "school": "bnu",
+    "tenant": "huaxin",
     "pattern": "coreference",
     "turns": [
         {
@@ -57,7 +57,7 @@ def run(mode):
     rows = run_dialog(
         d,
         mode,
-        lambda school: box([ch("d", "bnu", "国奖1万元")]),
+        lambda tenant: box([ch("d", "huaxin", "国奖1万元")]),
         llm,
         HaikuVerifier(FakeJudgeLLM()),
         judge_llm=judge,

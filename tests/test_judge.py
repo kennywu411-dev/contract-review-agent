@@ -33,11 +33,13 @@ class FakeSonnet:
 
 def q(type_="answerable", subtype=None):
     gold = [] if type_ == "refuse" else [{"doc_id": "d", "page": 5, "clause": None}]
-    return Question("bnu-001", "bnu", "一等多少钱", type_, subtype, "doc", None, gold, "5000元", "")
+    return Question(
+        "bnu-001", "huaxin", "一等多少钱", type_, subtype, "doc", None, gold, "5000元", ""
+    )
 
 
 def raw(sentences, kind="answer"):
-    return AgentResult("一等多少钱", "bnu", kind, sentences=sentences, citations={"C1": DOC})
+    return AgentResult("一等多少钱", "huaxin", kind, sentences=sentences, citations={"C1": DOC})
 
 
 S0 = {"kind": "fact", "text": "一等5000元", "citations": ["C1"]}
@@ -120,7 +122,7 @@ def test_agent_result_rebuilt_from_trace():
 
     trace = {
         "question": "q",
-        "school": "bnu",
+        "tenant": "huaxin",
         "cost_usd": 0.001,
         "latency_ms": 5000,
         "result": {

@@ -26,7 +26,7 @@ _ARTICLE = re.compile(r"^第[零一二三四五六七八九十百千〇两\d]+�
 class Chunk:
     chunk_id: str
     doc_id: str
-    school: str
+    tenant: str
     title: str
     section_path: list[str]
     text: str
@@ -57,13 +57,13 @@ def _pages(bodies: list[_Body]) -> list[int]:
 
 
 def _make(doc, strategy, n, bodies: list[_Body], text: str | None = None) -> Chunk:
-    doc_id, school, title, titles = doc
+    doc_id, tenant, title, titles = doc
     path = bodies[0].path
     own_title = path[0] if path and path[0] in titles else title
     return Chunk(
         chunk_id=f"{doc_id}:{strategy}:{n}",
         doc_id=doc_id,
-        school=school,
+        tenant=tenant,
         title=own_title,
         section_path=path,
         text=text if text is not None else "\n".join(b.text for b in bodies),
@@ -119,9 +119,9 @@ def _section(doc, bodies: list[_Body]) -> list[Chunk]:
 
 def load_chunks(db: Path, strategy: Strategy) -> list[Chunk]:
     conn = sqlite3.connect(db)
-    docs = conn.execute("SELECT doc_id, school, title FROM documents ORDER BY doc_id").fetchall()
+    docs = conn.execute("SELECT doc_id, tenant, title FROM documents ORDER BY doc_id").fetchall()
     out: list[Chunk] = []
-    for doc_id, school, title in docs:
+    for doc_id, tenant, title in docs:
         rows = conn.execute(
             "SELECT seq, kind, level, text, page, section_path_json FROM blocks "
             "WHERE doc_id=? ORDER BY seq",
@@ -140,7 +140,7 @@ def load_chunks(db: Path, strategy: Strategy) -> list[Chunk]:
             bodies.append(_Body(seq, text, page, json.loads(path_json), article))
         if not bodies:
             continue
-        doc = (doc_id, school, title, titles)
+        doc = (doc_id, tenant, title, titles)
         out += {"block": _block, "fixed": _fixed, "section": _section}[strategy](doc, bodies)
     conn.close()
     return out

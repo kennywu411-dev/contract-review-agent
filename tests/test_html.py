@@ -6,7 +6,7 @@ FIX = Path(__file__).parent / "fixtures"
 
 
 def test_html_blocks_have_no_page():
-    blocks = parse_html(FIX / "national_sample.html", "national-xsglgd")
+    blocks = parse_html(FIX / "national_sample.html", "common-xsglgd")
     assert blocks and all(b.page is None and b.bbox is None for b in blocks)
     assert any(b.kind == "heading" and b.text.startswith("第一章") for b in blocks)
 

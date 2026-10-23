@@ -46,6 +46,8 @@ dev = [
 [tool.ruff.lint.per-file-ignores]
 # 提示词正文按自然段写，不按 100 字折行
 "src/contract_review/prompts.py" = ["E501"]
+# 测试数据按可读性排，不按 100 字折行
+"tests/*" = ["E501"]
 
 [tool.uv.build-backend]
 module-name = "contract_review"

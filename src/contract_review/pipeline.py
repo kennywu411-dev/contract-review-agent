@@ -11,14 +11,14 @@ from contract_review.verify import HaikuVerifier, VerifiedAnswer, verify_result
 
 def answer_question(
     question: str,
-    school: str,
+    tenant: str,
     llm,
     toolbox,
     verifier: HaikuVerifier,
     on_step=None,
     history: str = "",
 ) -> tuple[AgentResult, VerifiedAnswer]:
-    raw = run_agent(question, school, llm, toolbox, on_step=on_step, history=history)
+    raw = run_agent(question, tenant, llm, toolbox, on_step=on_step, history=history)
     ver = verify_result(raw, verifier)
     raw.trace["verify"] = asdict(ver)
     raw.trace["cost_usd"] = raw.cost_usd + ver.cost_usd

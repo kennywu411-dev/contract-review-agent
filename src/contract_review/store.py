@@ -16,7 +16,7 @@ from contract_review.sources import Source, raw_path, sha256_of
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS documents (
-    doc_id TEXT PRIMARY KEY, school TEXT NOT NULL, title TEXT NOT NULL, url TEXT NOT NULL,
+    doc_id TEXT PRIMARY KEY, tenant TEXT NOT NULL, title TEXT NOT NULL, url TEXT NOT NULL,
     issuer TEXT, issued TEXT, applies_to TEXT, kind TEXT NOT NULL,
     sha256 TEXT NOT NULL, n_pages INTEGER, parsed_at TEXT NOT NULL
 );
@@ -81,7 +81,7 @@ def ingest(sources: list[Source], db: Path = DB_PATH, force: bool = False) -> In
                 "INSERT OR REPLACE INTO documents VALUES (?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     src.doc_id,
-                    src.school,
+                    src.tenant,
                     src.title,
                     src.url,
                     src.issuer,

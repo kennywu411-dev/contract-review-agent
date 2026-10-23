@@ -9,12 +9,12 @@ FIX = Path(__file__).parent / "fixtures"
 
 @pytest.fixture(scope="module")
 def bnu():
-    return parse_document(FIX / "bnu_sample.pdf", "bnu", "pdf")
+    return parse_document(FIX / "bnu_sample.pdf", "huaxin", "pdf")
 
 
 @pytest.fixture(scope="module")
 def upc():
-    return parse_document(FIX / "upc_sample.pdf", "upc", "pdf")
+    return parse_document(FIX / "upc_sample.pdf", "yunqi", "pdf")
 
 
 def test_pdf_blocks_have_pages_and_bbox(bnu, upc):

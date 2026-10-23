@@ -9,7 +9,7 @@ def test_pipeline_attaches_verification_to_trace():
     llm = FakeLLM([[tool("search_docs", {"query": "q"})], [tool("final_answer", ANSWER)]])
     judge = FakeJudgeLLM({0: ("unsupported", [])})
     raw, ver = answer_question(
-        "q", "bnu", llm, box([ch("d", "bnu", "考前申请")]), HaikuVerifier(judge)
+        "q", "huaxin", llm, box([ch("d", "huaxin", "考前申请")]), HaikuVerifier(judge)
     )
     assert raw.kind == "answer" and ver.kind == "refuse"
     v = raw.trace["verify"]
@@ -22,7 +22,11 @@ def test_turn_from_verified_answer():
 
     llm = FakeLLM([[tool("search_docs", {"query": "q"})], [tool("final_answer", ANSWER)]])
     raw, ver = answer_question(
-        "缓考怎么办", "bnu", llm, box([ch("d", "bnu", "考前申请")]), HaikuVerifier(FakeJudgeLLM())
+        "缓考怎么办",
+        "huaxin",
+        llm,
+        box([ch("d", "huaxin", "考前申请")]),
+        HaikuVerifier(FakeJudgeLLM()),
     )
     t = turn_from(raw, ver)
     assert t.question == "缓考怎么办" and "缓考须考前申请" in t.answer

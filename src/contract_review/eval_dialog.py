@@ -26,7 +26,7 @@ COMPRESS_BUDGET = 300  # 故意设低：多数 3 轮以上的对话都会触发�
 @dataclass
 class Dialog:
     id: str
-    school: str
+    tenant: str
     pattern: str
     turns: list[dict]
 
@@ -68,7 +68,7 @@ def run_dialog(
     for i, t in enumerate(d.turns):
         history = mem.render()
         raw, ver = answer_question(
-            t["question"], d.school, llm, make_toolbox(d.school), verifier, history=history
+            t["question"], d.tenant, llm, make_toolbox(d.tenant), verifier, history=history
         )
         mem.add(turn_from(raw, ver))
         row = {
@@ -103,7 +103,7 @@ def run_dialog(
             context = "；".join(asked)
             q = Question(
                 f"{d.id}-{i}",
-                d.school,
+                d.tenant,
                 f"（对话上文，学生依次问过：{context}）当前追问：{t['question']}",
                 t["type"],
                 None,

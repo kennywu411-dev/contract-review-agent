@@ -15,7 +15,7 @@ from datetime import date
 from pathlib import Path
 from typing import Literal
 
-from contract_review.config import DATA_DIR, RAW_DIR, SCHOOLS, SOURCES_PATH
+from contract_review.config import DATA_DIR, RAW_DIR, SOURCES_PATH, TENANTS
 
 LOCK_PATH = DATA_DIR / "sources.lock.json"
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/130 Safari/537.36"
@@ -27,7 +27,7 @@ MAGIC = {"pdf": b"%PDF", "docx": b"PK\x03\x04"}
 @dataclass(frozen=True)
 class Source:
     doc_id: str
-    school: str
+    tenant: str
     title: str
     url: str
     issuer: str
@@ -57,8 +57,8 @@ def load_sources(path: Path = SOURCES_PATH, lock_path: Path | None = None) -> li
         doc_id = e["doc_id"]
         if doc_id in seen:
             raise ValueError(f"重复的 doc_id: {doc_id}")
-        if e["school"] not in SCHOOLS:
-            raise ValueError(f"未知学校 {e['school']}（{doc_id}）")
+        if e["tenant"] not in TENANTS:
+            raise ValueError(f"未知学校 {e['tenant']}（{doc_id}）")
         if e["kind"] not in KINDS:
             raise ValueError(f"未知文件类型 {e['kind']}（{doc_id}）")
         seen.add(doc_id)
@@ -68,7 +68,7 @@ def load_sources(path: Path = SOURCES_PATH, lock_path: Path | None = None) -> li
 
 
 def raw_path(src: Source) -> Path:
-    return RAW_DIR / src.school / f"{src.doc_id}.{src.kind}"
+    return RAW_DIR / src.tenant / f"{src.doc_id}.{src.kind}"
 
 
 def sha256_of(path: Path) -> str:

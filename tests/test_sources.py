@@ -11,7 +11,7 @@ from contract_review.sources import Source, fetch_all, load_sources
 TOML_ONE = """
 [[source]]
 doc_id = "bnu-handbook"
-school = "bnu"
+tenant = "huaxin"
 title = "北京师范大学本科学生手册（2025）"
 url = "https://example.edu/a.pdf"
 issuer = "北京师范大学"
@@ -29,7 +29,7 @@ def write(tmp_path: Path, text: str) -> Path:
 def make_source(**kw) -> Source:
     base = dict(
         doc_id="d1",
-        school="bnu",
+        tenant="huaxin",
         title="t",
         url="https://example.edu/d1.pdf",
         issuer="i",
@@ -55,7 +55,7 @@ def test_load_sources_rejects_duplicate_ids(tmp_path):
 
 def test_load_sources_rejects_unknown_school(tmp_path):
     with pytest.raises(ValueError, match="pku"):
-        load_sources(write(tmp_path, TOML_ONE.replace('"bnu"', '"pku"')))
+        load_sources(write(tmp_path, TOML_ONE.replace('"huaxin"', '"pku"')))
 
 
 @pytest.fixture
@@ -76,12 +76,12 @@ def test_fetch_downloads_and_records_sha(raw):
     calls = []
     report = fetch_all([make_source()], opener=fake_opener(b"%PDF-1", calls))
     assert report.downloaded == ["d1"]
-    assert (raw / "bnu" / "d1.pdf").read_bytes() == b"%PDF-1"
+    assert (raw / "huaxin" / "d1.pdf").read_bytes() == b"%PDF-1"
     assert report.sha256["d1"] == hashlib.sha256(b"%PDF-1").hexdigest()
 
 
 def test_fetch_skips_existing(raw):
-    path = raw / "bnu" / "d1.pdf"
+    path = raw / "huaxin" / "d1.pdf"
     path.parent.mkdir(parents=True)
     path.write_bytes(b"x")
     src = make_source(sha256=hashlib.sha256(b"x").hexdigest())
@@ -107,7 +107,7 @@ def test_failed_download_reported(raw):
 
 
 def test_manual_file_replaced_by_hand_is_accepted(raw):
-    path = raw / "bnu" / "d1.pdf"
+    path = raw / "huaxin" / "d1.pdf"
     path.parent.mkdir(parents=True)
     path.write_bytes(b"new")
     src = make_source(manual=True, sha256="old-sha")
@@ -117,7 +117,7 @@ def test_manual_file_replaced_by_hand_is_accepted(raw):
 
 def test_html_saved_as_pdf_is_rejected(raw):
     report = fetch_all([make_source()], opener=fake_opener(b"<html>blocked</html>", []))
-    assert report.failed == ["d1"] and not (raw / "bnu" / "d1.pdf").exists()
+    assert report.failed == ["d1"] and not (raw / "huaxin" / "d1.pdf").exists()
 
 
 def test_docx_magic_accepted(raw):

@@ -147,7 +147,7 @@ def result_from_trace(trace: dict):
     res = trace["result"]
     return AgentResult(
         question=trace["question"],
-        school=trace["school"],
+        tenant=trace.get("tenant", trace.get("school", "")),
         kind=res["kind"],
         sentences=res.get("sentences", []),
         refuse_reason=res.get("refuse_reason", ""),

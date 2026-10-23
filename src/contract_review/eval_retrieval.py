@@ -57,7 +57,7 @@ def summarize(rows: list[dict], questions: dict[str, Question]) -> dict:
         for r in scored:
             q = questions[r["qid"]]
             groups["by_type"][q.type].append(r["rank"])
-            groups["by_school"][q.school].append(r["rank"])
+            groups["by_school"][q.tenant].append(r["rank"])
             groups["by_source_type"][q.source_type].append(r["rank"])
             if q.subtype:
                 groups["by_subtype"][q.subtype].append(r["rank"])
@@ -103,7 +103,7 @@ def run_retrieval_eval(
             config = f"{strategy}/{mode}@pool{pool}"
             for q in questions:
                 t = time.perf_counter()
-                res = retr.search(q.question, q.school, k=max(K_LIST), mode=mode, pool=pool)
+                res = retr.search(q.question, q.tenant, k=max(K_LIST), mode=mode, pool=pool)
                 rank = next((i for i, h in enumerate(res.hits, 1) if is_hit(h.chunk, q.gold)), None)
                 rows.append(
                     {
@@ -112,11 +112,11 @@ def run_retrieval_eval(
                         "rank": rank,
                         "top_score": res.hits[0].score if res.hits else 0.0,
                         "top10": [h.chunk.chunk_id for h in res.hits],
-                        "school_mismatch": res.school_mismatch,
+                        "tenant_mismatch": res.tenant_mismatch,
                         "leak": [
                             h.chunk.chunk_id
                             for h in res.hits
-                            if h.chunk.school not in (q.school, "national")
+                            if h.chunk.tenant not in (q.tenant, "common")
                         ],
                         "latency_ms": (time.perf_counter() - t) * 1000,
                         "stage_ms": res.latency_ms,

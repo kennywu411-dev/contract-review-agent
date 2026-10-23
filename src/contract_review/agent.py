@@ -23,7 +23,7 @@ EFFORT = "low"
 @dataclass
 class AgentResult:
     question: str
-    school: str
+    tenant: str
     kind: str  # answer / partial / refuse / clarify / fallback
     sentences: list[dict] = field(default_factory=list)
     refuse_reason: str = ""
@@ -61,7 +61,7 @@ def _usage_dict(u) -> dict:
 
 def run_agent(
     question: str,
-    school: str,
+    tenant: str,
     llm: LLM,
     toolbox: ToolBox,
     max_steps: int = MAX_STEPS,
@@ -76,16 +76,16 @@ def run_agent(
     """
     t0 = time.perf_counter()
     system = [
-        {"type": "text", "text": system_prompt(school), "cache_control": {"type": "ephemeral"}}
+        {"type": "text", "text": system_prompt(tenant), "cache_control": {"type": "ephemeral"}}
     ]
     content = f"{history}\n\n当前问题：{question}" if history else question
     messages: list[dict] = [{"role": "user", "content": content}]
-    result = AgentResult(question, school, "fallback")
+    result = AgentResult(question, tenant, "fallback")
     trace = {
         "trace_id": uuid.uuid4().hex[:12],
         "model": llm.model,
         "question": question,
-        "school": school,
+        "tenant": tenant,
         "max_steps": max_steps,
         "cache": cache,
         "history": history,

@@ -19,18 +19,18 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
 
-from contract_review.config import DB_PATH, ROOT, SCHOOLS
+from contract_review.config import DB_PATH, ROOT, TENANTS
 from contract_review.eval_retrieval import RUNS_DIR
 from contract_review.sources import load_sources, raw_path
 
-StudentSchool = Literal["bnu", "upc", "njust", "lzu", "cumt", "zzu"]
+ClientTenant = Literal["huaxin", "yunqi", "njust", "lzu", "cumt", "ruifeng"]
 _SAFE = re.compile(r"^[A-Za-z0-9_.-]+$")
 WEB_DIST = ROOT / "web" / "out"
 
 
 class AskBody(BaseModel):
     question: str = Field(min_length=1, max_length=2000)
-    school: StudentSchool
+    tenant: ClientTenant
     session_id: str | None = Field(default=None, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")
 
 
@@ -51,16 +51,16 @@ class RealEngine:
         self.llm = AnthropicLLM(HAIKU)
         self.verifier = HaikuVerifier(AnthropicLLM(HAIKU))
 
-    def ask(self, question: str, school: str, on_step, history: str = ""):
+    def ask(self, question: str, tenant: str, on_step, history: str = ""):
         from contract_review.pipeline import answer_question
         from contract_review.tools import ToolBox
         from contract_review.trace import save_trace
 
         raw, ver = answer_question(
             question,
-            school,
+            tenant,
             self.llm,
-            ToolBox(school, self.retriever, self.sql),
+            ToolBox(tenant, self.retriever, self.sql),
             self.verifier,
             on_step=on_step,
             history=history,
@@ -131,7 +131,7 @@ def _stage_row(trace: dict) -> dict:
     return {
         "trace_id": trace["trace_id"],
         "question": trace["question"],
-        "school": trace["school"],
+        "tenant": trace.get("tenant", trace.get("school", "")),
         "steps": len(trace.get("steps", [])),
         "llm_ms": sum(st.get("llm_ms", 0.0) for st in trace.get("steps", [])),
         "search_ms": tools.get("search_docs", 0.0),
@@ -176,20 +176,20 @@ def create_app(engine=None) -> FastAPI:
 
         if not body.session_id:
             return None
-        school, mem = sessions.get(body.session_id, (None, None))
-        if mem is None or school != body.school:  # 换学校就开新会话，不把别校的上下文带过来
+        tenant, mem = sessions.get(body.session_id, (None, None))
+        if mem is None or tenant != body.tenant:  # 换学校就开新会话，不把别校的上下文带过来
             eng = get_engine()
             mem = (
                 eng.new_memory() if hasattr(eng, "new_memory") else ConversationMemory(mode="full")
             )
-            sessions[body.session_id] = (body.school, mem)
+            sessions[body.session_id] = (body.tenant, mem)
             while len(sessions) > MAX_SESSIONS:
                 sessions.pop(next(iter(sessions)))
         return mem
 
-    @app.get("/api/schools")
-    def schools():
-        return [{"id": k, "name": v} for k, v in SCHOOLS.items() if k != "national"]
+    @app.get("/api/tenants")
+    def tenants():
+        return [{"id": k, "name": v} for k, v in TENANTS.items() if k != "common"]
 
     @app.post("/api/ask")
     async def ask(body: AskBody):
@@ -207,7 +207,7 @@ def create_app(engine=None) -> FastAPI:
             try:
                 history = await asyncio.to_thread(mem.render) if mem else ""
                 raw, ver = await asyncio.to_thread(
-                    get_engine().ask, body.question, body.school, on_step, history
+                    get_engine().ask, body.question, body.tenant, on_step, history
                 )
                 if mem:
                     mem.add(turn_from(raw, ver))
@@ -332,7 +332,7 @@ def create_app(engine=None) -> FastAPI:
         for r in rows:
             q = qs.get(r.get("qid"))
             if q:
-                r |= {"question": q.question, "school": q.school, "answer_hint": q.answer_hint}
+                r |= {"question": q.question, "tenant": q.tenant, "answer_hint": q.answer_hint}
         return {"run": run, "kind": _run_kind(summary), "summary": summary, "rows": rows}
 
     @app.get("/api/runs/{run}/stages")

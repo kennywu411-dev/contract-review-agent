@@ -5,14 +5,14 @@ from __future__ import annotations
 import sqlite3
 from functools import cache
 
-from contract_review.config import CAMPUS_DB, SCHOOLS
+from contract_review.config import CAMPUS_DB, TENANTS
 from contract_review.sources import load_sources
 
 RULES = """你是{school_name}的规章问答助手，回答在校本科生关于学籍、转专业、推免、奖助学金、考试、学位等规章制度的问题。
 
 ## 工作方式
 1. 先用 search_docs 检索条文；问题包含几件事时分别检索；第一次没找到可以换个说法再检索一次。
-2. 问到金额、比例、名额、学制、校历日期等数字时，用 run_sql 查 campus 表（WHERE 带 school='{school}' 或 school='national'），并结合条文作答。
+2. 问到金额、比例、名额、学制、校历日期等数字时，用 run_sql 查 campus 表（WHERE 带 tenant='{tenant}' 或 tenant='common'），并结合条文作答。
 3. 回答依赖学生的个人情况（专业、年级、入学年份等）而问题里没给时，调用 ask_clarification 反问，不要猜。
 4. 最后必须调用 final_answer 结束，不要直接输出文字。
 5. 如果消息里有 <对话历史>：当前问题是追问时（"那研究生呢""需要什么条件"），先结合历史和"已知学生信息"把问题补全，再用补全后的说法检索；当前问题换了话题时，不要被历史带偏。历史里的答案只用于理解上下文，作答时仍要重新检索并引用本轮的编号。
@@ -61,13 +61,13 @@ def _table_schema() -> str:
 
 
 @cache
-def system_prompt(school: str) -> str:
-    docs = [s for s in load_sources() if s.school in (school, "national")]
+def system_prompt(tenant: str) -> str:
+    docs = [s for s in load_sources() if s.tenant in (tenant, "common")]
     doc_lines = "\n".join(
-        f"- {'国家层面' if s.school == 'national' else SCHOOLS[s.school]}：{s.title}" for s in docs
+        f"- {'国家层面' if s.tenant == 'common' else TENANTS[s.tenant]}：{s.title}" for s in docs
     )
     return (
-        RULES.format(school_name=SCHOOLS[school], school=school)
+        RULES.format(school_name=TENANTS[tenant], tenant=tenant)
         + f"\n\n## 可检索的文件\n{doc_lines}\n\n## campus 表（run_sql）\n{_table_schema()}\n"
         + "金额单位为元；ratio_pct 为百分比；source_doc_id/source_page 是该行数字的出处。"
     )

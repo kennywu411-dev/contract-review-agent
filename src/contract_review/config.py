@@ -11,13 +11,10 @@ DB_PATH = DATA_DIR / "contract_review.db"
 CAMPUS_DB = DATA_DIR / "campus" / "campus.sqlite"
 SOURCES_PATH = DATA_DIR / "sources.toml"
 
-# 学校 id → 中文名；national 是所有学校共享的国家层面文件
-SCHOOLS = {
-    "national": "通用（国家层面）",
-    "bnu": "北京师范大学",
-    "upc": "中国石油大学（华东）",
-    "njust": "南京理工大学",
-    "lzu": "兰州大学",
-    "cumt": "中国矿业大学",
-    "zzu": "郑州大学",
+# 租户 id → 名称。common 是所有租户共享的法律法规与官方示范文本；其余三家公司是构造的（ADR 007）
+TENANTS = {
+    "common": "通用（法律法规与示范文本）",
+    "huaxin": "华信制造有限公司（构造）",
+    "yunqi": "云启科技有限公司（构造）",
+    "ruifeng": "瑞丰贸易有限公司（构造）",
 }

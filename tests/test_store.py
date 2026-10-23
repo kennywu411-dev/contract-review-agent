@@ -8,7 +8,7 @@ from contract_review.sources import Source
 
 
 def src(doc_id="d1", kind="html"):
-    return Source(doc_id, "bnu", "标题", "https://x", "北师大", "2025", kind)
+    return Source(doc_id, "huaxin", "标题", "https://x", "北师大", "2025", kind)
 
 
 @pytest.fixture
@@ -26,7 +26,7 @@ def env(tmp_path, monkeypatch):
 
 
 def put(tmp_path, s, data: bytes):
-    p = tmp_path / "raw" / s.school / f"{s.doc_id}.{s.kind}"
+    p = tmp_path / "raw" / s.tenant / f"{s.doc_id}.{s.kind}"
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_bytes(data)
 
@@ -69,8 +69,8 @@ def test_document_metadata_stored(env):
     db = tmp / "t.db"
     put(tmp, src(), b"ab")
     store.ingest([src()], db)
-    row = sqlite3.connect(db).execute("select school, title, url, sha256 from documents").fetchone()
-    assert row[:3] == ("bnu", "标题", "https://x") and len(row[3]) == 64
+    row = sqlite3.connect(db).execute("select tenant, title, url, sha256 from documents").fetchone()
+    assert row[:3] == ("huaxin", "标题", "https://x") and len(row[3]) == 64
 
 
 def test_pdf_text_layer_recorded(tmp_path, monkeypatch):

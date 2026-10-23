@@ -5,9 +5,10 @@ from collections import Counter
 
 import pytest
 
-from contract_review.config import DB_PATH
+from contract_review.config import DB_PATH, ROOT
 from contract_review.evalset import QUESTIONS_PATH, Question, load_questions
-from contract_review.sources import load_sources
+
+CAMPUS_SOURCES = ROOT / "archive" / "campus" / "sources.toml"
 
 
 def write(tmp_path, rows):
@@ -17,8 +18,8 @@ def write(tmp_path, rows):
 
 
 GOOD = {
-    "id": "bnu-001",
-    "school": "bnu",
+    "id": "huaxin-001",
+    "tenant": "huaxin",
     "question": "缓考怎么申请",
     "type": "answerable",
     "subtype": None,
@@ -39,13 +40,13 @@ def test_load_valid(tmp_path):
     "patch,msg",
     [
         ({"type": "maybe"}, "type"),
-        ({"school": "pku"}, "school"),
+        ({"tenant": "pku"}, "tenant"),
         ({"source_type": "public", "source_url": None}, "source_url"),
         ({"type": "refuse"}, "gold"),
         ({"gold": []}, "gold"),
         ({"subtype": "weird"}, "subtype"),
         ({"subtyp": "version"}, "未知字段"),
-        ({"id": "upc-001"}, "id"),
+        ({"id": "yunqi-001"}, "id"),
         ({"gold": [{"doc_id": "bnu-handbook-2025", "page": "166", "clause": None}]}, "page"),
         ({"gold": [{"doc_id": "x", "page": None, "clause": ""}]}, "gold"),
     ],
@@ -56,12 +57,39 @@ def test_load_rejects_invalid(tmp_path, patch, msg):
 
 
 def test_load_rejects_duplicate_ids(tmp_path):
-    with pytest.raises(ValueError, match="bnu-001"):
+    with pytest.raises(ValueError, match="huaxin-001"):
         load_questions(write(tmp_path, [GOOD, GOOD]))
 
 
 # ---- 以下检查真实评测集 ----
+def _campus_sources():
+    # 存档清单里的 tenant 是学校 id，绕过新租户表的校验，直接读取
+    import tomllib
+
+    from contract_review.sources import Source
+
+    rows = tomllib.loads(CAMPUS_SOURCES.read_text(encoding="utf-8"))["source"]
+    out = []
+    for r in rows:
+        r = dict(r)
+        r["tenant"] = r.pop("school", r.get("tenant"))
+        out.append(Source(**r))
+    return out
+
+
+def _campus_db_present() -> bool:
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        return bool(
+            conn.execute("select 1 from documents where doc_id like 'bnu-%' limit 1").fetchone()
+        )
+    except sqlite3.Error:
+        return False
+
+
 real = pytest.mark.skipif(not QUESTIONS_PATH.exists(), reason="评测集未生成")
+# 依赖高校文档入库内容的检查：ADR 007 后库里换成合同依据库，这些只在恢复高校数据时运行
+campus_db = pytest.mark.skipif(not _campus_db_present(), reason="高校场景数据已存档（ADR 007）")
 
 
 @pytest.fixture(scope="module")
@@ -70,12 +98,14 @@ def qs():
 
 
 @real
+@campus_db
 def test_gold_doc_ids_exist(qs):
-    known = {s.doc_id for s in load_sources()}
+    known = {s.doc_id for s in _campus_sources()}
     assert {g["doc_id"] for q in qs for g in q.gold if "doc_id" in g} <= known
 
 
 @real
+@campus_db
 def test_gold_pages_exist_in_blocks(qs):
     conn = sqlite3.connect(DB_PATH)
     bad = []
@@ -105,13 +135,14 @@ def test_gold_pages_exist_in_blocks(qs):
 
 
 @real
+@campus_db
 def test_gold_school_matches_question_school(qs):
-    school = {s.doc_id: s.school for s in load_sources()}
+    tenant = {s.doc_id: s.tenant for s in _campus_sources()}
     bad = [
         q.id
         for q in qs
         for g in q.gold
-        if "doc_id" in g and school[g["doc_id"]] not in (q.school, "national")
+        if "doc_id" in g and tenant[g["doc_id"]] not in (q.tenant, "common", "national")
     ]
     assert bad == []
 
@@ -120,12 +151,12 @@ def test_gold_school_matches_question_school(qs):
 def test_distribution_targets(qs):
     types = Counter(q.type for q in qs)
     subs = Counter(q.subtype for q in qs)
-    schools = Counter(q.school for q in qs)
+    tenants = Counter(q.tenant for q in qs)
     assert len(qs) >= 100
     assert types["answerable"] >= 55 and types["table"] >= 15 and types["refuse"] >= 20
     assert subs["cross_school"] >= 5 and subs["version"] >= 3
     assert subs["conflict"] >= 3 and subs["clarify"] >= 4
-    assert schools["bnu"] >= 25 and schools["upc"] >= 25
+    assert tenants["bnu"] >= 25 and tenants["upc"] >= 25
 
 
 @real
@@ -137,7 +168,7 @@ def test_real_source_ratio_reported(qs):
 def test_spot_check_sample_is_deterministic():
     from contract_review.evalset import spot_check_sample
 
-    items = [GOOD | {"id": f"bnu-{i:03d}"} for i in range(10)]
+    items = [GOOD | {"id": f"huaxin-{i:03d}"} for i in range(10)]
     qs_ = [Question(**r) for r in items]
     a, b = spot_check_sample(qs_, 0.2), spot_check_sample(qs_, 0.2)
     assert [q.id for q in a] == [q.id for q in b] and len(a) == 2
@@ -146,6 +177,7 @@ def test_spot_check_sample_is_deterministic():
 
 
 @real
+@campus_db
 def test_table_gold_queries_return_rows(qs):
     import sqlite3 as sq
 
