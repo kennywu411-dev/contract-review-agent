@@ -126,3 +126,14 @@ def test_summary_rates():
     assert s["clarify"]["clarify_rate"] == 1.0 and s["clarify"]["n"] == 1
     assert s["by_type"]["inspection"]["recall"] == 1.0
     assert s["cost"]["total_usd"] > 0
+
+
+def test_low_level_findings_reported_separately():
+    clean = score_contract(
+        contract(id="goods-c2", gold=[], borderline=[], favorable=[]),
+        result([finding("第三条", "payment", level="低")]),
+    )
+    assert clean["fp"] == 1 and clean["fp_hm"] == 0
+    s = summarize_review([clean])
+    assert s["clean"]["fp_contract_rate"] == 1.0 and s["clean"]["fp_contract_rate_hm"] == 0.0
+    assert s["detection"]["precision_hm"] == 0.0  # 没有高/中意见时记 0

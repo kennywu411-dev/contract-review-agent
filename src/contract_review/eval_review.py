@@ -78,6 +78,11 @@ def score_contract(c: Contract, r: dict) -> dict:
     rest = [f for i, f in enumerate(findings) if i not in used]
     fav_flagged = {f["clause"] for f in rest if f["clause"] in favorable}
     fp_clauses = {f["clause"] or f"缺失:{f['risk_type']}" for f in rest} - fav_flagged
+    # 高/中口径：低等级意见在产品里作为"提示"折叠显示，单独统计
+    fp_hm = {
+        f["clause"] or f"缺失:{f['risk_type']}" for f in rest if f["level"] != "低"
+    } - fav_flagged
+    matched_hm = sum(1 for i in used if findings[i]["level"] != "低")
     return {
         "id": c.id,
         "tenant": c.tenant,
@@ -95,6 +100,9 @@ def score_contract(c: Contract, r: dict) -> dict:
         "favorable_n": len(favorable),
         "favorable_flagged": len(fav_flagged),
         "fp": len(fp_clauses),
+        "fp_hm": len(fp_hm),
+        "n_findings_hm": sum(1 for f in findings if f["level"] != "低"),
+        "matched_findings_hm": matched_hm,
         "n_findings": len(findings),
         "matched_findings": len(used),
         "human_findings": sum(f["needs_human_review"] for f in findings),
@@ -141,6 +149,10 @@ def summarize_review(rows: list[dict]) -> dict:
             "basis_accuracy": _rate(det, lambda g: g["basis_ok"]),
             "level_agreement": _rate(det, lambda g: g["level_ok"]),
             "precision": _ratio(sum(r["matched_findings"] for r in scored), findings),
+            "precision_hm": _ratio(
+                sum(r["matched_findings_hm"] for r in scored),
+                sum(r["n_findings_hm"] for r in scored),
+            ),
             "fp_per_risky_contract": _ratio(sum(r["fp"] for r in risky), len(risky)),
         },
         "clean": {
@@ -150,6 +162,7 @@ def summarize_review(rows: list[dict]) -> dict:
             "fp_per_contract": _ratio(
                 sum(r["fp"] + r["favorable_flagged"] for r in clean), len(clean)
             ),
+            "fp_contract_rate_hm": _rate(clean, lambda r: r["fp_hm"] + r["favorable_flagged"] > 0),
         },
         "perspective": {
             "favorable_n": fav_n,

@@ -268,9 +268,11 @@ def cmd_eval_review(args: argparse.Namespace) -> None:
     print(
         f"检出率 {d['recall']:.1%}（{d['n_gold']} 处）  类型判对 {d['type_accuracy']:.1%}  "
         f"依据正确 {d['basis_accuracy']:.1%}  精确率 {d['precision']:.1%}"
+        f"（高/中 {d['precision_hm']:.1%}）"
     )
     print(
-        f"干净合同误报率 {cl['fp_contract_rate']:.1%}（{cl['n']} 份）  "
+        f"干净合同误报率 {cl['fp_contract_rate']:.1%}（高/中 {cl['fp_contract_rate_hm']:.1%}，"
+        f"{cl['n']} 份）  "
         f"视角错误 {s['perspective']['favorable_flag_rate']:.1%}  "
         f"临界转人工 {h['borderline_human_rate']:.1%}  反问 {s['clarify']['clarify_rate']:.1%}"
     )

@@ -33,7 +33,7 @@ def test_missing_clause_gold_really_missing(cs):
     for c in cs:
         for g in c.gold:
             if g["clause"] is None:
-                assert "保密" not in c.text.split("订立本合同。")[1], c.id
+                assert not any(line.endswith(" 保密") for line in c.text.splitlines()), c.id
 
 
 def test_clarify_contracts_hide_parties(cs):
