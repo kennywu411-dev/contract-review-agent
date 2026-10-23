@@ -379,6 +379,43 @@ def cmd_eval_contract_retrieval(args: argparse.Namespace) -> None:
         )
 
 
+def cmd_eval_review_longdialog(args: argparse.Namespace) -> None:
+    import json
+
+    from contract_review.datapilot_client import make_backend
+    from contract_review.eval_review_longdialog import run_long_dialog_eval
+    from contract_review.llm import HAIKU, AnthropicLLM, make_llm
+    from contract_review.review_agent import review_contract
+    from contract_review.tools import ToolBox
+
+    retr, sql, llm = _retriever("fixed"), make_backend(), make_llm(args.model)
+    try:
+        out = run_long_dialog_eval(
+            RUNS_DIR / args.source,
+            lambda c, history, question: review_contract(
+                c.text,
+                c.tenant,
+                llm,
+                ToolBox(c.tenant, retr, sql),
+                history=history,
+                question=question,
+                contract_id=c.id,
+            ),
+            AnthropicLLM(HAIKU),
+            args.mode or ["full", "window", "compress"],
+            args.n,
+            args.tag,
+            args.max_cost,
+        )
+    finally:
+        if hasattr(sql, "close"):
+            sql.close()
+    s = json.loads((out / "summary.json").read_text(encoding="utf-8"))
+    print(f"{out.relative_to(ROOT)}：{s['dialogs']} 组长对话")
+    for mode in args.mode or ["full", "window", "compress"]:
+        print(mode, json.dumps(s.get(mode, {}), ensure_ascii=False))
+
+
 def cmd_eval_agent(args: argparse.Namespace) -> None:
     import json
 
@@ -642,6 +679,14 @@ def main() -> None:
     p.add_argument("--mode", action="append", choices=["bm25", "vector", "hybrid", "hybrid_rerank"])
     p.add_argument("--tag", default="contract-retrieval")
     p.set_defaults(func=cmd_eval_contract_retrieval)
+    p = sub.add_parser("eval-review-longdialog", help="长对话记忆评测：全量 / 最近N轮 / 摘要压缩")
+    p.add_argument("source", help="runs/ 下的 eval-review 全量运行目录名（复用第 0 轮）")
+    p.add_argument("--n", type=int, default=12, help="长对话组数")
+    p.add_argument("--mode", action="append", choices=["full", "window", "compress"])
+    p.add_argument("--model", default="claude-haiku-5-5")
+    p.add_argument("--tag", default="review-longdialog")
+    p.add_argument("--max-cost", type=float, default=2.0)
+    p.set_defaults(func=cmd_eval_review_longdialog)
     p = sub.add_parser("eval-d4", help="引用校验与拒答评测（Haiku 作答+校验，Sonnet 评判）")
     p.add_argument("--sample", type=int)
     p.add_argument("--model", default="claude-haiku-5-5")
