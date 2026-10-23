@@ -36,7 +36,8 @@ class FakeLLM:
 ANSWER = {
     "refuse": False,
     "refuse_reason": "",
-    "sentences": [{"text": "缓考须考前申请。", "citations": ["C1"]}],
+    "unanswered": "",
+    "sentences": [{"kind": "fact", "text": "缓考须考前申请。", "citations": ["C1"]}],
 }
 
 
@@ -158,3 +159,16 @@ def test_unknown_model_rejected_before_spending():
 
     with pytest.raises(ValueError):
         AnthropicLLM("gpt-x")
+
+
+def test_partial_kind_from_unanswered():
+    ans = ANSWER | {"unanswered": "转专业难度属于主观评价，文件中没有"}
+    llm = FakeLLM([[tool("search_docs", {"query": "q"})], [tool("final_answer", ans)]])
+    r = run_agent("q", "bnu", llm, box([ch("d", "bnu", "x")]))
+    assert r.kind == "partial" and "主观" in r.unanswered
+
+
+def test_sentence_kind_defaults_to_fact():
+    llm = FakeLLM([[tool("search_docs", {"query": "q"})], [tool("final_answer", ANSWER)]])
+    r = run_agent("q", "bnu", llm, box([ch("d", "bnu", "x")]))
+    assert r.sentences[0]["kind"] == "fact"

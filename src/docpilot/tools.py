@@ -71,20 +71,23 @@ TOOLS = [
     ),
     _tool(
         "final_answer",
-        "给出最终回答，调用后本轮结束。每句话都要列出支撑它的编号（C 或 T）；没有出处支撑的话"
-        "不要写。文件里查不到答案时 refuse=true，并在 refuse_reason 里说明建议咨询的部门。",
+        "给出最终回答，调用后本轮结束。fact 句写规章事实，必须列出支撑它的编号（C 或 T）；"
+        "note 句只用于说明边界或建议咨询的部门，不能含数字和具体规定。整题都查不到答案时 "
+        "refuse=true 并写 refuse_reason；只有一部分答不了时，在 unanswered 里说明是哪部分。",
         {
             "refuse": {"type": "boolean"},
             "refuse_reason": {"type": "string"},
+            "unanswered": {"type": "string", "description": "答不了的部分；全部能答时为空字符串"},
             "sentences": {
                 "type": "array",
                 "items": {
                     "type": "object",
                     "properties": {
+                        "kind": {"type": "string", "enum": ["fact", "note"]},
                         "text": {"type": "string"},
                         "citations": {"type": "array", "items": {"type": "string"}},
                     },
-                    "required": ["text", "citations"],
+                    "required": ["kind", "text", "citations"],
                     "additionalProperties": False,
                 },
             },

@@ -24,9 +24,10 @@ EFFORT = "low"
 class AgentResult:
     question: str
     school: str
-    kind: str  # answer / refuse / clarify / fallback
+    kind: str  # answer / partial / refuse / clarify / fallback
     sentences: list[dict] = field(default_factory=list)
     refuse_reason: str = ""
+    unanswered: str = ""
     clarification: str = ""
     invalid_citations: list[str] = field(default_factory=list)
     citations: dict = field(default_factory=dict)
@@ -147,6 +148,7 @@ def run_agent(
         "kind": result.kind,
         "sentences": result.sentences,
         "refuse_reason": result.refuse_reason,
+        "unanswered": result.unanswered,
         "clarification": result.clarification,
         "invalid_citations": result.invalid_citations,
     }
@@ -176,10 +178,18 @@ def _finish(result: AgentResult, call, toolbox: ToolBox) -> None:
         result.clarification = args.get("question", "")
         return
     result.sentences = [
-        {"text": s.get("text", ""), "citations": _normalize_citations(s.get("citations", []))}
+        {
+            "kind": s.get("kind", "fact"),
+            "text": s.get("text", ""),
+            "citations": _normalize_citations(s.get("citations", [])),
+        }
         for s in args.get("sentences", [])
     ]
     result.refuse_reason = args.get("refuse_reason", "")
-    result.kind = "refuse" if args.get("refuse") else "answer"
+    result.unanswered = args.get("unanswered", "") or ""
+    if args.get("refuse"):
+        result.kind = "refuse"
+    else:
+        result.kind = "partial" if result.unanswered.strip() else "answer"
     cited = [c for s in result.sentences for c in s.get("citations", [])]
     result.invalid_citations = [c for c in dict.fromkeys(cited) if c not in toolbox.citations]
