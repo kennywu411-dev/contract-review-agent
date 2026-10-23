@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import re
 import time
 import uuid
 from dataclasses import asdict, dataclass, field
@@ -151,13 +152,27 @@ def run_agent(
     return result
 
 
+_CITE = re.compile(r"[CT]\d+", re.IGNORECASE)
+
+
+def _normalize_citations(raw: list[str]) -> list[str]:
+    """模型常把编号写成 "[C1]"、"【C1】" 或 "C1、T2"；统一成去重后的 C1/T2。"""
+    out: list[str] = []
+    for item in raw:
+        out += [m.upper() for m in _CITE.findall(str(item))]
+    return list(dict.fromkeys(out))
+
+
 def _finish(result: AgentResult, call, toolbox: ToolBox) -> None:
     args = call.input
     if call.name == "ask_clarification":
         result.kind = "clarify"
         result.clarification = args.get("question", "")
         return
-    result.sentences = args.get("sentences", [])
+    result.sentences = [
+        {"text": s.get("text", ""), "citations": _normalize_citations(s.get("citations", []))}
+        for s in args.get("sentences", [])
+    ]
     result.refuse_reason = args.get("refuse_reason", "")
     result.kind = "refuse" if args.get("refuse") else "answer"
     cited = [c for s in result.sentences for c in s.get("citations", [])]

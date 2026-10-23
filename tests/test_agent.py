@@ -129,3 +129,12 @@ def test_trace_roundtrip_json(tmp_path):
     assert t["steps"][0]["tool_calls"][0]["name"] == "search_docs"
     assert "C1" in t["citations"]
     json.dumps(t, ensure_ascii=False)
+
+
+def test_citation_ids_are_normalized():
+    messy = ANSWER | {
+        "sentences": [{"text": "x", "citations": ["[C1]", " c1 ", "【C1】", "C1、T1"]}]
+    }
+    llm = FakeLLM([[tool("search_docs", {"query": "q"})], [tool("final_answer", messy)]])
+    r = run_agent("q", "bnu", llm, box([ch("d", "bnu", "x")]))
+    assert r.sentences[0]["citations"] == ["C1", "T1"] and r.invalid_citations == ["T1"]

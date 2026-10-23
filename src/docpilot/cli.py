@@ -146,6 +146,66 @@ def cmd_eval_retrieval(args: argparse.Namespace) -> None:
         )
 
 
+def print_result(r) -> None:
+    for st in r.trace["steps"]:
+        calls = "、".join(
+            f"{c['name']}({next(iter(c['input'].values()), '') if c['input'] else ''})"[:60]
+            for c in st["tool_calls"]
+        )
+        u = st["usage"]
+        print(
+            f"  第{st['step']}步 {calls or st['stop_reason']}  "
+            f"in={u['input_tokens']} cache_read={u['cache_read_input_tokens']} "
+            f"out={u['output_tokens']}  {st['llm_ms']:.0f}ms"
+        )
+    if r.kind == "clarify":
+        print(f"反问：{r.clarification}")
+    elif r.kind == "refuse":
+        print(f"拒答：{r.refuse_reason}")
+    elif r.kind == "fallback":
+        print(f"未完成（{r.trace['end']}），按拒答处理")
+    for sent in r.sentences:
+        print(f"- {sent['text']} {''.join(f'[{c}]' for c in sent['citations'])}")
+    used = {c for sent in r.sentences for c in sent["citations"]}
+    for cid in sorted(used, key=lambda x: (x[0], int(x[1:]) if x[1:].isdigit() else 0)):
+        c = r.citations.get(cid)
+        if not c:
+            print(f"  [{cid}] 不存在（无效引用）")
+        elif c["kind"] == "doc":
+            where = (
+                f"第{','.join(map(str, c['pages']))}页" if c["pages"] else "、".join(c["articles"])
+            )
+            print(f"  [{cid}] 《{c['title']}》{where}")
+        else:
+            print(f"  [{cid}] 表 {c['sql']}")
+    print(f"共 {r.steps} 步，${r.cost_usd:.5f}，{r.latency_ms / 1000:.1f}s")
+
+
+def cmd_ask(args: argparse.Namespace) -> None:
+    from docpilot.agent import run_agent
+    from docpilot.datapilot_client import make_backend
+    from docpilot.llm import AnthropicLLM
+    from docpilot.tools import ToolBox
+    from docpilot.trace import save_trace
+
+    retr, sql = _retriever("fixed"), make_backend()
+    try:
+        r = run_agent(
+            args.question, args.school, AnthropicLLM(args.model), ToolBox(args.school, retr, sql)
+        )
+    finally:
+        if hasattr(sql, "close"):
+            sql.close()
+    print_result(r)
+    print(f"trace：{save_trace(r).relative_to(ROOT)}（查表后端：{r.trace['sql_backend']}）")
+
+
+def cmd_link(_: argparse.Namespace) -> None:
+    from docpilot.datapilot_client import link_datapilot
+
+    print(f"已链接：{link_datapilot()}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="docpilot")
     sub = parser.add_subparsers(required=True)
@@ -171,5 +231,13 @@ def main() -> None:
     p.add_argument("--tag", default="retrieval")
     p.add_argument("--pool", type=int, default=15, help="每路召回和重排的候选数（ADR 002）")
     p.set_defaults(func=cmd_eval_retrieval)
+    p = sub.add_parser("ask", help="向 agent 提问")
+    p.add_argument("question")
+    p.add_argument("--school", required=True, choices=["bnu", "upc", "njust", "lzu", "cumt", "zzu"])
+    p.add_argument("--model", default="claude-haiku-5-5")
+    p.set_defaults(func=cmd_ask)
+    sub.add_parser("link-datapilot", help="把 campus 库链接进 DataPilot").set_defaults(
+        func=cmd_link
+    )
     args = parser.parse_args()
     args.func(args)
