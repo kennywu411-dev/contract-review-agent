@@ -76,3 +76,14 @@ def test_unit_price_ratio_against_ledger(cs):
             assert 1.08 < ratio < 1.15, c.id
         elif c.our_side == "甲":
             assert abs(ratio - 1) <= 0.035, (c.id, ratio)
+
+
+def test_sample_covers_every_subset(cs):
+    from contract_review.contract_evalset import sample_contracts
+
+    s = sample_contracts(cs, 20)
+    assert len(s) == 20 and len({c.id for c in s}) == 20
+    assert any(c.clarify for c in s) and any(not c.gold for c in s) and any(c.borderline for c in s)
+    assert any(c.favorable for c in s)
+    assert {c.contract_type for c in s} == {c.contract_type for c in cs}
+    assert sample_contracts(cs, 20) == s

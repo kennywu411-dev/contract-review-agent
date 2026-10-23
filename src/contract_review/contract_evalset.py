@@ -47,3 +47,34 @@ class Contract:
 def load_contracts(path: Path = CONTRACTS_PATH) -> list[Contract]:
     with path.open(encoding="utf-8") as fh:
         return [Contract(**json.loads(line)) for line in fh if line.strip()]
+
+
+def sample_contracts(cs: list[Contract], n: int) -> list[Contract]:
+    """小样：按子集轮流取、组内补齐合同类型，保证反问、干净、临界、视角干扰和 7 类合同都覆盖。"""
+
+    def group(c: Contract) -> str:
+        if c.clarify:
+            return "clarify"
+        if c.favorable:
+            return "favorable"
+        if not c.gold:
+            return "clean"
+        return "borderline" if c.borderline else "risky"
+
+    buckets: dict[str, list[Contract]] = {}
+    for c in sorted(cs, key=lambda c: (c.contract_type, c.id)):
+        buckets.setdefault(group(c), []).append(c)
+    order = ["clarify", "favorable", "clean", "borderline", "risky"]
+    out: list[Contract] = []
+    seen: dict[str, int] = {}
+    while len(out) < min(n, len(cs)):
+        for k in order:
+            items = buckets.get(k)
+            if not items or len(out) >= n:
+                continue
+            # 组内优先取目前覆盖最少的合同类型，保证 7 类合同都进小样
+            pick = min(items, key=lambda c: seen.get(c.contract_type, 0))
+            items.remove(pick)
+            seen[pick.contract_type] = seen.get(pick.contract_type, 0) + 1
+            out.append(pick)
+    return sorted(out, key=lambda c: c.id)

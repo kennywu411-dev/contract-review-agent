@@ -229,6 +229,58 @@ def cmd_link(_: argparse.Namespace) -> None:
     print(f"已链接：{link_datapilot()}")
 
 
+def cmd_eval_review(args: argparse.Namespace) -> None:
+    import json
+
+    from contract_review.contract_evalset import load_contracts, sample_contracts
+    from contract_review.datapilot_client import make_backend
+    from contract_review.eval_review import run_review_eval
+    from contract_review.llm import make_llm
+    from contract_review.review_agent import review_contract
+    from contract_review.tools import ToolBox
+
+    cs = load_contracts()
+    if args.ids:
+        cs = [c for c in cs if c.id in set(args.ids.split(","))]
+    elif args.sample:
+        cs = sample_contracts(cs, args.sample)
+    retr, sql, llm = _retriever(args.strategy), make_backend(), make_llm(args.model)
+    try:
+        out = run_review_eval(
+            cs,
+            lambda c: review_contract(
+                c.text,
+                c.tenant,
+                llm,
+                ToolBox(c.tenant, retr, sql),
+                cache=args.cache,
+                contract_id=c.id,
+            ),
+            args.tag,
+            args.max_cost,
+        )
+    finally:
+        if hasattr(sql, "close"):
+            sql.close()
+    s = json.loads((out / "summary.json").read_text(encoding="utf-8"))
+    d, cl, h = s["detection"], s["clean"], s["human_review"]
+    print(f"{out.relative_to(ROOT)}：{s['n']} 份，后端 {getattr(sql, 'name', '?')}")
+    print(
+        f"检出率 {d['recall']:.1%}（{d['n_gold']} 处）  类型判对 {d['type_accuracy']:.1%}  "
+        f"依据正确 {d['basis_accuracy']:.1%}  精确率 {d['precision']:.1%}"
+    )
+    print(
+        f"干净合同误报率 {cl['fp_contract_rate']:.1%}（{cl['n']} 份）  "
+        f"视角错误 {s['perspective']['favorable_flag_rate']:.1%}  "
+        f"临界转人工 {h['borderline_human_rate']:.1%}  反问 {s['clarify']['clarify_rate']:.1%}"
+    )
+    print(
+        f"花费 ${s['cost']['total_usd']:.4f}（P50 ${s['cost']['p50']:.4f}/份）  "
+        f"延迟 P50 {s['latency_ms']['p50'] / 1000:.1f}s P95 {s['latency_ms']['p95'] / 1000:.1f}s  "
+        f"兜底 {s['fallback']}"
+    )
+
+
 def cmd_eval_agent(args: argparse.Namespace) -> None:
     import json
 
@@ -463,6 +515,15 @@ def main() -> None:
         "--cache", choices=["prefix", "system"], default="prefix", help="缓存策略对比实验"
     )
     p.set_defaults(func=cmd_eval_agent)
+    p = sub.add_parser("eval-review", help="合同审查评测（会调用 Claude API）")
+    p.add_argument("--sample", type=int, help="分层小样份数")
+    p.add_argument("--ids", help="只跑这些合同 id，逗号分隔")
+    p.add_argument("--model", default="claude-haiku-5-5")
+    p.add_argument("--strategy", default="fixed", choices=["block", "fixed", "section"])
+    p.add_argument("--tag", default="review")
+    p.add_argument("--max-cost", type=float, default=1.0, help="累计花费上限（美元）")
+    p.add_argument("--cache", choices=["prefix", "system"], default="prefix")
+    p.set_defaults(func=cmd_eval_review)
     p = sub.add_parser("eval-d4", help="引用校验与拒答评测（Haiku 作答+校验，Sonnet 评判）")
     p.add_argument("--sample", type=int)
     p.add_argument("--model", default="claude-haiku-5-5")
