@@ -1,0 +1,61 @@
+[project]
+name = "contract-review-agent"
+version = "0.0.1"
+description = "DocPilot：高校规章可信问答 agent（逐句出处、查不到就拒答）"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "anthropic>=2.1",
+    "docling>=2.142,<3",
+    "fastapi>=0.115",
+    "mcp>=2.3",
+    "numpy>=2",
+    "pypdf>=6.21",
+    "sse-starlette>=2",
+    "torch>=2.8",
+    "transformers>=5",
+    "uvicorn[standard]>=0.30",
+]
+
+[project.scripts]
+cra = "contract_review.cli:main"
+
+[project.optional-dependencies]
+milvus = [
+    "pymilvus[milvus-lite]>=3.0.2",
+]
+
+[build-system]
+requires = ["uv_build>=0.13.0,<0.14.0"]
+build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+filterwarnings = ["ignore::DeprecationWarning"]
+markers = ["slow: 需要下载的真模型"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[dependency-groups]
+dev = [
+    "httpx>=0.27",
+    "pytest>=9.1.1",
+    "ruff>=0.17.1",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# 提示词正文按自然段写，不按 100 字折行
+"src/contract_review/prompts.py" = ["E501"]
+# 测试数据按可读性排，不按 100 字折行
+"tests/*" = ["E501"]
+# 构造数据生成脚本：数据表一行一条，不折行
+"scripts/make_*.py" = ["E501"]
+"scripts/compare_v2.py" = ["E501"]
+
+[tool.uv.build-backend]
+module-name = "contract_review"

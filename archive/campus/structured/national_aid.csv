@@ -1,0 +1,7 @@
+school,name,stage,amount_yuan,amount_min_yuan,amount_max_yuan,quota_per_year,effective_from,note,source_doc_id,source_page
+national,国家奖学金,本专科,10000,,,120000,2024,奖励名额由每年6万名增加到12万名,national-jzxj-2024,一（一）
+national,国家励志奖学金,本专科,6000,,,,2024,,national-jzxj-2024,一（二）
+national,国家助学金,本专科,3700,2500,5000,,2024秋季学期,平均资助标准；具体标准由高校在范围内确定，可分2—3档,national-jzxj-2024,一（三）
+national,国家奖学金,研究生,,,,90000,2024,其中硕士生7万名、博士生2万名；金额本通知未调整,national-jzxj-2024,一（四）
+national,研究生学业奖学金中央财政支持标准,硕士生,10000,,20000,,2025,中央高校；最高不超过硕士生每生每年20000元,national-jzxj-2024,一（五）
+national,研究生学业奖学金中央财政支持标准,博士生,12000,,30000,,2025,中央高校；最高不超过博士生每生每年30000元,national-jzxj-2024,一（五）

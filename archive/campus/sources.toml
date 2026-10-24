@@ -1,0 +1,220 @@
+# DocPilot 文件清单。人工维护；下载后的 sha256 和日期由 scripts/fetch.py 写入 sources.lock.json。
+# manual = true：网站有反爬或页面内嵌，需要在浏览器里手动下载，放到 data/raw/<school>/<doc_id>.<kind>。
+# 来源与取舍见 docs/校园文件调研.md。
+
+# ---------- 通用层（国家层面，网页） ----------
+[[source]]
+doc_id = "national-xsglgd"
+school = "national"
+title = "普通高等学校学生管理规定（教育部令第41号）"
+url = "https://www.gov.cn/gongbao/content/2017/content_5220900.htm"
+issuer = "教育部"
+issued = "2017-02-04"
+kind = "html"
+
+[[source]]
+doc_id = "national-jzxj-2024"
+school = "national"
+title = "关于调整高等教育阶段和高中阶段国家奖助学金政策的通知（财教〔2024〕181号）"
+url = "https://www.gov.cn/zhengce/zhengceku/202410/content_6983670.htm"
+issuer = "财政部 教育部"
+issued = "2024-10"
+kind = "html"
+
+[[source]]
+doc_id = "national-xwf"
+school = "national"
+title = "中华人民共和国学位法"
+url = "http://www.npc.gov.cn/npc/c2/c30834/202404/t20240426_436840.html"
+issuer = "全国人民代表大会常务委员会"
+issued = "2024-04-26"
+kind = "html"
+
+# ---------- 北京师范大学（深度校） ----------
+[[source]]
+doc_id = "bnu-handbook-2025"
+school = "bnu"
+title = "北京师范大学本科生学生手册（2025年版）"
+url = "https://bs.bnu.edu.cn/docs/2025-09/08e6ea7e32e941af85176578001d74f1.pdf"
+issuer = "北京师范大学"
+issued = "2025-09"
+kind = "pdf"
+
+[[source]]
+doc_id = "bnu-xuewei-2025"
+school = "bnu"
+title = "北京师范大学学士学位授予工作实施细则（2025年修订）"
+url = "https://jwb.bnu.edu.cn/docs/2026-05/289e1d49912e4f2399f529de8b75e031.pdf"
+issuer = "北京师范大学"
+issued = "2025"
+kind = "pdf"
+
+# ---------- 中国石油大学（华东）（深度校） ----------
+[[source]]
+doc_id = "upc-handbook-2025"
+school = "upc"
+title = "中国石油大学（华东）学生手册（2025年版）"
+url = "https://jwc.upc.edu.cn/_upload/article/files/c0/e8/d27b1dbb4806af025e2e2eee9526/05e569a3-3180-4fad-8643-202373d501ec.pdf"
+issuer = "中国石油大学（华东）"
+issued = "2025-07"
+kind = "pdf"
+
+# ---------- 南京理工大学 ----------
+[[source]]
+doc_id = "njust-xueji-2023"
+school = "njust"
+title = "南京理工大学本科学生管理规定（南理工教〔2023〕165号）"
+url = "https://jwc.njust.edu.cn/1a/6e/c11970a334446/page.htm"
+issuer = "南京理工大学"
+issued = "2023"
+kind = "pdf"
+manual = true
+
+[[source]]
+doc_id = "njust-xuewei-2024"
+school = "njust"
+title = "南京理工大学学士学位授予管理办法"
+url = "https://jwc.njust.edu.cn/1a/6f/c19093a334447/page.htm"
+issuer = "南京理工大学"
+issued = "2024-05"
+kind = "pdf"
+manual = true
+
+[[source]]
+doc_id = "njust-zhuanye-2024"
+school = "njust"
+title = "南京理工大学本科生专业（类）调整与分流管理办法（南理工教〔2024〕116号）"
+url = "https://jwc.njust.edu.cn/_upload/article/files/84/f1/959bde08450a9b0f3d16b0c6d3ff/a9a1bd48-1f1b-4c3e-9771-3aa6c85e7bb4.pdf"
+issuer = "南京理工大学"
+issued = "2024"
+kind = "pdf"
+
+[[source]]
+doc_id = "njust-jiangxuejin-2024"
+school = "njust"
+title = "南京理工大学本科生奖学金评定办法（2024年修订）"
+url = "https://xgc.njust.edu.cn/f7/9c/c14127a259996/page.htm"
+issuer = "南京理工大学"
+issued = "2024"
+kind = "html"
+manual = true
+
+# ---------- 兰州大学 ----------
+[[source]]
+doc_id = "lzu-xueji-2026"
+school = "lzu"
+title = "兰州大学本科学生学籍管理规定（校教〔2026〕53号）"
+url = "https://xxgk.lzu.edu.cn/xxgknew/upload/files/20260915/8e4a39f5116445689861a76ab971c4b7.pdf"
+issuer = "兰州大学"
+issued = "2026-07-31"
+kind = "pdf"
+
+[[source]]
+doc_id = "lzu-tuimian-2026"
+school = "lzu"
+title = "兰州大学2026年推荐优秀应届本科毕业生免试攻读研究生工作办法"
+url = "https://snst.lzu.edu.cn/snstnew/upload/files/20250909/7cc66c0bdb30426d8979eb8f468cdef5.pdf"
+issuer = "兰州大学"
+issued = "2025-09"
+kind = "pdf"
+
+[[source]]
+doc_id = "lzu-jiangxuejin-2022"
+school = "lzu"
+title = "兰州大学本科生奖学金评定办法（2022年修订）"
+url = "https://xxgk.lzu.edu.cn/xxgknew/upload/files/20241128/c6df0fb081824ab9bf75b7bd193108d9.pdf"
+issuer = "兰州大学"
+issued = "2022"
+kind = "pdf"
+
+[[source]]
+doc_id = "lzu-xuewei-2025"
+school = "lzu"
+title = "兰州大学学位授予工作细则（校研〔2025〕11号）"
+url = "https://lifesc.lzu.edu.cn/xwsybz2025.pdf"
+issuer = "兰州大学"
+issued = "2025"
+kind = "pdf"
+
+[[source]]
+doc_id = "lzu-zhuanye-2025"
+school = "lzu"
+title = "兰州大学本科生转专业管理办法（校教〔2025〕26号）"
+url = "https://snst.lzu.edu.cn/snstnew/upload/files/20250520/4c2cd5beb1074d1bafdc29a694afb4ce.docx"
+issuer = "兰州大学"
+issued = "2025"
+kind = "docx"
+
+# ---------- 中国矿业大学 ----------
+[[source]]
+doc_id = "cumt-xueji-2021"
+school = "cumt"
+title = "中国矿业大学本科生学籍管理规定（中矿大〔2021〕23号）"
+url = "https://jwb.cumt.edu.cn/__local/5/B3/E7/EAE27B409C1841C07F1BE057D73_D26418F9_32095.pdf"
+issuer = "中国矿业大学"
+issued = "2021"
+kind = "pdf"
+
+[[source]]
+doc_id = "cumt-tuimian-2021"
+school = "cumt"
+title = "中国矿业大学推荐优秀应届本科毕业生免试攻读研究生管理办法（中矿大教字〔2021〕19号）"
+url = "https://jwb.cumt.edu.cn/__local/A/2C/CD/1A9DA84D0322421DA746A8B2AEA_6F9D51BF_2224B.pdf"
+issuer = "中国矿业大学"
+issued = "2021"
+kind = "pdf"
+
+[[source]]
+doc_id = "cumt-xuewei-2025"
+school = "cumt"
+title = "中国矿业大学学士学位授予实施细则（中矿大〔2025〕22号）"
+url = "https://jwb.cumt.edu.cn/__local/7/1A/E4/86BC68180968CE8F48CFBA7B189_BFAAE92A_27D61.pdf"
+issuer = "中国矿业大学"
+issued = "2025-11"
+kind = "pdf"
+
+[[source]]
+doc_id = "cumt-zhuanye-2021"
+school = "cumt"
+title = "中国矿业大学本科生转专业管理办法（中矿大教字〔2021〕20号）"
+url = "https://jwb.cumt.edu.cn/__local/6/30/83/777EE96C15905C51A033B70EEE0_0A379E60_1F199.pdf"
+issuer = "中国矿业大学"
+issued = "2021"
+kind = "pdf"
+
+[[source]]
+doc_id = "cumt-xiaoli-2026"
+school = "cumt"
+title = "中国矿业大学2026-2027学年校历"
+url = "https://jwb.cumt.edu.cn/__local/0/28/93/37B136A07770700C2A46E53A835_4185D3F2_13B05.pdf"
+issuer = "中国矿业大学"
+issued = "2026"
+kind = "pdf"
+
+# ---------- 郑州大学 ----------
+[[source]]
+doc_id = "zzu-xueji-2017"
+school = "zzu"
+title = "郑州大学全日制本科学生学籍管理规定（校教务〔2017〕17号，学院转载）"
+url = "https://www5.zzu.edu.cn/xxgl/info/1179/4200.htm"
+issuer = "郑州大学"
+issued = "2017"
+kind = "html"
+
+[[source]]
+doc_id = "zzu-jiangxuejin-2017"
+school = "zzu"
+title = "郑州大学本科生奖学金评定办法（校学生〔2017〕10号）"
+url = "https://www5.zzu.edu.cn/student/info/1008/1519.htm"
+issuer = "郑州大学"
+issued = "2017"
+kind = "html"
+
+[[source]]
+doc_id = "zzu-zhuanye-2025"
+school = "zzu"
+title = "郑州大学本科生转专业管理办法（校教务〔2025〕3号）"
+url = "https://www5.zzu.edu.cn/__local/7/6E/70/D372E1C986ECB902B318886345A_FBC67998_2FB6F.pdf"
+issuer = "郑州大学"
+issued = "2025"
+kind = "pdf"
