@@ -172,3 +172,73 @@ def test_strict_precision_counts_one_correct_finding_per_gold():
     assert row["strict_hits"] == 1
     s = summarize_review([row])
     assert abs(s["detection"]["precision_strict"] - 1 / 3) < 1e-9
+
+
+def v2_contract(**kw):
+    # v2 难评测集（ADR 013）：组合风险记多个条款、风险分类别、干净合同带干扰项
+    base = dict(
+        id="v2-goods-r1",
+        gold=[
+            dict(
+                clause="第二十条",
+                clauses=["第二十条", "第十一条"],
+                type="liability",
+                alt_types=[],
+                category="combo",
+                level="高",
+                basis=[[LAW, "第六百二十一条"]],
+            ),
+            dict(
+                clause="第十四条",
+                clauses=["第十四条"],
+                type="confidentiality",
+                alt_types=["penalty"],
+                category="hidden",
+                level="中",
+                basis=[[LAW, "第五百零一条"]],
+            ),
+        ],
+        borderline=[],
+        favorable=[],
+    )
+    base.update(kw)
+    return contract(**base)
+
+
+def test_combo_gold_matches_any_listed_clause():
+    row = score_contract(v2_contract(), result([finding("第十一条", "liability")]))
+    combo = row["gold"][0]
+    assert combo["detected"] and combo["type_ok"] and combo["category"] == "combo"
+    assert row["fp"] == 0 and row["strict_hits"] == 1
+
+
+def test_alt_types_count_as_type_ok():
+    row = score_contract(v2_contract(), result([finding("第十四条", "penalty")]))
+    assert row["gold"][1]["type_ok"] and row["strict_hits"] == 1
+
+
+def test_summary_reports_recall_by_category():
+    rows = [score_contract(v2_contract(), result([finding("第二十条", "liability")]))]
+    s = summarize_review(rows)
+    assert s["by_category"]["combo"]["recall"] == 1.0
+    assert s["by_category"]["hidden"]["recall"] == 0.0 and s["by_category"]["hidden"]["n"] == 1
+
+
+def test_distractor_flags_reported_by_kind():
+    c = v2_contract(
+        id="v2-goods-c1",
+        gold=[],
+        distractors=[
+            dict(clause="第九条", kind="near_threshold", name="d_inspection"),
+            dict(clause="第二十三条", kind="legit_exemption", name="d_force_majeure"),
+        ],
+    )
+    r = result([finding("第九条", "inspection"), finding("第二十三条", "liability", level="低")])
+    row = score_contract(c, r)
+    assert row["distractors"] == [
+        {"kind": "near_threshold", "name": "d_inspection", "flagged_hm": True},
+        {"kind": "legit_exemption", "name": "d_force_majeure", "flagged_hm": False},
+    ]
+    s = summarize_review([row])
+    assert s["distractors"]["near_threshold"] == {"n": 1, "flag_rate_hm": 1.0}
+    assert s["distractors"]["legit_exemption"]["flag_rate_hm"] == 0.0

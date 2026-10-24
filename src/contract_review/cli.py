@@ -235,14 +235,19 @@ def cmd_link(_: argparse.Namespace) -> None:
 def cmd_eval_review(args: argparse.Namespace) -> None:
     import json
 
-    from contract_review.contract_evalset import load_contracts, sample_contracts
+    from contract_review.contract_evalset import (
+        CONTRACTS_PATH,
+        CONTRACTS_V2_PATH,
+        load_contracts,
+        sample_contracts,
+    )
     from contract_review.datapilot_client import make_backend
     from contract_review.eval_review import run_review_eval
     from contract_review.llm import make_llm
     from contract_review.review_agent import review_contract
     from contract_review.tools import ToolBox
 
-    cs = load_contracts()
+    cs = load_contracts(CONTRACTS_V2_PATH if args.evalset == "v2" else CONTRACTS_PATH)
     if args.ids:
         cs = [c for c in cs if c.id in set(args.ids.split(","))]
     elif args.sample:
@@ -273,6 +278,7 @@ def cmd_eval_review(args: argparse.Namespace) -> None:
             run_one,
             args.tag,
             args.max_cost,
+            meta={"evalset": args.evalset, "multi_agent": args.multi_agent, "model": args.model},
         )
     finally:
         if hasattr(sql, "close"):
@@ -296,6 +302,18 @@ def cmd_eval_review(args: argparse.Namespace) -> None:
         f"延迟 P50 {s['latency_ms']['p50'] / 1000:.1f}s P95 {s['latency_ms']['p95'] / 1000:.1f}s  "
         f"兜底 {s['fallback']}"
     )
+    if s.get("by_category"):
+        print(
+            "分类检出 "
+            + "  ".join(f"{k} {v['recall']:.0%}（{v['n']}）" for k, v in s["by_category"].items())
+        )
+    if s.get("distractors"):
+        print(
+            "干扰项误报（高/中） "
+            + "  ".join(
+                f"{k} {v['flag_rate_hm']:.0%}（{v['n']}）" for k, v in s["distractors"].items()
+            )
+        )
 
 
 def cmd_review_d4(args: argparse.Namespace) -> None:
@@ -679,6 +697,7 @@ def main() -> None:
     p.add_argument("--max-cost", type=float, default=1.0, help="累计花费上限（美元）")
     p.add_argument("--cache", choices=["prefix", "system"], default="prefix")
     p.add_argument("--multi-agent", action="store_true", help="主审 + 三个专职审查员（ADR 012）")
+    p.add_argument("--evalset", choices=["v1", "v2"], default="v1", help="v2 = 难评测集（ADR 013）")
     p.set_defaults(func=cmd_eval_review)
     p = sub.add_parser(
         "review-d4", help="复用一次 eval-review 运行：依据校验（Haiku）+ 评判（Sonnet）"
