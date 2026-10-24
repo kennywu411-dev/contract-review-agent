@@ -10,6 +10,7 @@ import json
 import re
 import secrets
 import sqlite3
+import threading
 from contextlib import asynccontextmanager
 from dataclasses import asdict
 from functools import cache
@@ -97,21 +98,29 @@ class RealEngine:
 
         stop_servers()
 
-    def review(self, contract: str, tenant: str, on_step, history: str = "", question: str = ""):
+    def review(
+        self,
+        contract: str,
+        tenant: str,
+        on_step,
+        history: str = "",
+        question: str = "",
+        first_review: bool = False,
+    ):
         from contract_review import review_verify, trace
         from contract_review.multi_agent import review_contract_multi
         from contract_review.review_agent import review_contract
         from contract_review.tools import ToolBox
 
-        if (
-            not question and self.review_mode == "multi"
-        ):  # 首轮整份审查：主审 + 专职审查员（ADR 012）
+        if (not question or first_review) and self.review_mode == "multi":
+            # 首次整份审查：主审 + 专职审查员（ADR 012）；反问后用户补充的立场带给主审
             r = review_contract_multi(
                 contract,
                 tenant,
                 self.llm,
                 lambda: ToolBox(tenant, self.retriever, self.sql),
                 on_step=on_step,
+                hint=question,
             )
         else:  # 追问只涉及个别条款或换视角重审，单 Agent 带历史回答
             r = review_contract(
@@ -277,7 +286,8 @@ def create_app(engine=None, review_mode: str = DEFAULT_REVIEW_MODE) -> FastAPI:
                 sessions.pop(next(iter(sessions)))
         return mem
 
-    review_sessions: dict[str, dict] = {}  # session_id → {tenant, contract, prev, qa}
+    review_sessions: dict[str, dict] = {}  # session_id → {tenant, contract, memory, lock, reviewed}
+    app.state.review_sessions = review_sessions
 
     @app.get("/api/samples")
     def samples():
@@ -306,6 +316,9 @@ def create_app(engine=None, review_mode: str = DEFAULT_REVIEW_MODE) -> FastAPI:
                 raise HTTPException(400, "追问需要先在同一会话里审查一份合同")
             # 追问只针对会话里那份合同；请求里带来的 contract 不能把旧历史配到新合同上
             contract, memory = sess["contract"], sess["memory"]
+            # 同一会话同时只处理一个请求：并发追问会同时改同一份记忆（审查 I4）
+            if not sess["lock"].acquire(blocking=False):
+                raise HTTPException(409, "这个会话上一轮还没结束，请稍候再问")
         else:
             if not body.contract:
                 raise HTTPException(400, "请提供合同全文")
@@ -319,11 +332,27 @@ def create_app(engine=None, review_mode: str = DEFAULT_REVIEW_MODE) -> FastAPI:
                 if hasattr(eng, "new_review_memory")
                 else ReviewMemory(mode="full")
             )
-            review_sessions[sid] = {"tenant": body.tenant, "contract": contract, "memory": memory}
+            sess = {
+                "tenant": body.tenant,
+                "contract": contract,
+                "memory": memory,
+                "lock": threading.Lock(),
+                "reviewed": False,  # 是否已有一次给出意见的审查（首轮反问时还没有）
+            }
+            sess["lock"].acquire()
+            review_sessions[sid] = sess
             while len(review_sessions) > MAX_SESSIONS:
                 review_sessions.pop(next(iter(review_sessions)))
         loop = asyncio.get_running_loop()
         queue: asyncio.Queue = asyncio.Queue()
+        # 首轮反问后，用户补充立场的那一轮才是真正的首次审查（审查 M3）
+        first_review = not body.question or not sess["reviewed"]
+        held = [True]
+
+        def release():
+            if held[0]:
+                held[0] = False
+                sess["lock"].release()
 
         def on_step(record):
             loop.call_soon_threadsafe(queue.put_nowait, ("step", record))
@@ -339,6 +368,7 @@ def create_app(engine=None, review_mode: str = DEFAULT_REVIEW_MODE) -> FastAPI:
                     on_step,
                     history,
                     body.question or "",
+                    first_review=first_review,
                 )
                 data = r.to_dict()
                 data["trace"] = {"trace_id": r.trace.get("trace_id")}
@@ -348,10 +378,14 @@ def create_app(engine=None, review_mode: str = DEFAULT_REVIEW_MODE) -> FastAPI:
                     memory.add_followup(body.question, turn)
                 else:
                     memory.add_review(turn)
+                if r.kind == "review":
+                    sess["reviewed"] = True
                 await queue.put(("review", data))
                 await queue.put(("verified", asdict(ver)))
             except Exception as e:  # 推给前端显示，不让连接挂住
                 await queue.put(("error", {"message": f"{type(e).__name__}: {e}"}))
+            finally:
+                release()
             await queue.put(("done", {}))
 
         async def stream():
@@ -367,6 +401,7 @@ def create_app(engine=None, review_mode: str = DEFAULT_REVIEW_MODE) -> FastAPI:
             finally:
                 if not task.done():
                     task.cancel()
+                release()  # 任务还没开始就被取消时，work 的 finally 不会执行
 
         return EventSourceResponse(stream(), ping=15)
 

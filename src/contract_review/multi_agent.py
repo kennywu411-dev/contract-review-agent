@@ -144,7 +144,7 @@ class _Locked:
         return call
 
 
-def _plan(contract: str, tenant: str, llm, toolbox, trace: dict, on_step) -> tuple:
+def _plan(contract: str, tenant: str, llm, toolbox, trace: dict, on_step, hint: str = "") -> tuple:
     company = TENANTS[tenant].removesuffix("（构造）")
     groups = "；".join(
         f"{g}（{v['label']}：{'、'.join(RISK_TYPES[t] for t in v['types'])}）"
@@ -156,6 +156,8 @@ def _plan(contract: str, tenant: str, llm, toolbox, trace: dict, on_step) -> tup
         "首部、通知送达这类不涉及风险的条款可以不分派。完成后调用 plan_review。\n"
         f"<合同>\n{_defang(contract).strip()}\n</合同>"
     )
+    if hint:
+        content += f"\n用户补充：{_defang(hint)}"
     sub = {"steps": []}
     terminal, cost, steps = tool_loop(
         llm=llm,
@@ -238,8 +240,12 @@ def review_contract_multi(
     toolbox_factory,
     on_step=None,
     contract_id: str = "",
+    hint: str = "",
 ) -> ReviewResult:
-    """toolbox_factory() -> ToolBox（每个 agent 一个，检索器和查表后端共用并加锁）。"""
+    """toolbox_factory() -> ToolBox（每个 agent 一个，检索器和查表后端共用并加锁）。
+
+    hint：用户补充的信息（如首轮反问后答"我方是甲方"），交给主审判断立场。
+    """
     t0 = time.perf_counter()
     # 检索和查表各一把锁：一次慢查询不会卡住另外两组的检索（审查 M5）
     search_lock, sql_lock = threading.Lock(), threading.Lock()
@@ -261,7 +267,7 @@ def review_contract_multi(
     }
     result = ReviewResult(tenant, "fallback")
     planner_box = make_box()
-    terminal, cost, steps = _plan(contract, tenant, llm, planner_box, trace, on_step)
+    terminal, cost, steps = _plan(contract, tenant, llm, planner_box, trace, on_step, hint)
     result.cost_usd, result.steps = cost, steps
     if terminal is None or terminal.name == "ask_clarification":
         if terminal is not None:
