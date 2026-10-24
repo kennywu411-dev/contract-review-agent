@@ -1732,10 +1732,17 @@ def render(sk: Skeleton, rng: random.Random) -> dict:
     tenant = ctx["tenant"]
     effs = [(t, t.make(ctx)) for t in sk.risks] + [(d, d.make(ctx)) for d in sk.dis]
     # 单价
-    rng_factor = next((t.factor(ctx) for t, _ in effs if t.factor), None)
+    src = next((t for t, _ in effs if t.factor), None)
     st_avg = ctx["avg"]
-    factor = rng.uniform(*rng_factor) if rng_factor else rng.uniform(0.97, 1.03)
-    price = float(fmt_price(st_avg * factor))
+    factor = rng.uniform(*src.factor(ctx)) if src else rng.uniform(0.97, 1.03)
+    # 规范写"近十二个月均价"，审查方也可能用全部历史均价：风险按两者较高的算、合规干扰项按较低的算
+    if src is None:
+        base = st_avg
+    elif isinstance(src, Tpl):
+        base = max(st_avg, ctx["avg12"])
+    else:
+        base = min(st_avg, ctx["avg12"])
+    price = float(fmt_price(base * factor))
     qty = rng.choice([20, 50, 100, 200]) if st_avg > 100 else rng.choice([20000, 50000, 100000])
     ctx.update(
         price=fmt_price(price),
@@ -2008,7 +2015,8 @@ def assign_distractors(sks: list[Skeleton], rng: random.Random) -> None:
                 break
             # 按目标比例挑类别，类别内挑用得最少的模板
             kind = min(
-                {d.kind for d in cands}, key=lambda k: (used[k] / DIS_TARGET[k], rng.random())
+                sorted({d.kind for d in cands}),
+                key=lambda k: (used[k] / DIS_TARGET[k], rng.random()),
             )
             pool = [d for d in cands if d.kind == kind]
             low = min(used[d.name] for d in pool)
