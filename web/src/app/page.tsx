@@ -345,7 +345,7 @@ export default function ReviewPage() {
                           <span className="rounded bg-sky-500/15 px-1.5 py-0.5 text-xs text-sky-700 dark:text-sky-400">校验转人工 {t.verified.flagged}</span>
                         )}
                       </div>
-                      <p className="text-muted-foreground text-sm">{t.result.summary}</p>
+                      <p className="text-muted-foreground text-sm whitespace-pre-line">{t.result.summary}</p>
                       {(t.verified?.findings.length ? t.verified.findings : t.result.findings).map((f, i) => (
                         <FindingCard key={i} f={f} i={i} result={t.result!} active={open?.turnId === t.id ? open.cid : null}
                           onCite={(cid) => setOpen({ turnId: t.id, cid })} onClause={pickClause} />
