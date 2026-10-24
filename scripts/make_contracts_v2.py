@@ -1497,6 +1497,10 @@ FAV_ACCEPT = {
     ("confidentiality", "ruifeng"): "瑞丰办法第十五条要求保密义务对等",
     ("penalty", "ruifeng"): "瑞丰办法第十二条要求违约条款双方对等",
     ("liability", "*"): "全部免责依民法典第五百零六条可能部分无效",
+    # 问题日志 P25：自动续期条款没约定提前通知不续期，三家规范都有要求
+    ("auto_renew", "huaxin"): "华信规范第十八条要求约定期满前三十日可书面通知不续期",
+    ("auto_renew", "yunqi"): "云启细则第十四条要求约定到期前三十日可通知不续期",
+    ("auto_renew", "ruifeng"): "瑞丰办法第十四条要求约定提前十五日书面通知不续期",
 }
 
 
@@ -1883,6 +1887,23 @@ def render(sk: Skeleton, rng: random.Random) -> dict:
                 "clauses": [no["liability"]],
                 "types": ["liability", "other"],
                 "reason": "责任上限的例外对我方同样适用",
+            }
+        )
+    # 问题日志 P25：数据集自身文本引出的合理意见（改进后的多 Agent 读了定义条款后报出），不算误报
+    if TYPES[sk.ctype]["ip"] and "ip" in no and "definitions" in no:
+        acceptable.append(
+            {
+                "clauses": [no["definitions"], no["ip"]],
+                "types": ["ip"],
+                "reason": "定义条款把成果限定为交付物，图纸、中间成果等归属不明（生成器的基础定义带来的）",
+            }
+        )
+    if ctx["item"] in EQUIPMENT and "inspection" in no:
+        acceptable.append(
+            {
+                "clauses": [no["inspection"], no["payment"]],
+                "types": ["inspection", "payment"],
+                "reason": "检验期从安装调试合格起算，但合同没约定安装调试期限，验收和付款可能被拖延",
             }
         )
     flag = supplier_risk(tenant, ctx["cp"][0]) if ctx["v"] == "甲" else None
