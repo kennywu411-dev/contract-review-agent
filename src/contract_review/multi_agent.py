@@ -69,7 +69,8 @@ PLAN_TOOL = _tool(
         },
     },
 )
-_HEAD = re.compile(r"^(第[零一二三四五六七八九十百\d]+条)(?=[\s、：:．.]|$)")
+# 行首"第X条"就是条款标题（"第一条【价款】""第3条：交付"都算）；后面紧跟"的/约定/规定/所…"的是正文引用
+_HEAD = re.compile(r"^\s*(第[零一二三四五六七八九十百\d]+条)(?!的|约定|规定|所|中|之|项下|第)")
 _LEVEL = {"高": 0, "中": 1, "低": 2}
 _CN = {c: i for i, c in enumerate("零一二三四五六七八九")}
 
@@ -211,7 +212,10 @@ def _subagent(group, side, header, headings, parts, contract, tenant, llm, toolb
     return res, cost, steps, sub_trace
 
 
-def _renumber(res: ReviewResult, citations: dict, offsets: dict, toolbox) -> list[dict]:
+def _renumber(
+    res: ReviewResult, citations: dict, offsets: dict, toolbox, group: str, invalid: list[str]
+) -> list[dict]:
+    """各组编号重编成全局唯一；引用了本组没检索过的编号，记进 invalid（带组名）再从意见里剔除。"""
     mapping = {}
     for cid, c in toolbox.citations.items():
         kind = cid[0]
@@ -221,6 +225,7 @@ def _renumber(res: ReviewResult, citations: dict, offsets: dict, toolbox) -> lis
         citations[new] = c
     out = []
     for f in res.findings:
+        invalid += [f"{group}:{c}" for c in f["citations"] if c not in mapping]
         out.append(f | {"citations": [mapping[c] for c in f["citations"] if c in mapping]})
     return out
 
@@ -235,12 +240,13 @@ def review_contract_multi(
 ) -> ReviewResult:
     """toolbox_factory() -> ToolBox（每个 agent 一个，检索器和查表后端共用并加锁）。"""
     t0 = time.perf_counter()
-    lock = threading.Lock()
+    # 检索和查表各一把锁：一次慢查询不会卡住另外两组的检索（审查 M5）
+    search_lock, sql_lock = threading.Lock(), threading.Lock()
 
     def make_box():
         box = toolbox_factory()
-        box.retriever = _Locked(box.retriever, lock)
-        box.sql = _Locked(box.sql, lock)
+        box.retriever = _Locked(box.retriever, search_lock)
+        box.sql = _Locked(box.sql, sql_lock)
         return box
 
     trace = {
@@ -272,6 +278,18 @@ def review_contract_multi(
             if no in clauses and g in assigned and no not in assigned[g]:
                 assigned[g].append(no)
     trace["assignments"] = assigned
+    unknown = sorted(
+        {
+            normalize_clause(a.get("clause", "")) or a.get("clause", "")
+            for a in terminal.input.get("assignments", [])
+        }
+        - set(clauses)
+    )
+    if not clauses or unknown or not any(assigned.values()):
+        # 识别不出条款标题（如"一、价款"）或分派落空：不能产出"没问题"的空审查，回退单 Agent 审全文（审查 C1）
+        return _fallback_single(
+            contract, tenant, llm, make_box(), on_step, contract_id, result, trace, t0, unknown
+        )
 
     jobs = {}
     with ThreadPoolExecutor(max_workers=len(GROUPS)) as pool:
@@ -296,14 +314,22 @@ def review_contract_multi(
             )
     citations: dict = {}
     offsets = {"C": 0, "T": 0}
-    findings, out_of_scope, summaries = [], 0, []
+    findings, out_of_scope, summaries, invalid, failed = [], 0, [], [], []
     for g, (box, fut) in jobs.items():
-        res, c, s, sub_trace = fut.result()
+        try:
+            res, c, s, sub_trace = fut.result()
+        except (
+            Exception
+        ) as e:  # 一组出错（超时、网络）：其余组照常汇总，标注这类风险没审（审查 I1）
+            failed.append(g)
+            trace.setdefault("group_errors", {})[g] = f"{type(e).__name__}: {e}"[:300]
+            summaries.append(f"{GROUPS[g]['label']}：本次未能完成审查，请重试或转人工。")
+            continue
         result.cost_usd += c
         result.steps += s
         trace["steps"] += [st | {"agent": g} for st in sub_trace["steps"]]
         allowed = set(GROUPS[g]["types"]) | ({"other"} if GROUPS[g]["sql"] else set())
-        for f in _renumber(res, citations, offsets, box):
+        for f in _renumber(res, citations, offsets, box, g, invalid):
             if f["risk_type"] in allowed:
                 findings.append(f)
             else:
@@ -314,12 +340,33 @@ def review_contract_multi(
     result.our_side = side
     result.findings = merge_findings(findings)
     result.summary = "\n".join(summaries)
-    result.invalid_citations = [
-        c for f in result.findings for c in f["citations"] if c not in citations
-    ]
+    result.invalid_citations = invalid
+    if len(failed) == len(GROUPS):
+        result.kind = "fallback"
     trace["out_of_scope"] = out_of_scope
+    trace["failed_groups"] = failed
     trace["end"] = "submit_review"
     return _close(result, trace, t0, citations)
+
+
+def _fallback_single(contract, tenant, llm, box, on_step, contract_id, result, trace, t0, unknown):
+    from contract_review.review_agent import review_contract
+
+    single = review_contract(contract, tenant, llm, box, on_step=on_step, contract_id=contract_id)
+    single.cost_usd += result.cost_usd
+    single.steps += result.steps
+    single.trace["steps"] = trace["steps"] + single.trace["steps"]
+    single.trace |= {
+        "task": "review_multi",
+        "trace_id": trace["trace_id"],
+        "fallback_single": True,
+        "unknown_clauses": unknown,
+        "assignments": trace.get("assignments", {}),
+        "cost_usd": single.cost_usd,
+        "latency_ms": (time.perf_counter() - t0) * 1000,
+    }
+    single.latency_ms = single.trace["latency_ms"]
+    return single
 
 
 def _close(result: ReviewResult, trace: dict, t0: float, citations: dict) -> ReviewResult:

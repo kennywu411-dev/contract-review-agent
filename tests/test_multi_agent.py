@@ -183,3 +183,79 @@ def test_subagent_brief_restates_perspective_rule():
         if "plan_review" not in {t["name"] for t in q["tools"]}
     ]
     assert sub and all("只约束对方、保护我方" in c for c in sub)
+
+
+def test_split_contract_accepts_bracket_headings():
+    from contract_review.multi_agent import split_contract
+
+    header, clauses = split_contract(
+        "合同\n第一条【价款】\n单价\n第二条 付款\n乙方\n第3条：交付\n第四条、验收\n依照第二条约定执行"
+    )
+    assert list(clauses) == ["第一条", "第二条", "第三条", "第四条"]
+    assert "依照第二条约定执行" in clauses["第四条"]
+
+
+def test_unparseable_contract_falls_back_to_single_agent():
+    # 审查 C1：识别不出条款时不能产出"空审查"，回退单 Agent 审全文
+    contract = "采购合同\n一、价款\n单价3600元\n二、验收\n交付即视为合格"
+    plan = {"our_side": "甲", "assignments": [{"clause": "第一条", "groups": ["pricing"]}]}
+
+    class Fallback(RoutedLLM):
+        def create(self, **kw):
+            from types import SimpleNamespace as NS
+
+            names = {t["name"] for t in kw["tools"]}
+            if "plan_review" in names:
+                return super().create(**kw)
+            self.requests.append(kw)
+            return NS(
+                content=[
+                    tool(
+                        "submit_review",
+                        {
+                            "our_side": "甲",
+                            "summary": "单",
+                            "findings": [f("第一条", "unit_price")],
+                        },
+                    )
+                ],
+                stop_reason="tool_use",
+                usage=usage(),
+            )
+
+    r = review_contract_multi(contract, "huaxin", Fallback(plan=plan), lambda: box())
+    assert r.trace["fallback_single"] and r.findings and r.findings[0]["risk_type"] == "unit_price"
+
+
+def test_failed_group_does_not_fail_review():
+    # 审查 I1：一组异常，其余两组的结果照常汇总，标注哪组没审
+    class Boom(RoutedLLM):
+        def create(self, **kw):
+            content = kw["messages"][0]["content"]
+            if "【责任与违约】" in content:
+                raise RuntimeError("timeout")
+            return super().create(**kw)
+
+    extra = {"pricing": {"our_side": "甲", "summary": "p", "findings": [f("第四条", "inspection")]}}
+    r = review_contract_multi(
+        CONTRACT, "huaxin", Boom(extra=extra), lambda: box([ch("law", "common", "法条")])
+    )
+    assert r.kind == "review" and [x["clause"] for x in r.findings] == ["第四条"]
+    assert r.trace["failed_groups"] == ["liability"] and "责任与违约" in r.summary
+
+
+def test_invalid_citation_kept_visible():
+    # 审查 I2：子 agent 引用了没检索过的编号，要进 invalid_citations，而不是悄悄丢掉
+    extra = {
+        "pricing": {
+            "our_side": "甲",
+            "summary": "p",
+            "findings": [f("第四条", "inspection", cites=("C1", "C9"))],
+        }
+    }
+    r = review_contract_multi(
+        CONTRACT, "huaxin", RoutedLLM(extra=extra), lambda: box([ch("law", "common", "法条")])
+    )
+    assert r.invalid_citations == ["pricing:C9"] and all(
+        c in r.citations for c in r.findings[0]["citations"]
+    )
