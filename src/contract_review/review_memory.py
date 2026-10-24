@@ -49,6 +49,10 @@ SUMMARY_SCHEMA = {
 }
 
 
+class _RuleOnly(Exception):
+    """compress 模式没有摘要模型：直接走规则台账。"""
+
+
 @dataclass
 class _Turn:
     no: int
@@ -74,7 +78,7 @@ class ReviewMemory:
         budget_chars: int = 3000,
         summarizer=None,
     ) -> None:
-        self.mode, self.keep_last, self.budget = mode, keep_last, budget_chars
+        self.mode, self.keep_last, self.budget = mode, max(1, keep_last), budget_chars
         self.summarizer = summarizer
         self.turns: list[_Turn] = []
         self.summary: dict | None = None
@@ -85,19 +89,25 @@ class ReviewMemory:
         self.last_render_chars = 0
         self.last_error = ""
         self._next = 0
+        self._first_review_done = False  # "首次审查"标在第一次给出意见的轮次（先反问时不是第0轮）
+        self._backfilled_keys: set[tuple[int, int]] = set()
 
     # ---------------- 记录 ----------------
     def add_review(self, result: dict, question: str = "") -> None:
         k = self._next
         self._next += 1
-        head = "【第0轮·首次审查】" if k == 0 and not question else f"【第{k}轮】"
+        first = result.get("kind") != "clarify" and not self._first_review_done
+        head = f"【第{k}轮·首次审查】" if first else f"【第{k}轮】"
+        if first:
+            self._first_review_done = True
         lines = [head + (f"用户：{question}" if question else "")]
         if result.get("kind") == "clarify":
-            lines.append(f"助手反问：{result.get('clarification', '')}")
+            ask = f"助手反问：{result.get('clarification', '')}"
+            lines = [head + (f"用户：{question}\n{ask}" if question else ask)]
             self.turns.append(_Turn(k, "\n".join(lines)))
             return
         side = result.get("our_side", "")
-        again = "重新审查，" if question else ""
+        again = "重新审查，" if question and not first else ""
         lines.append(f"助手：{again}我方：{side}方。总体结论：{result.get('summary', '')}")
         findings = []
         for i, f in enumerate(result.get("findings", []), 1):
@@ -119,10 +129,9 @@ class ReviewMemory:
     # ---------------- 渲染 ----------------
     def _summary_text(self) -> str:
         s = self.summary or {}
-        lines = [
-            f"较早对话摘要（第0–{self.summarized_upto}轮）：",
-            f"我方：{s.get('our_side', '')}方",
-        ]
+        # 立场取全部轮次里最新的：换回立场可能发生在保留原文的最近几轮里（审查 M4）
+        side = next((t.our_side for t in reversed(self.turns) if t.our_side), s.get("our_side", ""))
+        lines = [f"较早对话摘要（第0–{self.summarized_upto}轮）：", f"我方：{side}方"]
         lines.append("意见台账：")
         for f in s.get("findings", []):
             rtype = RISK_TYPES.get(f["risk_type"], f["risk_type"])
@@ -148,10 +157,12 @@ class ReviewMemory:
             out = self._render(self.turns[-self.keep_last :])
         else:
             out = self._render(self.turns)
+            # 成批压缩：最近 keep_last 轮之外至少又攒了 keep_last 轮才压一次，
+            # 避免超预算后每轮都调摘要（审查 M1）
             if (
                 self.mode == "compress"
                 and len(out) > self.budget
-                and len(self.turns) > self.keep_last
+                and len(self.turns) - self.keep_last >= self.keep_last
             ):
                 self._compress()
                 out = self._render(self.turns)
@@ -167,10 +178,13 @@ class ReviewMemory:
             self.required += t.findings
         side = next((t.our_side for t in reversed(old) if t.our_side), "")
         self.summarized_upto = old[-1].no
+        prev = self.summary or {}
         text = (
             f"已有摘要：{json.dumps(self.summary, ensure_ascii=False)}\n" if self.summary else ""
         ) + "\n".join(t.text for t in old)
         try:
+            if self.summarizer is None:  # 不给摘要模型：纯规则台账，不算错误（审查 M2）
+                raise _RuleOnly()
             resp = self.summarizer.create(
                 # 自适应思考的 token 也算在上限里；1500 会把 JSON 截断（ADR 011 小样）
                 max_tokens=SUMMARY_MAX_TOKENS,
@@ -188,34 +202,42 @@ class ReviewMemory:
             self.compressions += 1
             by_model = True
         except Exception as e:  # 摘要模型出错：整份用规则生成，不能丢掉早期意见
-            self.compress_errors += 1
-            self.last_error = f"{type(e).__name__}: {e}"[:300]
+            if not isinstance(e, _RuleOnly):
+                self.compress_errors += 1
+                self.last_error = f"{type(e).__name__}: {e}"[:300]
             by_model = False
-            prev = self.summary or {}
             summary = {
                 "our_side": side or prev.get("our_side", ""),
-                "findings": [],
+                "findings": [dict(f) for f in prev.get("findings", [])],
                 "decisions": prev.get("decisions", []),
                 "cited": prev.get("cited", []),
             }
-        self.summary = self._backfill(summary, side, by_model)
+        self.summary = self._backfill(summary, side, by_model, prev)
 
-    def _backfill(self, summary: dict, side: str, by_model: bool) -> dict:
-        """规则核对：每条被压缩过的意见都要在台账里（按 轮次+序号 对），缺的补录。"""
+    def _backfill(self, summary: dict, side: str, by_model: bool, prev: dict) -> dict:
+        """规则核对：每条被压缩过的意见都要在台账里（按 轮次+序号 对），缺的补录。
+
+        上一份摘要里有这条时沿用它的状态（如"已谈妥不再处理"），不能退化成"已报"（审查 I3）。
+        """
         have = {(f["turn"], f["no"]) for f in summary.get("findings", [])}
+        before = {(f["turn"], f["no"]): f for f in prev.get("findings", [])}
         for turn, no, clause, rtype in self.required:
-            if (turn, no) not in have:
-                summary.setdefault("findings", []).append(
-                    {
-                        "turn": turn,
-                        "no": no,
-                        "clause": clause,
-                        "risk_type": rtype,
-                        "status": "已报（补录）",
-                    }
-                )
-                if by_model:  # 模型摘要漏了才算补录；规则兜底时全是补录，不计
-                    self.backfilled += 1
+            key = (turn, no)
+            if key in have:
+                continue
+            entry = before.get(key) or {
+                "turn": turn,
+                "no": no,
+                "clause": clause,
+                "risk_type": rtype,
+                "status": "已报（补录）",
+            }
+            summary.setdefault("findings", []).append(dict(entry))
+            have.add(key)
+            # 模型摘要漏了才算补录；规则兜底时不计；同一条只计一次
+            if by_model and key not in self._backfilled_keys:
+                self._backfilled_keys.add(key)
+                self.backfilled += 1
         summary["findings"].sort(key=lambda f: (f["turn"], f["no"]))
         if not summary.get("our_side"):
             summary["our_side"] = side
