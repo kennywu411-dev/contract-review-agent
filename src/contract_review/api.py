@@ -207,9 +207,13 @@ def _questions() -> dict:
 
 @cache
 def _contracts() -> dict:
-    from contract_review.contract_evalset import load_contracts
+    from contract_review.contract_evalset import CONTRACTS_V2_PATH, load_contracts
 
-    return {c.id: c for c in load_contracts()}
+    # v1 与 v2 难评测集（ADR 013）的 id 不重叠，运行详情里两套都能配上标题
+    cs = load_contracts() + (
+        load_contracts(CONTRACTS_V2_PATH) if CONTRACTS_V2_PATH.exists() else []
+    )
+    return {c.id: c for c in cs}
 
 
 def _stage_row(trace: dict) -> dict:

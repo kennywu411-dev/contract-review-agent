@@ -242,3 +242,28 @@ def test_distractor_flags_reported_by_kind():
     s = summarize_review([row])
     assert s["distractors"]["near_threshold"] == {"n": 1, "flag_rate_hm": 1.0}
     assert s["distractors"]["legit_exemption"]["flag_rate_hm"] == 0.0
+
+
+def test_run_review_eval_resumes_existing_run(tmp_path, monkeypatch):
+    # 进程中途退出（ADR 013 全量跑到 17 份时会话结束）：续跑只补没跑的合同，不重复花钱
+    import json
+    from types import SimpleNamespace as NS
+
+    import contract_review.eval_review as er
+
+    monkeypatch.setattr(er, "RUNS_DIR", tmp_path)
+    calls = []
+
+    def run_one(c):
+        calls.append(c.id)
+        d = result([finding("第四条", "inspection")])
+        return NS(trace={"trace_id": f"t-{c.id}"} | d["trace"], to_dict=lambda: d)
+
+    cs = [contract(id=f"goods-r{i}") for i in range(1, 4)]
+    first = er.run_review_eval(cs[:2], run_one, "x")
+    out = er.run_review_eval(cs, run_one, "x", resume=first)
+    assert out == first and calls == ["goods-r1", "goods-r2", "goods-r3"]
+    rows = [json.loads(x) for x in (out / "review_results.jsonl").open()]
+    assert [r["id"] for r in rows] == ["goods-r1", "goods-r2", "goods-r3"]
+    s = json.loads((out / "summary.json").read_text())
+    assert s["n"] == 3 and s["resumed_from"] == 2

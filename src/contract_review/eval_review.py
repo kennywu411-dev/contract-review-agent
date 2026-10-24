@@ -247,23 +247,37 @@ def run_review_eval(
     tag: str,
     max_cost_usd: float = 2.0,
     meta: dict | None = None,
+    resume: Path | None = None,
 ) -> Path:
-    """run_one(contract) -> ReviewResult。逐份落盘；累计花费超过 max_cost_usd 就停（预算闸门）。"""
+    """run_one(contract) -> ReviewResult。逐份落盘；累计花费超过 max_cost_usd 就停（预算闸门）。
+
+    resume：已有的运行目录。进程中途退出时只补跑没有结果的合同，追加到同一目录，花费累计计入闸门。
+    """
     from contract_review.trace import save_trace
 
-    out = RUNS_DIR / f"{tag}-{datetime.now():%Y%m%d-%H%M%S}"
-    (out / "traces").mkdir(parents=True)
-    rows = []
-    with (out / "review_results.jsonl").open("w", encoding="utf-8") as fh:
-        for c in contracts:
+    out = resume or RUNS_DIR / f"{tag}-{datetime.now():%Y%m%d-%H%M%S}"
+    (out / "traces").mkdir(parents=True, exist_ok=True)
+    path = out / "review_results.jsonl"
+    rows = (
+        [json.loads(x) for x in path.open(encoding="utf-8") if x.strip()]
+        if resume and path.exists()
+        else []
+    )
+    done = {r["id"] for r in rows}
+    resumed_from = len(rows)
+    todo = [c for c in contracts if c.id not in done]
+    with path.open("a" if resume else "w", encoding="utf-8") as fh:
+        for c in todo:
+            if sum(x["cost_usd"] for x in rows) > max_cost_usd:
+                break
             r = run_one(c)
             save_trace(r, out / "traces")
             row = score_contract(c, r.to_dict()) | {"trace_id": r.trace["trace_id"]}
             rows.append(row)
             fh.write(json.dumps(row, ensure_ascii=False) + "\n")
             fh.flush()
-            if sum(x["cost_usd"] for x in rows) > max_cost_usd:
-                break
+    order = {c.id: i for i, c in enumerate(contracts)}
+    rows.sort(key=lambda r: order.get(r["id"], len(order)))
     summary = (
         summarize_review(rows)
         | {
@@ -272,6 +286,7 @@ def run_review_eval(
             "stopped_by_budget": len(rows) < len(contracts),
         }
         | (meta or {})
+        | ({"resumed_from": resumed_from} if resume else {})
     )
     (out / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=1), "utf-8")
     return out

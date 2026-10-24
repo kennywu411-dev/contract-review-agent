@@ -272,3 +272,70 @@ def test_missing_or_hallucinated_assignments_do_not_trigger_fallback():
     }
     r = review_contract_multi(CONTRACT, "huaxin", RoutedLLM(plan=plan), lambda: box())
     assert not r.trace.get("fallback_single") and r.trace["ignored_assignments"] == ["第二十条"]
+
+
+DEF_CONTRACT = """数据产品开发合同
+甲方（委托方）：云启科技有限公司
+乙方（开发方）：杭州某某软件有限公司
+第一条 定义
+本合同中下列用语的含义是：（一）“交付成果”，指乙方最终交付的可执行程序，不包括源代码。
+第二条 标的、数量和价款
+单价：人民币1800元/人天。
+第三条 知识产权
+交付成果的知识产权归甲方所有。
+第四条 争议解决
+由乙方住所地人民法院管辖。
+"""
+
+
+def _sub_contents(llm):
+    return {
+        g: next(
+            q["messages"][0]["content"]
+            for q in llm.requests
+            if f"【{GROUPS[g]['label']}】" in q["messages"][0]["content"]
+        )
+        for g in GROUPS
+    }
+
+
+def test_definitions_clause_sent_to_every_group():
+    # ADR 013：主审从不分派"定义"条款，靠定义构成的组合风险（交付成果不含源代码）全部漏检
+    plan = {
+        "our_side": "甲",
+        "assignments": [
+            {"clause": "第二条", "groups": ["pricing"]},
+            {"clause": "第三条", "groups": ["rights"]},
+            {"clause": "第四条", "groups": ["rights"]},
+        ],
+    }
+    llm = RoutedLLM(plan=plan)
+    review_contract_multi(DEF_CONTRACT, "yunqi", llm, lambda: box())
+    subs = _sub_contents(llm)
+    # 分到条款的组都带上定义条款；没分到条款的组（责任组）不需要
+    assert "不包括源代码" in subs["pricing"] and "不包括源代码" in subs["rights"]
+    assert "不包括源代码" not in subs["liability"]
+
+
+def test_unassigned_clause_routed_by_keywords():
+    # ADR 013：主审漏分的条款（保密、争议解决）按关键词兜底分组，不能没人审
+    plan = {"our_side": "甲", "assignments": [{"clause": "第二条", "groups": ["pricing"]}]}
+    llm = RoutedLLM(plan=plan)
+    r = review_contract_multi(DEF_CONTRACT, "yunqi", llm, lambda: box())
+    subs = _sub_contents(llm)
+    assert "由乙方住所地人民法院管辖" in subs["rights"]
+    assert "知识产权归甲方所有" in subs["rights"]
+    assert "由乙方住所地人民法院管辖" not in subs["pricing"]
+    assert r.trace["auto_assigned"] == {"第三条": ["rights"], "第四条": ["rights"]}
+
+
+def test_briefs_ask_for_threshold_and_cross_clause_checks():
+    llm = RoutedLLM()
+    review_contract_multi(CONTRACT, "huaxin", llm, lambda: box())
+    plan_msg = next(
+        q["messages"][0]["content"]
+        for q in llm.requests
+        if "plan_review" in {t["name"] for t in q["tools"]}
+    )
+    assert "每个条款都要分派" in plan_msg
+    assert all("红线" in c and "结合" in c for c in _sub_contents(llm).values())

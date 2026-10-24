@@ -279,6 +279,7 @@ def cmd_eval_review(args: argparse.Namespace) -> None:
             args.tag,
             args.max_cost,
             meta={"evalset": args.evalset, "multi_agent": args.multi_agent, "model": args.model},
+            resume=(ROOT / "runs" / args.resume) if args.resume else None,
         )
     finally:
         if hasattr(sql, "close"):
@@ -698,6 +699,7 @@ def main() -> None:
     p.add_argument("--cache", choices=["prefix", "system"], default="prefix")
     p.add_argument("--multi-agent", action="store_true", help="主审 + 三个专职审查员（ADR 012）")
     p.add_argument("--evalset", choices=["v1", "v2"], default="v1", help="v2 = 难评测集（ADR 013）")
+    p.add_argument("--resume", help="runs/ 下已有的运行目录名：只补跑没有结果的合同")
     p.set_defaults(func=cmd_eval_review)
     p = sub.add_parser(
         "review-d4", help="复用一次 eval-review 运行：依据校验（Haiku）+ 评判（Sonnet）"
