@@ -259,3 +259,16 @@ def test_invalid_citation_kept_visible():
     assert r.invalid_citations == ["pricing:C9"] and all(
         c in r.citations for c in r.findings[0]["citations"]
     )
+
+
+def test_missing_or_hallucinated_assignments_do_not_trigger_fallback():
+    # 主审常写"缺失（保密条款）"提示缺条款，或多写一个不存在的条号：都不是解析失败，不回退单 Agent
+    plan = PLAN | {
+        "assignments": PLAN["assignments"]
+        + [
+            {"clause": "缺失（保密条款）", "groups": ["rights"]},
+            {"clause": "第二十条", "groups": ["liability"]},
+        ]
+    }
+    r = review_contract_multi(CONTRACT, "huaxin", RoutedLLM(plan=plan), lambda: box())
+    assert not r.trace.get("fallback_single") and r.trace["ignored_assignments"] == ["第二十条"]

@@ -112,6 +112,11 @@ def _clause_no(clause: str | None) -> int:
     return total + cur
 
 
+def _arabic(no: str) -> str:
+    """ "第十二条" → "第12条"，用来在原文里找阿拉伯数字写法的条号。"""
+    return f"第{_clause_no(no)}条"
+
+
 def merge_findings(findings: list[dict]) -> list[dict]:
     """按（条款, 类型）去重：保留等级更高的那条，依据合并（高等级的在前），转人工取"或"。"""
     best: dict[tuple, dict] = {}
@@ -285,13 +290,12 @@ def review_contract_multi(
             if no in clauses and g in assigned and no not in assigned[g]:
                 assigned[g].append(no)
     trace["assignments"] = assigned
-    unknown = sorted(
-        {
-            normalize_clause(a.get("clause", "")) or a.get("clause", "")
-            for a in terminal.input.get("assignments", [])
-        }
-        - set(clauses)
-    )
+    # 分派里引用了解析结果中没有的"第X条"：原文里确实有这一条 → 标题格式没解析出来（要回退）；
+    # 原文里没有 → 主审多写了编号（忽略并记录）。"缺失（保密条款）"这类提示不是条款号，不算
+    refs = {normalize_clause(a.get("clause", "")) for a in terminal.input.get("assignments", [])}
+    missing = sorted(no for no in refs - set(clauses) if no)
+    unknown = [no for no in missing if no in contract or _arabic(no) in contract]
+    trace["ignored_assignments"] = [no for no in missing if no not in unknown]
     if not clauses or unknown or not any(assigned.values()):
         # 识别不出条款标题（如"一、价款"）或分派落空：不能产出"没问题"的空审查，
         # 回退单 Agent 审全文（审查 C1）
