@@ -1331,6 +1331,12 @@ STD_WHY = {
 # 标准位置的具体理由（审查 v2 低 8：不要用"A 或者 B"式的通用说法）
 STD_WHY_V = {
     (
+        "ip",
+        "R1",
+        "乙",
+    ): "我方投入的既有技术、工具、数据以及成果的知识产权全部归对方，且我方不得在其他项目中使用。",
+    ("ip", "R2", "乙"): "我方原有技术的知识产权随交付一并转让给对方，没有另外对价。",
+    (
         "penalty",
         "R1",
     ): "只约束我方的违约金：按合同总额日百分之一计、不设上限，对方逾期只'另行协商'。",
@@ -1393,7 +1399,9 @@ def std_tpls() -> list[Tpl]:
 
             def make(ctx, rtype=rtype, var=var):
                 body = CORE_FN[rtype](var, ctx["v"], ctx)
-                why = STD_WHY_V.get((rtype, var), STD_WHY[rtype])
+                why = STD_WHY_V.get((rtype, var, ctx["v"])) or STD_WHY_V.get(
+                    (rtype, var), STD_WHY[rtype]
+                )
                 eff = dict(over={rtype: body}, gold_slots=[rtype], why=why)
                 if rtype == "deposit":
                     eff["need_deposit"] = True
@@ -1829,7 +1837,7 @@ def render(sk: Skeleton, rng: random.Random) -> dict:
                 if t.cat == "threshold":
                     u = UNIT_RANGE[tenant]
                     a12 = ctx["avg12"]
-                    why = f"单价{fmt_price(price)}元，比台账近十二个月均价{a12:.2f}元高{(price / a12 - 1) * 100:.1f}%，刚超过规范{u['art']}的{u['thr']}复核线。"
+                    why = f"单价{fmt_price(price)}元，比台账近十二个月均价{a12:.2f}元高{(price / a12 - 1) * 100:.1f}%，超过规范{u['art']}的{u['thr']}复核线。"
             g["why"] = fill(why)
             gold.append(g)
             if t.cat == "hidden":
