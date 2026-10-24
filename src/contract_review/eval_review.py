@@ -39,7 +39,12 @@ def _basis_ok(f: dict, gold: dict, citations: dict) -> bool:
 def _matches(f: dict, gold: dict) -> bool:
     if gold["clause"] is None:
         return f["clause"] is None and f["risk_type"] == gold["type"]
-    return f["clause"] == gold["clause"]
+    # v2 组合风险：落在任何一个相关条款上都算检出
+    return f["clause"] in (gold.get("clauses") or [gold["clause"]])
+
+
+def _type_ok(f: dict, gold: dict) -> bool:
+    return f["risk_type"] == gold["type"] or f["risk_type"] in gold.get("alt_types", [])
 
 
 def score_contract(c: Contract, r: dict) -> dict:
@@ -55,17 +60,16 @@ def score_contract(c: Contract, r: dict) -> dict:
                 "clause": g["clause"],
                 "type": g["type"],
                 "level": g.get("level"),
+                "category": g.get("category"),
                 "detected": bool(fs),
-                "type_ok": any(f["risk_type"] == g["type"] for f in fs),
+                "type_ok": any(_type_ok(f, g) for f in fs),
                 "basis_ok": any(_basis_ok(f, g, r["citations"]) for f in fs),
                 "level_ok": any(f["level"] == g.get("level") for f in fs),
                 "human": any(f["needs_human_review"] for f in fs),
             }
         )
     # 严格命中：条款和类型都对，每处风险最多算一条意见
-    strict_hits = sum(
-        1 for g in c.gold if any(_matches(f, g) and f["risk_type"] == g["type"] for f in findings)
-    )
+    strict_hits = sum(1 for g in c.gold if any(_matches(f, g) and _type_ok(f, g) for f in findings))
     border = []
     for b in c.borderline:
         hits = [i for i, f in enumerate(findings) if f["clause"] == b["clause"]]
@@ -94,6 +98,14 @@ def score_contract(c: Contract, r: dict) -> dict:
         f["clause"] or f"缺失:{f['risk_type']}" for f in rest if f["level"] != "低"
     } - fav_flagged
     matched_hm = sum(1 for i in used if findings[i]["level"] != "低")
+    distractors = [
+        {
+            "kind": d["kind"],
+            "name": d.get("name"),
+            "flagged_hm": any(f["clause"] == d["clause"] and f["level"] != "低" for f in rest),
+        }
+        for d in c.distractors
+    ]
     return {
         "id": c.id,
         "tenant": c.tenant,
@@ -111,6 +123,7 @@ def score_contract(c: Contract, r: dict) -> dict:
         "acceptable_flagged": acceptable,
         "favorable_n": len(favorable),
         "favorable_flagged": len(fav_flagged),
+        "distractors": distractors,
         "fp": len(fp_clauses),
         "fp_hm": len(fp_hm),
         "n_findings_hm": sum(1 for f in findings if f["level"] != "低"),
@@ -152,6 +165,22 @@ def summarize_review(rows: list[dict]) -> dict:
             "recall": _rate(gs, lambda g: g["detected"]),
             "type_ok": _rate(gs, lambda g: g["type_ok"]),
         }
+    by_category = {}
+    for cat in dict.fromkeys(g["category"] for g in golds if g.get("category")):
+        gs = [g for g in golds if g.get("category") == cat]
+        dg = [g for g in gs if g["detected"]]
+        by_category[cat] = {
+            "n": len(gs),
+            "recall": _rate(gs, lambda g: g["detected"]),
+            "type_accuracy": _rate(dg, lambda g: g["type_ok"]),
+            "basis_accuracy": _rate(dg, lambda g: g["basis_ok"]),
+        }
+    ds = [d for r in scored for d in r.get("distractors", [])]
+    distractors = {
+        k: {"n": len(x), "flag_rate_hm": _rate(x, lambda d: d["flagged_hm"])}
+        for k in dict.fromkeys(d["kind"] for d in ds)
+        for x in [[d for d in ds if d["kind"] == k]]
+    }
     return {
         "n": len(rows),
         "detection": {
@@ -203,6 +232,8 @@ def summarize_review(rows: list[dict]) -> dict:
             "invalid_citation_contract_rate": _rate(scored, lambda r: bool(r["invalid_citations"])),
         },
         "by_type": by_type,
+        "by_category": by_category,
+        "distractors": distractors,
         "fallback": sum(1 for r in rows if r["kind"] == "fallback"),
         "steps_mean": st.mean(r["steps"] for r in rows) if rows else 0,
         "cost": {"total_usd": sum(costs), "p50": _pct(costs, 0.5), "p95": _pct(costs, 0.95)},
@@ -211,28 +242,51 @@ def summarize_review(rows: list[dict]) -> dict:
 
 
 def run_review_eval(
-    contracts: list[Contract], run_one, tag: str, max_cost_usd: float = 2.0
+    contracts: list[Contract],
+    run_one,
+    tag: str,
+    max_cost_usd: float = 2.0,
+    meta: dict | None = None,
+    resume: Path | None = None,
 ) -> Path:
-    """run_one(contract) -> ReviewResult。逐份落盘；累计花费超过 max_cost_usd 就停（预算闸门）。"""
+    """run_one(contract) -> ReviewResult。逐份落盘；累计花费超过 max_cost_usd 就停（预算闸门）。
+
+    resume：已有的运行目录。进程中途退出时只补跑没有结果的合同，追加到同一目录，花费累计计入闸门。
+    """
     from contract_review.trace import save_trace
 
-    out = RUNS_DIR / f"{tag}-{datetime.now():%Y%m%d-%H%M%S}"
-    (out / "traces").mkdir(parents=True)
-    rows = []
-    with (out / "review_results.jsonl").open("w", encoding="utf-8") as fh:
-        for c in contracts:
+    out = resume or RUNS_DIR / f"{tag}-{datetime.now():%Y%m%d-%H%M%S}"
+    (out / "traces").mkdir(parents=True, exist_ok=True)
+    path = out / "review_results.jsonl"
+    rows = (
+        [json.loads(x) for x in path.open(encoding="utf-8") if x.strip()]
+        if resume and path.exists()
+        else []
+    )
+    done = {r["id"] for r in rows}
+    resumed_from = len(rows)
+    todo = [c for c in contracts if c.id not in done]
+    with path.open("a" if resume else "w", encoding="utf-8") as fh:
+        for c in todo:
+            if sum(x["cost_usd"] for x in rows) > max_cost_usd:
+                break
             r = run_one(c)
             save_trace(r, out / "traces")
             row = score_contract(c, r.to_dict()) | {"trace_id": r.trace["trace_id"]}
             rows.append(row)
             fh.write(json.dumps(row, ensure_ascii=False) + "\n")
             fh.flush()
-            if sum(x["cost_usd"] for x in rows) > max_cost_usd:
-                break
-    summary = summarize_review(rows) | {
-        "run_id": out.name,
-        "kind": "review",
-        "stopped_by_budget": len(rows) < len(contracts),
-    }
+    order = {c.id: i for i, c in enumerate(contracts)}
+    rows.sort(key=lambda r: order.get(r["id"], len(order)))
+    summary = (
+        summarize_review(rows)
+        | {
+            "run_id": out.name,
+            "kind": "review",
+            "stopped_by_budget": len(rows) < len(contracts),
+        }
+        | (meta or {})
+        | ({"resumed_from": resumed_from} if resume else {})
+    )
     (out / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=1), "utf-8")
     return out

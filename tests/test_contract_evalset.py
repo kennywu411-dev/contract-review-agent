@@ -3,7 +3,7 @@ from collections import Counter
 
 import pytest
 
-from contract_review.config import DB_PATH, LEDGER_DB
+from contract_review.config import DB_PATH, LEDGER_DB, ROOT
 from contract_review.contract_evalset import RISK_TYPES, load_contracts
 
 
@@ -94,3 +94,50 @@ def test_acceptable_clauses_exist(cs):
         for a in c.acceptable:
             for no in a["clauses"]:
                 assert no is None or f"\n{no} " in c.text, (c.id, no)
+
+
+V2 = ROOT / "evals" / "contracts_v2.jsonl"
+
+
+@pytest.fixture(scope="module")
+def v2():
+    return load_contracts(V2)
+
+
+def test_v2_counts_and_categories(v2):
+    # ADR 013：60 份长合同，30 份植入 75 处风险，5 类数量固定；干净合同都带干扰项
+    assert len(v2) == 60 and len({c.id for c in v2}) == 60
+    risky = [c for c in v2 if c.gold]
+    assert len(risky) == 30 and all(2 <= len(c.gold) <= 3 for c in risky)
+    cats = Counter(g["category"] for c in risky for g in c.gold)
+    assert cats == {"hidden": 18, "paraphrase": 18, "combo": 12, "threshold": 15, "standard": 12}
+    assert all(c.distractors and not c.gold for c in v2 if not c.gold)
+    assert sum(1 for c in risky for g in c.gold if len(g["clauses"]) > 1) >= 10
+
+
+def test_v2_contracts_are_long_and_gold_clauses_exist(v2):
+    for c in v2:
+        n = sum(1 for line in c.text.splitlines() if line.startswith("第") and "条 " in line[:8])
+        assert 25 <= n <= 30, (c.id, n)
+        for g in c.gold:
+            assert g["why"] and g["category"]
+            for no in g["clauses"]:
+                assert f"\n{no} " in c.text, (c.id, no)
+        for d in c.distractors:
+            assert f"\n{d['clause']} " in c.text, (c.id, d)
+
+
+@pytest.mark.skipif(not DB_PATH.exists(), reason="依据库未入库")
+def test_v2_basis_articles_exist_in_corpus(v2):
+    conn = sqlite3.connect(DB_PATH)
+    missing = {
+        (doc_id, article)
+        for c in v2
+        for g in c.gold
+        for doc_id, article in g["basis"]
+        if not conn.execute(
+            "select 1 from blocks where doc_id=? and text like ? limit 1",
+            (doc_id, f"{article}%"),
+        ).fetchone()
+    }
+    assert missing == set()

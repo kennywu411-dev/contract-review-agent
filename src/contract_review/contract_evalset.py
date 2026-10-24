@@ -9,6 +9,7 @@ from pathlib import Path
 from contract_review.config import ROOT
 
 CONTRACTS_PATH = ROOT / "evals" / "contracts.jsonl"
+CONTRACTS_V2_PATH = ROOT / "evals" / "contracts_v2.jsonl"  # 难评测集（ADR 013）
 
 # 风险类型 id → 中文名（10 + 1 类，ADR 007）
 RISK_TYPES = {
@@ -43,6 +44,8 @@ class Contract:
     favorable: list[dict] = field(default_factory=list)
     # 金标准没植入、但按租户规范报出来是对的意见（全分支审查订正，见问题日志 P21）：不算误报
     acceptable: list[dict] = field(default_factory=list)
+    # v2：干净合同里的干扰项（刚好合规的数值、合法免责、对我方有利条款等），报出算误报，按类别统计
+    distractors: list[dict] = field(default_factory=list)
     constructed: bool = True
 
 

@@ -28,3 +28,12 @@
 ## 局限
 
 自己出题自己考：植入规则和 agent 提示词由同一人写。缓解：每类多种写法、agent 看不到植入规则、保留干净合同与"对我方有利"的干扰条款。结论只代表这套构造数据上的表现。
+
+## v2 难评测集（ADR 013）
+
+`contracts_v2.jsonl` 由 `uv run python scripts/make_contracts_v2.py` 生成（固定种子），**全部是构造数据**。60 份长合同（每份 25–30 条），30 份植入 75 处风险、30 份干净：
+
+- 风险分 5 类：隐蔽位置 18、换说法 18、跨条款组合 12（`clauses` 记多条）、临界值 15、标准位置对照 12；每处带 `category`、`why`、`alt_types`。
+- 干净合同带 `distractors`：刚好合规的数值、合法免责、对我方有利的单方条款、"签订地法院 + 签订地在我方"。
+- 抽查清单 `contracts_v2_spotcheck.md`（20 条）随生成器一起输出。
+- 跑法：`cra eval-review --evalset v2 [--multi-agent]`。

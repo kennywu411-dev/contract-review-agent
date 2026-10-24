@@ -47,6 +47,13 @@ GROUPS = {
         "sql": False,
     },
 }
+# 主审漏分的条款按关键词兜底分组（ADR 013：v2 评测里有保密条款没人审）
+ROUTE_KEYWORDS = {
+    "pricing": ("付款", "价款", "定金", "预付", "单价", "发票", "检验", "验收", "结算"),
+    "liability": ("违约", "赔偿", "责任", "解除", "终止"),
+    "rights": ("保密", "知识产权", "著作权", "管辖", "仲裁", "法院", "续期", "期限", "期满"),
+}
+DEFINITION_HEADINGS = ("定义", "释义", "用语")
 SUB_MAX_STEPS = 6
 SUB_MAX_TOKENS = 6000
 _TOOLS = {t["name"]: t for t in REVIEW_TOOLS}
@@ -158,7 +165,9 @@ def _plan(contract: str, tenant: str, llm, toolbox, trace: dict, on_step, hint: 
     content = (
         f"你是主审，不逐条审查，只做分工。先判断{company}（我方）是甲方还是乙方，看不出就调用 "
         f"ask_clarification；再把每个条款分派给可能涉及的专职组（可以多个）：{groups}。"
-        "首部、通知送达这类不涉及风险的条款可以不分派。完成后调用 plan_review。\n"
+        "每个条款都要分派，不要只看标题：风险可能藏在发票、人员、变更、附件等标题看似无关的条款里；"
+        "一个条款同时涉及几类风险（例如定金和违约金、付款和验收）就分给几个组。"
+        "定义条款会自动发给所有组，不必分派。完成后调用 plan_review。\n"
         f"<合同>\n{_defang(contract).strip()}\n</合同>"
     )
     if hint:
@@ -191,6 +200,9 @@ def _subagent(group, side, header, headings, parts, contract, tenant, llm, toolb
         # 片段里看不到全局，容易把对我方有利的单方条款当成风险（ADR 012 小样）：这里重申视角规则
         f"判断每一条前先想清楚它约束谁、保护谁：只约束对方、保护我方（{side}方）的条款，"
         "即使写得过严、可能被法院调整或认定无效，也不要报。"
+        # ADR 013：v2 评测里专职组漏掉了刚越过规范红线的数值，以及要结合定义/其他条款才看得出的风险
+        "凡是比例、天数、年限、金额这类数值，都要检索本公司规范的对应条款，逐项和红线对照，刚越过一点也算；"
+        "还要结合定义条款和其他条款的约定看（例如定义把某个用语限定得很窄、两个条款互为前提或叠加适用）。"
         "完成后调用 submit_review。\n"
         f"<合同首部>\n{_defang(header).strip()}\n</合同首部>\n"
         f"<全部条款标题>\n{headings}\n</全部条款标题>\n"
@@ -289,7 +301,25 @@ def review_contract_multi(
         for g in a.get("groups", []):
             if no in clauses and g in assigned and no not in assigned[g]:
                 assigned[g].append(no)
+    # 定义条款发给所有组；主审漏分的条款按关键词兜底（ADR 013）
+    defs = [
+        no
+        for no, text in clauses.items()
+        if any(h in text.splitlines()[0] for h in DEFINITION_HEADINGS)
+    ]
+    covered = {no for v in assigned.values() for no in v}
+    auto: dict[str, list[str]] = {}
+    for no, text in clauses.items():
+        if no in covered or no in defs:
+            continue
+        gs = [g for g, kws in ROUTE_KEYWORDS.items() if any(k in text for k in kws)]
+        for g in gs:
+            assigned[g].append(no)
+        if gs:
+            auto[no] = gs
     trace["assignments"] = assigned
+    trace["auto_assigned"] = auto
+    trace["definitions"] = defs
     # 分派里引用了解析结果中没有的"第X条"：原文里确实有这一条 → 标题格式没解析出来（要回退）；
     # 原文里没有 → 主审多写了编号（忽略并记录）。"缺失（保密条款）"这类提示不是条款号，不算
     refs = {normalize_clause(a.get("clause", "")) for a in terminal.input.get("assignments", [])}
@@ -306,7 +336,8 @@ def review_contract_multi(
     jobs = {}
     with ThreadPoolExecutor(max_workers=len(GROUPS)) as pool:
         for g in GROUPS:
-            parts = "\n".join(clauses[no] for no in sorted(assigned[g], key=_clause_no))
+            nos = sorted(set(assigned[g]) | set(defs), key=_clause_no) if assigned[g] else []
+            parts = "\n".join(clauses[no] for no in nos)
             box = make_box()
             jobs[g] = (
                 box,
