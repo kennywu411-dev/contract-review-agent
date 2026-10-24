@@ -69,7 +69,8 @@ PLAN_TOOL = _tool(
         },
     },
 )
-# 行首"第X条"就是条款标题（"第一条【价款】""第3条：交付"都算）；后面紧跟"的/约定/规定/所…"的是正文引用
+# 行首"第X条"就是条款标题（"第一条【价款】""第3条：交付"都算）；
+# 后面紧跟"的/约定/规定/所…"的是正文引用
 _HEAD = re.compile(r"^\s*(第[零一二三四五六七八九十百\d]+条)(?!的|约定|规定|所|中|之|项下|第)")
 _LEVEL = {"高": 0, "中": 1, "低": 2}
 _CN = {c: i for i, c in enumerate("零一二三四五六七八九")}
@@ -286,7 +287,8 @@ def review_contract_multi(
         - set(clauses)
     )
     if not clauses or unknown or not any(assigned.values()):
-        # 识别不出条款标题（如"一、价款"）或分派落空：不能产出"没问题"的空审查，回退单 Agent 审全文（审查 C1）
+        # 识别不出条款标题（如"一、价款"）或分派落空：不能产出"没问题"的空审查，
+        # 回退单 Agent 审全文（审查 C1）
         return _fallback_single(
             contract, tenant, llm, make_box(), on_step, contract_id, result, trace, t0, unknown
         )
