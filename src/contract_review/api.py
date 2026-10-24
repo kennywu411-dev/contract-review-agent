@@ -10,6 +10,7 @@ import json
 import re
 import secrets
 import sqlite3
+import threading
 from contextlib import asynccontextmanager
 from dataclasses import asdict
 from functools import cache
@@ -23,6 +24,7 @@ from sse_starlette.sse import EventSourceResponse
 
 from contract_review.config import DB_PATH, ROOT, TENANTS
 from contract_review.eval_retrieval import RUNS_DIR
+from contract_review.review_memory import ReviewMemory
 from contract_review.sources import load_sources, raw_path
 
 ClientTenant = Literal["huaxin", "yunqi", "ruifeng"]
@@ -45,20 +47,22 @@ class ReviewBody(BaseModel):
     session_id: str | None = Field(default=None, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")
 
 
-MAX_QA = 6  # 追问历史只带最近几轮
-
 MAX_SESSIONS = 200  # 内存里最多保留这么多会话，超出就丢最早的（本地单机演示足够）
+
+
+DEFAULT_REVIEW_MODE = "multi"  # 首轮审查默认多 Agent（ADR 012）；"single" 为单 Agent
 
 
 class RealEngine:
     """真实问答：首次请求时加载检索模型和 DataPilot 连接，之后复用。"""
 
-    def __init__(self) -> None:
+    def __init__(self, review_mode: str = DEFAULT_REVIEW_MODE) -> None:
         from contract_review.cli import _retriever
         from contract_review.datapilot_client import make_backend
         from contract_review.llm import HAIKU, AnthropicLLM
         from contract_review.verify import HaikuVerifier
 
+        self.review_mode = review_mode
         self.retriever = _retriever("fixed")
         self.sql = make_backend()
         self.llm = AnthropicLLM(HAIKU)
@@ -94,25 +98,50 @@ class RealEngine:
 
         stop_servers()
 
-    def review(self, contract: str, tenant: str, on_step, history: str = "", question: str = ""):
+    def review(
+        self,
+        contract: str,
+        tenant: str,
+        on_step,
+        history: str = "",
+        question: str = "",
+        first_review: bool = False,
+    ):
+        from contract_review import review_verify, trace
+        from contract_review.multi_agent import review_contract_multi
         from contract_review.review_agent import review_contract
-        from contract_review.review_verify import verify_review
         from contract_review.tools import ToolBox
-        from contract_review.trace import save_trace
 
-        r = review_contract(
-            contract,
-            tenant,
-            self.llm,
-            ToolBox(tenant, self.retriever, self.sql),
-            on_step=on_step,
-            history=history,
-            question=question,
-        )
-        ver = verify_review(r.to_dict(), self.review_verifier, tenant, contract)
+        if (not question or first_review) and self.review_mode == "multi":
+            # 首次整份审查：主审 + 专职审查员（ADR 012）；反问后用户补充的立场带给主审
+            r = review_contract_multi(
+                contract,
+                tenant,
+                self.llm,
+                lambda: ToolBox(tenant, self.retriever, self.sql),
+                on_step=on_step,
+                hint=question,
+            )
+        else:  # 追问只涉及个别条款或换视角重审，单 Agent 带历史回答
+            r = review_contract(
+                contract,
+                tenant,
+                self.llm,
+                ToolBox(tenant, self.retriever, self.sql),
+                on_step=on_step,
+                history=history,
+                question=question,
+            )
+        ver = review_verify.verify_review(r.to_dict(), self.review_verifier, tenant, contract)
         r.trace["verify"] = asdict(ver)
-        save_trace(r)
+        trace.save_trace(r)
         return r, ver
+
+    def new_review_memory(self):
+        from contract_review.llm import HAIKU, AnthropicLLM
+
+        # 产品默认 8000 字才压缩：8 轮以内摘要调用的花费超过省下的 token（ADR 011）
+        return ReviewMemory(mode="compress", budget_chars=8000, summarizer=AnthropicLLM(HAIKU))
 
     def new_memory(self):
         from contract_review.llm import HAIKU, AnthropicLLM
@@ -145,7 +174,13 @@ def _chunks(strategy: str) -> dict:
 
 
 def _run_kind(summary: dict) -> str:
-    if summary.get("kind") in ("review", "review_d4", "review_dialog", "contract_retrieval"):
+    if summary.get("kind") in (
+        "review",
+        "review_d4",
+        "review_dialog",
+        "review_longdialog",
+        "contract_retrieval",
+    ):
         return summary["kind"]
     if any(isinstance(v, dict) and "followup_correct" in v for v in summary.values()):
         return "dialog"
@@ -205,7 +240,7 @@ def _stage_row(trace: dict) -> dict:
     }
 
 
-def create_app(engine=None) -> FastAPI:
+def create_app(engine=None, review_mode: str = DEFAULT_REVIEW_MODE) -> FastAPI:
     from fastapi.middleware.cors import CORSMiddleware
 
     state = {"engine": engine}
@@ -231,7 +266,7 @@ def create_app(engine=None) -> FastAPI:
 
     def get_engine():
         if state["engine"] is None:
-            state["engine"] = RealEngine()
+            state["engine"] = RealEngine(review_mode)
             app.state.engine = state["engine"]
         return state["engine"]
 
@@ -251,7 +286,8 @@ def create_app(engine=None) -> FastAPI:
                 sessions.pop(next(iter(sessions)))
         return mem
 
-    review_sessions: dict[str, dict] = {}  # session_id → {tenant, contract, prev, qa}
+    review_sessions: dict[str, dict] = {}  # session_id → {tenant, contract, memory, lock, reviewed}
+    app.state.review_sessions = review_sessions
 
     @app.get("/api/samples")
     def samples():
@@ -273,38 +309,58 @@ def create_app(engine=None) -> FastAPI:
 
     @app.post("/api/review")
     async def review(body: ReviewBody):
-        from contract_review.review_agent import history_from_review
-
         sess = review_sessions.get(body.session_id or "")
         if body.question:
             sid = body.session_id or ""
             if sess is None or sess["tenant"] != body.tenant:
                 raise HTTPException(400, "追问需要先在同一会话里审查一份合同")
             # 追问只针对会话里那份合同；请求里带来的 contract 不能把旧历史配到新合同上
-            contract = sess["contract"]
-            history = history_from_review(sess["prev"], sess["qa"][-MAX_QA:])
+            contract, memory = sess["contract"], sess["memory"]
+            # 同一会话同时只处理一个请求：并发追问会同时改同一份记忆（审查 I4）
+            if not sess["lock"].acquire(blocking=False):
+                raise HTTPException(409, "这个会话上一轮还没结束，请稍候再问")
         else:
             if not body.contract:
                 raise HTTPException(400, "请提供合同全文")
-            contract, history = body.contract, ""
+            contract = body.contract
             # 会话 id 由服务端签发（128 位随机，不可猜），客户端自带的 id 不采用（审查 Minor 5a）
             sid = secrets.token_hex(16)
-            review_sessions[sid] = {
+            eng = get_engine()
+            # 多轮记忆：真实引擎超预算时摘要压缩（ADR 011）；测试用的假引擎退回全量历史
+            memory = (
+                eng.new_review_memory()
+                if hasattr(eng, "new_review_memory")
+                else ReviewMemory(mode="full")
+            )
+            sess = {
                 "tenant": body.tenant,
                 "contract": contract,
-                "prev": None,
-                "qa": [],
+                "memory": memory,
+                "lock": threading.Lock(),
+                "reviewed": False,  # 是否已有一次给出意见的审查（首轮反问时还没有）
             }
+            sess["lock"].acquire()
+            review_sessions[sid] = sess
             while len(review_sessions) > MAX_SESSIONS:
                 review_sessions.pop(next(iter(review_sessions)))
         loop = asyncio.get_running_loop()
         queue: asyncio.Queue = asyncio.Queue()
+        # 首轮反问后，用户补充立场的那一轮才是真正的首次审查（审查 M3）
+        first_review = not body.question or not sess["reviewed"]
+        held = [True]
+
+        def release():
+            if held[0]:
+                held[0] = False
+                sess["lock"].release()
 
         def on_step(record):
             loop.call_soon_threadsafe(queue.put_nowait, ("step", record))
 
         async def work():
             try:
+                # 超预算时 render 会调用摘要模型，放到线程里
+                history = await asyncio.to_thread(memory.render) if body.question else ""
                 r, ver = await asyncio.to_thread(
                     get_engine().review,
                     contract,
@@ -312,21 +368,24 @@ def create_app(engine=None) -> FastAPI:
                     on_step,
                     history,
                     body.question or "",
+                    first_review=first_review,
                 )
                 data = r.to_dict()
                 data["trace"] = {"trace_id": r.trace.get("trace_id")}
-                s = review_sessions.get(sid)  # 请求期间可能已被淘汰
-                if s is not None:
-                    if r.kind == "followup":
-                        s["qa"].append((body.question, r.answer))
-                    elif r.kind in ("review", "clarify"):
-                        s["prev"] = data | {"findings": ver.findings or r.findings}
-                        if body.question:
-                            s["qa"].append((body.question, f"已按{r.our_side}方重新审查。"))
+                # 记忆里存校验后的意见（带转人工标记）；会话中途被淘汰也只是写进一个不再引用的对象
+                turn = data | {"findings": ver.findings or r.findings}
+                if body.question:
+                    memory.add_followup(body.question, turn)
+                else:
+                    memory.add_review(turn)
+                if r.kind == "review":
+                    sess["reviewed"] = True
                 await queue.put(("review", data))
                 await queue.put(("verified", asdict(ver)))
             except Exception as e:  # 推给前端显示，不让连接挂住
                 await queue.put(("error", {"message": f"{type(e).__name__}: {e}"}))
+            finally:
+                release()
             await queue.put(("done", {}))
 
         async def stream():
@@ -342,6 +401,7 @@ def create_app(engine=None) -> FastAPI:
             finally:
                 if not task.done():
                     task.cancel()
+                release()  # 任务还没开始就被取消时，work 的 finally 不会执行
 
         return EventSourceResponse(stream(), ping=15)
 
@@ -488,6 +548,7 @@ def create_app(engine=None) -> FastAPI:
                     "agent_results.jsonl",
                     "review_results.jsonl",
                     "dialog_results.jsonl",
+                    "longdialog_results.jsonl",
                     "results.jsonl",
                 )
                 if (d / n).exists()

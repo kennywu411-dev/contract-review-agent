@@ -10,8 +10,12 @@ test("条款号兼容空格、顿号、冒号和阿拉伯数字", () => {
   assert.deepEqual(cs[1].lines, ["第一条 标的", "内容一"]);
 });
 
+test("方括号标题也算条款", () => {
+  assert.deepEqual(splitClauses("第一条【价款】\n单价\n").map((c) => c.no), ["第一条"]);
+});
+
 test("正文里提到的条款号不切分", () => {
-  const cs = splitClauses("第一条 违约\n依照第二条约定执行\n");
+  const cs = splitClauses("第一条 违约\n依照第二条约定执行\n第二条约定的期限同上\n");
   assert.equal(cs.length, 1);
 });
 

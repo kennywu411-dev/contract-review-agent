@@ -248,17 +248,29 @@ def cmd_eval_review(args: argparse.Namespace) -> None:
     elif args.sample:
         cs = sample_contracts(cs, args.sample)
     retr, sql, llm = _retriever(args.strategy), make_backend(), make_llm(args.model)
-    try:
-        out = run_review_eval(
-            cs,
-            lambda c: review_contract(
+    if args.multi_agent:  # 主审 + 三个专职审查员并行（ADR 012）
+        from contract_review.multi_agent import review_contract_multi
+
+        def run_one(c):
+            return review_contract_multi(
+                c.text, c.tenant, llm, lambda: ToolBox(c.tenant, retr, sql), contract_id=c.id
+            )
+    else:
+
+        def run_one(c):
+            return review_contract(
                 c.text,
                 c.tenant,
                 llm,
                 ToolBox(c.tenant, retr, sql),
                 cache=args.cache,
                 contract_id=c.id,
-            ),
+            )
+
+    try:
+        out = run_review_eval(
+            cs,
+            run_one,
             args.tag,
             args.max_cost,
         )
@@ -379,6 +391,43 @@ def cmd_eval_contract_retrieval(args: argparse.Namespace) -> None:
         )
 
 
+def cmd_eval_review_longdialog(args: argparse.Namespace) -> None:
+    import json
+
+    from contract_review.datapilot_client import make_backend
+    from contract_review.eval_review_longdialog import run_long_dialog_eval
+    from contract_review.llm import HAIKU, AnthropicLLM, make_llm
+    from contract_review.review_agent import review_contract
+    from contract_review.tools import ToolBox
+
+    retr, sql, llm = _retriever("fixed"), make_backend(), make_llm(args.model)
+    try:
+        out = run_long_dialog_eval(
+            RUNS_DIR / args.source,
+            lambda c, history, question: review_contract(
+                c.text,
+                c.tenant,
+                llm,
+                ToolBox(c.tenant, retr, sql),
+                history=history,
+                question=question,
+                contract_id=c.id,
+            ),
+            AnthropicLLM(HAIKU),
+            args.mode or ["full", "window", "compress"],
+            args.n,
+            args.tag,
+            args.max_cost,
+        )
+    finally:
+        if hasattr(sql, "close"):
+            sql.close()
+    s = json.loads((out / "summary.json").read_text(encoding="utf-8"))
+    print(f"{out.relative_to(ROOT)}：{s['dialogs']} 组长对话")
+    for mode in args.mode or ["full", "window", "compress"]:
+        print(mode, json.dumps(s.get(mode, {}), ensure_ascii=False))
+
+
 def cmd_eval_agent(args: argparse.Namespace) -> None:
     import json
 
@@ -495,8 +544,16 @@ def cmd_serve(args: argparse.Namespace) -> None:
 
     if not WEB_DIST.exists():
         print("提示：web/out 不存在，只启动 API。构建前端：cd web && npm install && npm run build")
-    print(f"DocPilot：http://{args.host}:{args.port}（首次提问会加载检索模型，约 20 秒）")
-    uvicorn.run(create_app(), host=args.host, port=args.port, log_level="warning")
+    print(
+        f"Contract Risk Review Agent：http://{args.host}:{args.port}"
+        f"（审查方式：{args.review_mode}；首次请求会加载检索模型，约 20 秒）"
+    )
+    uvicorn.run(
+        create_app(review_mode=args.review_mode),
+        host=args.host,
+        port=args.port,
+        log_level="warning",
+    )
 
 
 def cmd_reverify_d4(args: argparse.Namespace) -> None:
@@ -621,6 +678,7 @@ def main() -> None:
     p.add_argument("--tag", default="review")
     p.add_argument("--max-cost", type=float, default=1.0, help="累计花费上限（美元）")
     p.add_argument("--cache", choices=["prefix", "system"], default="prefix")
+    p.add_argument("--multi-agent", action="store_true", help="主审 + 三个专职审查员（ADR 012）")
     p.set_defaults(func=cmd_eval_review)
     p = sub.add_parser(
         "review-d4", help="复用一次 eval-review 运行：依据校验（Haiku）+ 评判（Sonnet）"
@@ -642,6 +700,14 @@ def main() -> None:
     p.add_argument("--mode", action="append", choices=["bm25", "vector", "hybrid", "hybrid_rerank"])
     p.add_argument("--tag", default="contract-retrieval")
     p.set_defaults(func=cmd_eval_contract_retrieval)
+    p = sub.add_parser("eval-review-longdialog", help="长对话记忆评测：全量 / 最近N轮 / 摘要压缩")
+    p.add_argument("source", help="runs/ 下的 eval-review 全量运行目录名（复用第 0 轮）")
+    p.add_argument("--n", type=int, default=12, help="长对话组数")
+    p.add_argument("--mode", action="append", choices=["full", "window", "compress"])
+    p.add_argument("--model", default="claude-haiku-5-5")
+    p.add_argument("--tag", default="review-longdialog")
+    p.add_argument("--max-cost", type=float, default=2.0)
+    p.set_defaults(func=cmd_eval_review_longdialog)
     p = sub.add_parser("eval-d4", help="引用校验与拒答评测（Haiku 作答+校验，Sonnet 评判）")
     p.add_argument("--sample", type=int)
     p.add_argument("--model", default="claude-haiku-5-5")
@@ -651,6 +717,12 @@ def main() -> None:
     p = sub.add_parser("serve", help="启动 Web 界面（问答 / 评测看板 / 成本面板）")
     p.add_argument("--host", default="127.0.0.1")
     p.add_argument("--port", type=int, default=8000)
+    p.add_argument(
+        "--review-mode",
+        choices=["multi", "single"],
+        default="multi",
+        help="首轮审查方式（ADR 012）",
+    )
     p.set_defaults(func=cmd_serve)
     p = sub.add_parser("reverify-d4", help="复用某次 D4 运行的原始回答，只换校验策略重评")
     p.add_argument("source", help="runs/ 下的 D4 运行目录名")

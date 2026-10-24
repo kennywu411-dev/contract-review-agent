@@ -4,7 +4,13 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { EChart } from "@/components/echart";
 import { Metric } from "@/components/metric";
-import { ContractRetrievalView, ReviewD4View, ReviewDialogView, ReviewView } from "@/components/review-eval";
+import {
+  ContractRetrievalView,
+  ReviewD4View,
+  ReviewDialogView,
+  ReviewLongDialogView,
+  ReviewView,
+} from "@/components/review-eval";
 import { TopNav } from "@/components/top-nav";
 import { TraceDrawer } from "@/components/trace-drawer";
 import { getJSON, pct, type RunDetail, type RunInfo } from "@/lib/api";
@@ -16,6 +22,7 @@ const KIND_LABEL = {
   review: "合同审查",
   review_d4: "合同·依据校验",
   review_dialog: "合同·多轮追问",
+  review_longdialog: "合同·长对话记忆",
   contract_retrieval: "合同·检索",
   retrieval: "高校·检索（D2）",
   agent: "高校·Agent（D3）",
@@ -313,7 +320,7 @@ export default function EvalPage() {
             <label className="flex items-center gap-1.5">
               <span className="text-muted-foreground text-xs">运行</span>
               <select value={sel} onChange={(e) => setSel(e.target.value)} className="bg-background h-9 cursor-pointer rounded-md border px-2">
-                {(["review", "review_d4", "review_dialog", "contract_retrieval", "d4", "dialog", "agent", "retrieval"] as const).map((k) => (
+                {(["review", "review_d4", "review_dialog", "review_longdialog", "contract_retrieval", "d4", "dialog", "agent", "retrieval"] as const).map((k) => (
                   <optgroup key={k} label={KIND_LABEL[k]}>
                     {runs.filter((r) => r.kind === k).map((r) => (
                       <option key={r.run} value={r.run}>
@@ -349,6 +356,7 @@ export default function EvalPage() {
             {detail.kind === "review_d4" && <ReviewD4View d={detail} />}
             {detail.kind === "review_dialog" && <ReviewDialogView d={detail} onOpen={setTrace} />}
             {detail.kind === "contract_retrieval" && <ContractRetrievalView d={detail} />}
+            {detail.kind === "review_longdialog" && <ReviewLongDialogView d={detail} onOpen={setTrace} />}
             {(detail.kind === "agent" || detail.kind === "d4") && (
               <QuestionTable d={detail} compare={cmpDetail} onOpen={setTrace} />
             )}

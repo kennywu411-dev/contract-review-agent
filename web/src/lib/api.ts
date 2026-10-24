@@ -95,7 +95,7 @@ export type HtmlDoc = {
 
 export type RunInfo = {
   run: string;
-  kind: "retrieval" | "agent" | "d4" | "dialog" | "review" | "review_d4" | "review_dialog" | "contract_retrieval";
+  kind: "retrieval" | "agent" | "d4" | "dialog" | "review" | "review_d4" | "review_dialog" | "review_longdialog" | "contract_retrieval";
   n: number | null;
 };
 export type RunDetail = {

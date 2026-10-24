@@ -204,3 +204,79 @@ export function ContractRetrievalView({ d }: { d: RunDetail }) {
     </div>
   );
 }
+
+const LONG_MODES: [string, string][] = [
+  ["full", "全量历史"],
+  ["window", "只留最近 2 轮"],
+  ["compress", "摘要压缩"],
+];
+
+/** 长对话记忆运行：三种记忆方式的追问正确率（分题型）与输入 token、成本。 */
+export function ReviewLongDialogView({ d, onOpen }: { d: RunDetail; onOpen: (traceId: string) => void }) {
+  const s = d.summary;
+  const modes = LONG_MODES.filter(([m]) => s[m]);
+  const cell = (m: string, k: string) => get(s, `${m}.${k}`);
+  return (
+    <div className="space-y-4">
+      <p className="text-muted-foreground text-sm">
+        {num(s.dialogs)} 组长对话 × 8 轮（第 7、8 轮回指首次审查和中途决定）；压缩预算 {num(s.budget_chars)} 字，保留最近 {num(s.keep_last)} 轮原文（ADR 011）。
+      </p>
+      <div className="overflow-x-auto rounded-lg border">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-muted-foreground bg-muted/40 border-b text-left text-xs">
+              <th className="px-3 py-2 font-medium">记忆方式</th>
+              <th className="font-medium">追问正确率</th>
+              <th className="font-medium">回指早期轮次</th>
+              <th className="font-medium">近期指代 / 直接问 / 换视角</th>
+              <th className="font-medium">平均输入 token</th>
+              <th className="font-medium">平均历史字数</th>
+              <th className="font-medium">压缩次数</th>
+              <th className="px-3 font-medium">花费（含摘要）</th>
+            </tr>
+          </thead>
+          <tbody className="tabular-nums">
+            {modes.map(([m, label]) => (
+              <tr key={m} className="border-b last:border-0">
+                <td className="px-3 py-1.5">{label}</td>
+                <td>{pct(cell(m, "ok"))}</td>
+                <td>{pct(cell(m, "early_ok"))}</td>
+                <td className="text-xs">{pct(cell(m, "recent_ok"))} / {pct(cell(m, "direct_ok"))} / {pct(cell(m, "flip_ok"))}</td>
+                <td>{Math.round(num(cell(m, "input_tokens_mean"))).toLocaleString()}</td>
+                <td>{Math.round(num(cell(m, "history_chars_mean"))).toLocaleString()}</td>
+                <td>{num(cell(m, "compressions"))}</td>
+                <td className="px-3">{fmtUsd(num(cell(m, "total_cost_usd")))}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="overflow-x-auto rounded-lg border">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-muted-foreground bg-muted/40 border-b text-left text-xs">
+              <th className="px-3 py-2 font-medium">合同</th>
+              <th className="font-medium">方式</th>
+              <th className="font-medium">轮</th>
+              <th className="font-medium">追问</th>
+              <th className="px-3 font-medium">结果</th>
+            </tr>
+          </thead>
+          <tbody>
+            {d.rows.map((r, i) => (
+              <tr key={i} onClick={() => onOpen(String(r.trace_id))} className="hover:bg-accent/50 cursor-pointer border-b last:border-0">
+                <td className="px-3 py-1.5 font-mono text-xs">{String(r.contract_id)}</td>
+                <td className="text-xs">{LONG_MODES.find(([m]) => m === r.mode)?.[1] ?? String(r.mode)}</td>
+                <td className="text-xs">{num(r.turn)}</td>
+                <td className="text-xs">{String(r.question)}</td>
+                <td className={cn("px-3 text-xs", r.ok === false && "text-amber-600 dark:text-amber-400")}>
+                  {r.ok === null ? "—" : r.ok ? "对" : "错"}（{String(r.kind)}）
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}

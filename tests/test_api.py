@@ -36,7 +36,7 @@ class FakeEngine:
         ver = VerifiedAnswer("answer", kept=raw.sentences)
         return raw, ver
 
-    def review(self, contract, tenant, on_step, history="", question=""):
+    def review(self, contract, tenant, on_step, history="", question="", first_review=False):
         from contract_review.review_agent import ReviewResult
         from contract_review.review_verify import VerifiedReview
 
@@ -138,6 +138,7 @@ def test_runs_listing_mixed_types(client):
             "review",
             "review_d4",
             "review_dialog",
+            "review_longdialog",
             "contract_retrieval",
         }
         and runs
@@ -240,7 +241,7 @@ def test_review_followup_uses_session_history():
     )
     assert dict(events(r))["review"]["kind"] == "followup"
     _, contract, _, history, question = eng.calls[-1]
-    assert contract == CONTRACT and "<上一轮审查>" in history and "1. 第四条" in history
+    assert contract == CONTRACT and "<对话历史>" in history and "1. 第四条" in history
     assert question == "第1条意见怎么改"
     c.post("/api/review", json={"question": "再说说", "tenant": "huaxin", "session_id": s1})
     assert "用户：第1条意见怎么改" in eng.calls[-1][3]  # 上一轮追问也进历史
@@ -337,3 +338,76 @@ def test_app_shutdown_closes_engine():
     with TestClient(create_app(engine=eng)) as c:
         c.get("/api/tenants")
     assert eng.closed
+
+
+def test_real_engine_first_turn_uses_review_mode(monkeypatch):
+    # 首轮审查按 review_mode 选单/多 Agent；追问始终由单 Agent 带历史回答（ADR 012）
+    from contract_review import api as api_mod
+    from contract_review.review_verify import VerifiedReview
+    from tests.test_multi_agent import CONTRACT as MULTI_CONTRACT
+    from tests.test_multi_agent import RoutedLLM
+    from tests.test_tools import FakeRetriever, FakeSQL
+
+    calls = []
+    monkeypatch.setattr(api_mod, "save_trace", lambda r: None, raising=False)
+    monkeypatch.setattr("contract_review.trace.save_trace", lambda r, d=None: None)
+    monkeypatch.setattr(
+        "contract_review.review_verify.verify_review",
+        lambda r, v, t, c: calls.append("verify") or VerifiedReview(),
+    )
+    eng = object.__new__(api_mod.RealEngine)
+    eng.llm, eng.retriever, eng.sql = (
+        RoutedLLM(),
+        FakeRetriever([]),
+        FakeSQL({"columns": [], "rows": []}),
+    )
+    eng.review_verifier, eng.review_mode = None, "multi"
+    r, _ = eng.review(MULTI_CONTRACT, "huaxin", None)
+    assert r.trace["task"] == "review_multi" and not r.trace.get("fallback_single")
+    eng.review_mode = "single"
+    # 单 Agent 路径不带"【组名】"，RoutedLLM 认不出 → 说明没走多 Agent
+    with pytest.raises(StopIteration):
+        eng.review(MULTI_CONTRACT, "huaxin", None)
+
+
+def test_concurrent_request_on_same_session_rejected():
+    # 审查 I4：同一会话已有进行中的请求时，再来的追问直接 409，不并发改同一份记忆
+    import contract_review.api as api_mod
+
+    eng = FakeEngine()
+    app = create_app(engine=eng)
+    c = TestClient(app)
+    sid = start_session(c)
+    sess = app.state.review_sessions[sid]
+    assert sess["lock"].acquire(blocking=False)
+    try:
+        r = c.post(
+            "/api/review", json={"question": "怎么改", "tenant": "huaxin", "session_id": sid}
+        )
+        assert r.status_code == 409
+    finally:
+        sess["lock"].release()
+    r = c.post("/api/review", json={"question": "怎么改", "tenant": "huaxin", "session_id": sid})
+    assert r.status_code == 200 and not sess["lock"].locked()
+    assert api_mod  # noqa: B018
+
+
+def test_answer_to_clarification_is_first_review():
+    # 审查 M3：首轮反问后，"我方是甲方"这一轮才是真正的首次审查，引擎要按首轮处理（可走多 Agent）
+    class ClarifyFirst(FakeEngine):
+        def review(self, contract, tenant, on_step, history="", question="", first_review=False):
+            self.calls.append(("first", first_review, question))
+            from contract_review.review_agent import ReviewResult
+            from contract_review.review_verify import VerifiedReview
+
+            kind = "clarify" if not question else "review"
+            r = ReviewResult(tenant, kind, our_side="甲", clarification="我方是甲方还是乙方？")
+            r.trace = {"trace_id": "x", "steps": []}
+            return r, VerifiedReview()
+
+    eng = ClarifyFirst()
+    c = TestClient(create_app(engine=eng))
+    sid = start_session(c)
+    c.post("/api/review", json={"question": "我方是甲方。", "tenant": "huaxin", "session_id": sid})
+    c.post("/api/review", json={"question": "第1条怎么改", "tenant": "huaxin", "session_id": sid})
+    assert [x[1] for x in eng.calls] == [True, True, False]
