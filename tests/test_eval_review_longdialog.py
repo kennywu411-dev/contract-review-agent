@@ -172,3 +172,40 @@ def test_list_expectation_keeps_clause_shared_with_other_finding():
 
 def test_clauses_in_ignores_opinion_numbers():
     assert clauses_in("第0轮第1条是第四条；第2条意见已谈妥") == {"第四条"}
+
+
+def test_clauses_in_strips_law_refs_and_opinion_numbers():
+    # 审查 I5 的反例
+    assert clauses_in("依据《民法典》第七条诚信原则，第四条要改") == {"第四条"}
+    assert clauses_in("《民事诉讼法》第三十四条规定，第二条要改") == {"第二条"}
+    assert clauses_in("最开始你列的第1条对应第四条") == {"第四条"}
+
+
+def test_exclusion_cannot_skip_over_other_clauses():
+    exp = {"type": "list", "must": ["第四条"], "must_not": ["第六条"]}
+    wrong = {"kind": "followup", "answer": "第四条需要改，第八条无需我方过多担心但第六条必须改"}
+    assert score_turn(exp, wrong) is False
+    ok = {
+        "kind": "followup",
+        "answer": "第0轮第2条（第六条定金与违约金叠加）已谈妥，不再列入；需要改的是第四条。",
+    }
+    assert score_turn(exp, ok) is True
+
+
+def test_script_uses_same_numbering_as_memory():
+    # 首轮第 1 条是缺失型意见时，"你列的第1条"指的就是它；这类对话不入选，避免题目与渲染编号错位
+    from contract_review.eval_review_longdialog import usable_prev
+
+    missing_first = PREV | {
+        "findings": [
+            {
+                "clause": None,
+                "risk_type": "confidentiality",
+                "level": "中",
+                "reason": "",
+                "suggestion": "",
+            }
+        ]
+        + PREV["findings"]
+    }
+    assert usable_prev(PREV) and not usable_prev(missing_first)

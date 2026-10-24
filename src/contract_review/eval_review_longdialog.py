@@ -35,16 +35,31 @@ _CLAUSE = re.compile(
 )
 
 
-# 排除语境：除……外 / 已谈妥、不再、无需、不用 处理的条款（往后最多 20 个字到"外"或标点）
+_NUM = r"(?:[0-9]+|[零一二三四五六七八九十百]+)"
+_ART = rf"第\s*{_NUM}\s*条(?:\s*第\s*{_NUM}\s*款)?"
+# 先整体剔除、再抽合同条款号的片段（审查 I5）：
+# 书名号法条引用（"《民法典》第七条"）；意见编号（"列的第1条""第0轮第1条""第2条意见"）
+_NOT_CLAUSE = re.compile(
+    rf"《[^》]{{1,40}}》[^，。；,;\n《]{{0,8}}?{_ART}(?:\s*[、和及与或]\s*{_ART})*"
+    rf"|(?:列的|列出的|轮)\s*第\s*{_NUM}\s*条"
+    rf"|第\s*{_NUM}\s*条\s*意见"
+)
+# 排除语境（已谈妥/不再列入的条款不算"列入"）。中间不允许出现"条"，不能跨过别的条款；
+# 必须以明确的排除词收尾或开头
+_DROP = (
+    r"(?:已经?谈妥|不再处理|不再列入|不列入|移出|排除|无需处理|无需修改|不用再管|不用管|不需要再改)"
+)
 _EXCLUDED = re.compile(
-    r"(?:除(?:了)?|已谈妥的?|不再|无需|不用)[^，。；,;]{0,20}?第[^，。；,;条]{1,6}条[^，。；,;]{0,12}?(?:外|以外|之外)?"
+    rf"除了?[^，。；,;\n条]{{0,12}}{_ART}[^，。；,;\n条]{{0,12}}?(?:以外|之外|外)"
+    rf"|{_DROP}的?[^，。；,;\n条]{{0,6}}{_ART}"
+    rf"|{_ART}[^，。；,;\n条]{{0,16}}?{_DROP}"
 )
 
 
 def clauses_in(text: str) -> set[str]:
-    """回答里提到的合同条款号（前面紧跟"法""典"等的视为法条引用，不算）。"""
+    """回答里提到的合同条款号：先剔除法条引用和意见编号，再抽"第X条"。"""
     out = set()
-    for m in _CLAUSE.finditer(text or ""):
+    for m in _CLAUSE.finditer(_NOT_CLAUSE.sub("", text or "")):
         no = normalize_clause(m.group(0))
         if no and len(no) <= 6:  # 合同条款号最多到"第二十X条"，法条号更长
             out.add(no)
@@ -58,11 +73,24 @@ def _notice_clause(c: Contract) -> str:
     raise ValueError(f"{c.id} 没有通知与送达条款")
 
 
+def usable_prev(prev: dict) -> bool:
+    """首次审查至少 3 条带条款号的意见，且第 1、2 条都有条款号。
+
+    题目按全部意见编号出（与记忆渲染一致），前两条是缺失型意见时编号会错位，所以不入选。
+    """
+    fs = prev["findings"]
+    with_clause = sum(1 for f in fs if f.get("clause"))
+    return with_clause >= 3 and bool(fs[0].get("clause")) and bool(fs[1].get("clause"))
+
+
 def script_turns(prev: dict, c: Contract) -> list[dict]:
-    fs = [f for f in prev["findings"] if f.get("clause")]
-    a, b = fs[0]["clause"], fs[1]["clause"]
+    a, b = prev["findings"][0]["clause"], prev["findings"][1]["clause"]
     # 谈妥的是第 2 条意见；它所在条款如果还有别的意见，这个条款仍要列出（P23）
-    others = list(dict.fromkeys(f["clause"] for i, f in enumerate(fs) if i != 1))
+    others = list(
+        dict.fromkeys(
+            f["clause"] for i, f in enumerate(prev["findings"]) if i != 1 and f.get("clause")
+        )
+    )
     side = prev["our_side"]
     other = "乙" if side == "甲" else "甲"
     x = _notice_clause(c)
@@ -119,7 +147,8 @@ def score_turn(exp: dict, r: dict) -> bool | None:
         return r["kind"] == "review" and r.get("our_side") == exp["side"]
     answer = r.get("answer", "")
     mentioned = clauses_in(answer)
-    listed = clauses_in(_EXCLUDED.sub("", answer))  # "除已谈妥的第六条外"这类排除语境里的不算列入
+    # "除已谈妥的第六条外"这类排除语境里的不算列入；先剔除意见编号，免得"第0轮第2条"被当成排除对象
+    listed = clauses_in(_EXCLUDED.sub("", _NOT_CLAUSE.sub("", answer)))
     return set(exp["must"]) <= mentioned and not (set(exp["must_not"]) & listed)
 
 
@@ -135,7 +164,7 @@ def build_long_dialogs(source: Path, n: int) -> list[dict]:
             continue
         trace = json.loads((source / "traces" / f"{res['trace_id']}.json").read_text("utf-8"))
         prev = trace["result"]
-        if sum(1 for f in prev["findings"] if f.get("clause")) < 3:
+        if not usable_prev(prev):
             continue
         out.append({"contract_id": c.id, "prev": prev, "turns": script_turns(prev, c)})
         if len(out) == n:
