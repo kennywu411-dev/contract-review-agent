@@ -29,7 +29,10 @@ from contract_review.review_memory import ReviewMemory
 
 KEEP_LAST = 2
 BUDGET_CHARS = 3000  # 小样里 8 轮全量历史约 5600 字，6000 不会触发压缩（问题日志 P23）
-_CLAUSE = re.compile(r"(?<![法典释则范办例])第\s*(?:[0-9]+|[零一二三四五六七八九十百]+)\s*条")
+# 前面是"法""典"等的是法条引用，前面是"轮"的是意见编号（第0轮第1条），后面跟"意见"的也是意见编号
+_CLAUSE = re.compile(
+    r"(?<![法典释则范办例轮])第\s*(?:[0-9]+|[零一二三四五六七八九十百]+)\s*条(?!\s*意见)"
+)
 
 
 # 排除语境：除……外 / 已谈妥、不再、无需、不用 处理的条款（往后最多 20 个字到"外"或标点）
@@ -58,7 +61,8 @@ def _notice_clause(c: Contract) -> str:
 def script_turns(prev: dict, c: Contract) -> list[dict]:
     fs = [f for f in prev["findings"] if f.get("clause")]
     a, b = fs[0]["clause"], fs[1]["clause"]
-    all_clauses = list(dict.fromkeys(f["clause"] for f in fs))
+    # 谈妥的是第 2 条意见；它所在条款如果还有别的意见，这个条款仍要列出（P23）
+    others = list(dict.fromkeys(f["clause"] for i, f in enumerate(fs) if i != 1))
     side = prev["our_side"]
     other = "乙" if side == "甲" else "甲"
     x = _notice_clause(c)
@@ -97,8 +101,8 @@ def script_turns(prev: dict, c: Contract) -> list[dict]:
             "还有哪些需要我们去改？只列条款号。",
             "expect": {
                 "type": "list",
-                "must": [k for k in all_clauses if k != b],
-                "must_not": [b],
+                "must": others,
+                "must_not": [] if b in others else [b],
                 "group": "early",
             },
         },

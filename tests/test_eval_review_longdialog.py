@@ -155,3 +155,20 @@ def test_list_scoring_ignores_excluded_mentions():
     assert score_turn(exp, ok) is True
     bad = {"kind": "followup", "answer": "需要修改：第四条、第六条、第九条。"}
     assert score_turn(exp, bad) is False
+
+
+def test_list_expectation_keeps_clause_shared_with_other_finding():
+    # 被谈妥的第 2 条意见和另一条意见在同一条款上时，该条款仍应列出（长对话全量里 7/12 组如此）
+    from contract_review.eval_review_longdialog import load_contracts, script_turns
+
+    c = next(c for c in load_contracts() if c.id == "goods-r1")
+    prev = PREV | {
+        "findings": PREV["findings"][:1]
+        + [PREV["findings"][1], PREV["findings"][1], PREV["findings"][2]]
+    }
+    last = script_turns(prev, c)[-1]["expect"]
+    assert last["must"] == ["第四条", "第六条", "第九条"] and last["must_not"] == []
+
+
+def test_clauses_in_ignores_opinion_numbers():
+    assert clauses_in("第0轮第1条是第四条；第2条意见已谈妥") == {"第四条"}

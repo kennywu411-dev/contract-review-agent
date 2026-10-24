@@ -131,7 +131,8 @@ class RealEngine:
     def new_review_memory(self):
         from contract_review.llm import HAIKU, AnthropicLLM
 
-        return ReviewMemory(mode="compress", summarizer=AnthropicLLM(HAIKU))
+        # 产品默认 8000 字才压缩：8 轮以内摘要调用的花费超过省下的 token（ADR 011）
+        return ReviewMemory(mode="compress", budget_chars=8000, summarizer=AnthropicLLM(HAIKU))
 
     def new_memory(self):
         from contract_review.llm import HAIKU, AnthropicLLM
