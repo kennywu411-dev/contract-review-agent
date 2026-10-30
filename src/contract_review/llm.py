@@ -48,6 +48,15 @@ def _load_dotenv() -> None:
             os.environ["ANTHROPIC_API_KEY"] = value.strip().strip('"')
 
 
+MISSING_API_KEY_MSG = "未设置 ANTHROPIC_API_KEY，请在 .env 中填写后重启"
+
+
+def api_key_missing() -> bool:
+    """环境变量和根目录 .env 里都没有 ANTHROPIC_API_KEY。"""
+    _load_dotenv()
+    return not os.environ.get("ANTHROPIC_API_KEY", "").strip()
+
+
 class AnthropicLLM:
     """fallbacks=True 时走 beta 接口并开启服务端 refusal fallback（官方对
     Sonnet 5.5 的推荐做法）；被拒时由服务端换模型重跑，响应的 model 字段会变。"""

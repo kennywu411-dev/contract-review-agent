@@ -1,4 +1,4 @@
-"""网页类规章（gov.cn、npc.gov.cn、学校新闻页）的正文抽取，只用标准库。"""
+"""网页类法规（gov.cn、npc.gov.cn 等政府网站）的正文抽取，只用标准库。"""
 
 from __future__ import annotations
 

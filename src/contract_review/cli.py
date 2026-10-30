@@ -30,7 +30,7 @@ def render_report(
         "无文字页：PDF 文字层为空（空白页、图片页）；",
         "未解析页：有文字层但没解析出块（多为目录页）。",
         "",
-        "| 学校 | doc_id | 页数 | 块数 | 标题 | 表格 | 无文字页 | 未解析页 | 乱码比例 | 标记 |",
+        "| 租户 | doc_id | 页数 | 块数 | 标题 | 表格 | 无文字页 | 未解析页 | 乱码比例 | 标记 |",
         "|---|---|---|---|---|---|---|---|---|---|",
     ]
     for tenant, doc_id, q in rows:
@@ -560,7 +560,10 @@ def cmd_serve(args: argparse.Namespace) -> None:
     import uvicorn
 
     from contract_review.api import WEB_DIST, create_app
+    from contract_review.llm import MISSING_API_KEY_MSG, api_key_missing
 
+    if api_key_missing():
+        print(f"警告：{MISSING_API_KEY_MSG}；在此之前审查请求都会失败")
     if not WEB_DIST.exists():
         print("提示：web/out 不存在，只启动 API。构建前端：cd web && npm install && npm run build")
     print(
@@ -653,13 +656,24 @@ def cmd_eval_dialog(args: argparse.Namespace) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(prog="cra")
     sub = parser.add_subparsers(required=True)
+    # 早期场景的命令：还能用，但不在 --help 里列出（3.12 的 argparse 对子命令不认 SUPPRESS，
+    # 所以不给 help，最后再把它们从命令列表里去掉）
+    hidden_cmds = {
+        "search",
+        "eval-retrieval",
+        "ask",
+        "eval-agent",
+        "eval-d4",
+        "reverify-d4",
+        "eval-dialog",
+    }
     p = sub.add_parser("ingest", help="下载缺失文件 → 解析入库 → 质量报告 → 结构化表库")
     p.add_argument("--force", action="store_true", help="忽略 sha256，全部重新解析")
     p.set_defaults(func=cmd_ingest)
     p = sub.add_parser("index", help="为切块策略建向量缓存（data/index/）")
     p.add_argument("--strategy", action="append", choices=["block", "fixed", "section"])
     p.set_defaults(func=cmd_index)
-    p = sub.add_parser("search", help="检索调试")
+    p = sub.add_parser("search")  # 检索调试
     p.add_argument("query")
     p.add_argument("--tenant", required=True)
     p.add_argument("--strategy", default="fixed", choices=["block", "fixed", "section"])
@@ -668,19 +682,19 @@ def main() -> None:
     )
     p.add_argument("-k", type=int, default=5)
     p.set_defaults(func=cmd_search)
-    p = sub.add_parser("eval-retrieval", help="检索评测：切块策略 × 检索模式")
+    p = sub.add_parser("eval-retrieval")  # 检索评测：切块策略 × 检索模式
     p.add_argument("--sample", type=int, help="按题型分层抽样 N 题先跑")
     p.add_argument("--strategy", action="append", choices=["block", "fixed", "section"])
     p.add_argument("--mode", action="append", choices=["bm25", "vector", "hybrid", "hybrid_rerank"])
     p.add_argument("--tag", default="retrieval")
     p.add_argument("--pool", type=int, default=15, help="每路召回和重排的候选数（ADR 002）")
     p.set_defaults(func=cmd_eval_retrieval)
-    p = sub.add_parser("ask", help="向 agent 提问")
+    p = sub.add_parser("ask")  # 向 agent 提问
     p.add_argument("question")
     p.add_argument("--tenant", required=True, choices=["huaxin", "yunqi", "ruifeng"])
     p.add_argument("--model", default="claude-haiku-5-5")
     p.set_defaults(func=cmd_ask)
-    p = sub.add_parser("eval-agent", help="agent 评测（会调用 Claude API）")
+    p = sub.add_parser("eval-agent")  # agent 评测（会调用 Claude API）
     p.add_argument("--sample", type=int)
     p.add_argument("--model", default="claude-haiku-5-5")
     p.add_argument("--tag", default="agent")
@@ -729,7 +743,7 @@ def main() -> None:
     p.add_argument("--tag", default="review-longdialog")
     p.add_argument("--max-cost", type=float, default=2.0)
     p.set_defaults(func=cmd_eval_review_longdialog)
-    p = sub.add_parser("eval-d4", help="引用校验与拒答评测（Haiku 作答+校验，Sonnet 评判）")
+    p = sub.add_parser("eval-d4")  # 引用校验与拒答评测（Haiku 作答+校验，Sonnet 评判）
     p.add_argument("--sample", type=int)
     p.add_argument("--model", default="claude-haiku-5-5")
     p.add_argument("--tag", default="d4")
@@ -745,12 +759,12 @@ def main() -> None:
         help="首轮审查方式（ADR 012）",
     )
     p.set_defaults(func=cmd_serve)
-    p = sub.add_parser("reverify-d4", help="复用某次 D4 运行的原始回答，只换校验策略重评")
+    p = sub.add_parser("reverify-d4")  # 复用某次 D4 运行的原始回答，只换校验策略重评
     p.add_argument("source", help="runs/ 下的 D4 运行目录名")
     p.add_argument("--tag", default="d4-reverify")
     p.add_argument("--max-cost", type=float, default=2.5)
     p.set_defaults(func=cmd_reverify_d4)
-    p = sub.add_parser("eval-dialog", help="多轮对话评测：none / full / compress 三种记忆对比")
+    p = sub.add_parser("eval-dialog")  # 多轮对话评测：none / full / compress 三种记忆对比
     p.add_argument("--limit", type=int, help="只跑前 N 组对话")
     p.add_argument("--mode", action="append", choices=["none", "full", "compress"])
     p.add_argument("--tag", default="dialog")
@@ -759,5 +773,6 @@ def main() -> None:
     sub.add_parser("link-datapilot", help="把供应商台账库链接进 DataPilot").set_defaults(
         func=cmd_link
     )
+    sub.metavar = "{" + ",".join(n for n in sub.choices if n not in hidden_cmds) + "}"
     args = parser.parse_args()
     args.func(args)

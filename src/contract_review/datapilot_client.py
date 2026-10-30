@@ -2,6 +2,8 @@
 
 DataPilot 只认 data/dev_databases/<db_id>/<db_id>.sqlite，所以在那里建一个
 指向 data/ledger 的软链接，不改 DataPilot 的代码（`cra link-datapilot`）。
+
+DataPilot 的位置由环境变量 DATAPILOT_DIR 指定；没设或目录不存在时直接用本地库。
 """
 
 from __future__ import annotations
@@ -17,7 +19,8 @@ from typing import Protocol
 
 from contract_review.config import LEDGER_DB
 
-DATAPILOT_DIR = Path(os.environ.get("DATAPILOT_DIR", Path.home() / "Documents" / "datapilot"))
+_env_dir = os.environ.get("DATAPILOT_DIR", "").strip()
+DATAPILOT_DIR: Path | None = Path(_env_dir).expanduser() if _env_dir else None
 DB_ID = "ledger"
 MAX_ROWS = 50
 CALL_TIMEOUT_S = 20
@@ -31,6 +34,8 @@ class SQLBackend(Protocol):
 
 def link_datapilot() -> Path:
     """在 DataPilot 的库目录下建 ledger → 本仓库 data/ledger 的软链接；已存在则不动。"""
+    if DATAPILOT_DIR is None:
+        raise RuntimeError("未设置 DATAPILOT_DIR，不知道 DataPilot 在哪里")
     target = DATAPILOT_DIR / "data" / "dev_databases" / DB_ID
     if not target.is_symlink():
         target.symlink_to(LEDGER_DB.parent.resolve(), target_is_directory=True)
@@ -76,6 +81,8 @@ class MCPBackend:
 
     def __init__(self, datapilot_dir: Path | None = None) -> None:
         self.dir = datapilot_dir or DATAPILOT_DIR
+        if self.dir is None:
+            raise RuntimeError("未设置 DATAPILOT_DIR，不知道 DataPilot 在哪里")
         self.loop = asyncio.new_event_loop()
         self.thread = threading.Thread(target=self.loop.run_forever, daemon=True)
         self.thread.start()
@@ -180,8 +187,14 @@ class ResilientBackend:
             self.primary.close()
 
 
+def datapilot_available() -> bool:
+    if DATAPILOT_DIR is None:
+        return False
+    return (DATAPILOT_DIR / "src" / "datapilot" / "mcp_server.py").exists()
+
+
 def make_backend() -> SQLBackend:
-    if (DATAPILOT_DIR / "src" / "datapilot" / "mcp_server.py").exists():
+    if datapilot_available():
         try:
             link_datapilot()
             return ResilientBackend(MCPBackend(), LocalBackend())

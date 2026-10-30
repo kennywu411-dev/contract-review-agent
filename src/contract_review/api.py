@@ -244,6 +244,18 @@ def _stage_row(trace: dict) -> dict:
     }
 
 
+def _error_message(e: Exception) -> str:
+    """推给前端的错误文案；缺 API key 时 SDK 的英文报错对用户没用，换成中文提示。"""
+    from contract_review.llm import MISSING_API_KEY_MSG, api_key_missing
+
+    # SDK 缺 key 时抛的是 TypeError("Could not resolve authentication method ...")
+    if "Could not resolve authentication method" in str(e) or (
+        isinstance(e, TypeError) and api_key_missing()
+    ):
+        return MISSING_API_KEY_MSG
+    return f"{type(e).__name__}: {e}"
+
+
 def create_app(engine=None, review_mode: str = DEFAULT_REVIEW_MODE) -> FastAPI:
     from fastapi.middleware.cors import CORSMiddleware
 
@@ -266,7 +278,7 @@ def create_app(engine=None, review_mode: str = DEFAULT_REVIEW_MODE) -> FastAPI:
         allow_headers=["*"],
     )
     app.state.engine = engine
-    sessions: dict[str, tuple[str, object]] = {}  # session_id → (学校, ConversationMemory)
+    sessions: dict[str, tuple[str, object]] = {}  # session_id → (租户, ConversationMemory)
 
     def get_engine():
         if state["engine"] is None:
@@ -280,7 +292,7 @@ def create_app(engine=None, review_mode: str = DEFAULT_REVIEW_MODE) -> FastAPI:
         if not body.session_id:
             return None
         tenant, mem = sessions.get(body.session_id, (None, None))
-        if mem is None or tenant != body.tenant:  # 换学校就开新会话，不把别校的上下文带过来
+        if mem is None or tenant != body.tenant:  # 换租户就开新会话，不把别的公司的上下文带过来
             eng = get_engine()
             mem = (
                 eng.new_memory() if hasattr(eng, "new_memory") else ConversationMemory(mode="full")
@@ -387,7 +399,7 @@ def create_app(engine=None, review_mode: str = DEFAULT_REVIEW_MODE) -> FastAPI:
                 await queue.put(("review", data))
                 await queue.put(("verified", asdict(ver)))
             except Exception as e:  # 推给前端显示，不让连接挂住
-                await queue.put(("error", {"message": f"{type(e).__name__}: {e}"}))
+                await queue.put(("error", {"message": _error_message(e)}))
             finally:
                 release()
             await queue.put(("done", {}))
@@ -438,7 +450,7 @@ def create_app(engine=None, review_mode: str = DEFAULT_REVIEW_MODE) -> FastAPI:
                 )
                 await queue.put(("verified", asdict(ver)))
             except Exception as e:  # 推给前端显示，不让连接挂住
-                await queue.put(("error", {"message": f"{type(e).__name__}: {e}"}))
+                await queue.put(("error", {"message": _error_message(e)}))
             await queue.put(("done", {}))
 
         async def stream():

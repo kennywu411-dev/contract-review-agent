@@ -73,14 +73,24 @@ Web：合同高亮、意见卡片、点编号看条文原文、多轮追问
 
 ## 运行
 
+需要 Python 3.12、[uv](https://docs.astral.sh/uv/)、Node 20+ 和 npm。
+
 ```bash
-uv sync
-uv run cra ingest     # 下载法规和 7 份示范文本、解析入库，生成供应商台账库
-uv run cra index      # 第一次会下载 bge-m3 和 bge-reranker-v2-m3，各约 2.3GB
-uv run cra serve      # http://127.0.0.1:8000，只监听本机
+uv sync                                               # 约 1GB（torch、docling）
+uv run cra ingest                                     # 下载法规和 7 份示范文本、解析入库，生成供应商台账库
+npm --prefix web install && npm --prefix web run build   # 构建前端到 web/out
+uv run cra serve                                      # http://127.0.0.1:8000，只监听本机，托管 web/out
 ```
 
-需要 `ANTHROPIC_API_KEY`（环境变量或根目录 `.env`）。示范文本来自市场监管总局合同示范文本库，网站标注了版权，所以原文只在本地使用、不进仓库，仓库里只有文本 id 和下载脚本。
+需要 `ANTHROPIC_API_KEY`，写在环境变量或根目录 `.env` 里：
+
+```
+ANTHROPIC_API_KEY=sk-ant-...
+```
+
+- 第一次审查请求会下载 bge-m3 和 bge-reranker-v2-m3（共约 2.3GB）并建向量缓存，要等几分钟；想提前做好，运行 `uv run cra index`（可选）。
+- 没有 DataPilot 时查台账自动用本地库；装了 DataPilot 的话用 `DATAPILOT_DIR` 环境变量指向它的目录，`cra link-datapilot` 会把台账库链接进去。
+- 示范文本来自市场监管总局合同示范文本库，网站标注了版权，所以原文只在本地使用、不进仓库，仓库里只有文本 id 和下载脚本。
 
 评测（会调用 API，都有 `--max-cost` 预算上限）：
 
