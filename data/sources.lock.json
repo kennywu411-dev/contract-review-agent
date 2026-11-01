@@ -1,0 +1,41 @@
+{
+  "huaxin-contract-policy": {
+    "sha256": "8d6ec6c13c35bbd3023aa5254b2aed6e239e0fa92ac9ddf72865964b7cac03ee"
+  },
+  "law-civil-code": {
+    "sha256": "16fb30a132114600f32059367dae0d6dd274519aa154126eae0ef9600cf4074e"
+  },
+  "law-civil-procedure": {
+    "sha256": "553095be018f74f899e6c00377c787cc7d4e8bfe8dae0816c80e6ea9bbeade72"
+  },
+  "law-contract-interp-2023": {
+    "sha256": "4c3b05e6796f435518b6e65e97cb38c26e09ee89ef04d8ee8696d3a870a45519"
+  },
+  "ruifeng-contract-policy": {
+    "sha256": "7e05ba8e4cb9f08a17dfc020405f23a1f0ce879b52e019ce8d33b0a4f2ac39cc"
+  },
+  "tpl-agri-products-2025": {
+    "sha256": "d504a9b7a76cf0cb6bdbab7cd05ceabf6a87d8e08b26f6d313c453a252f886da"
+  },
+  "tpl-data-dev-2025": {
+    "sha256": "074241d667e12697031d05c9c6fbcff65a32c5dde1c937258364bacb42dab5e4"
+  },
+  "tpl-data-processing-2025": {
+    "sha256": "403ff3d365a01bc572bd8ea37bf2b0fd75c17c7ba20c01284a5ddb0492bb90fe"
+  },
+  "tpl-data-supply-2025": {
+    "sha256": "7bff8e981b318a59c487971a8b58948f5ad7583df10d088ae4fa82bd8d9a082c"
+  },
+  "tpl-entrustment-2025": {
+    "sha256": "58f7cd38beff837cee1a5b79b68a2da1058d596cc021f7fa5b66807875bcd9e6"
+  },
+  "tpl-industrial-goods-2023": {
+    "sha256": "635bf49d6134ee2ce1bac7aacacb814199464f1a10fdb3938984270f237199a6"
+  },
+  "tpl-work-2024": {
+    "sha256": "6b67d23ec645990a41e977f0a4ef6b6279169a2ac6d677f2d78b3a989b84a3b0"
+  },
+  "yunqi-contract-policy": {
+    "sha256": "5d172bafa232aa1a9f9b25ff4edfb366f0b59241894c60bd5d0d5b539191c681"
+  }
+}

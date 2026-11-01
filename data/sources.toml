@@ -1,0 +1,124 @@
+# Contract Risk Review Agent 依据库清单。人工维护；sha256 由 `cra ingest` 写入 sources.lock.json。
+# tenant=common：所有租户共享的法律法规与官方示范文本；其余 tenant 是构造的公司内部审批规范（data/tenants/）。
+# 来源与许可见 docs/合同场景调研.md、ADR 007。示范文本只在本地使用，不进 git。
+
+# ---------- 法律法规与司法解释（不受著作权保护，《著作权法》第五条） ----------
+[[source]]
+doc_id = "law-civil-code"
+tenant = "common"
+title = "中华人民共和国民法典"
+url = "https://www.court.gov.cn/zixun/xiangqing/233181.html"
+issuer = "全国人民代表大会"
+issued = "2020-05-28"
+kind = "html"
+
+[[source]]
+doc_id = "law-contract-interp-2023"
+tenant = "common"
+title = "最高人民法院关于适用《中华人民共和国民法典》合同编通则若干问题的解释（法释〔2023〕13号）"
+url = "https://www.court.gov.cn/fabu/xiangqing/419382.html"
+issuer = "最高人民法院"
+issued = "2023-12-04"
+kind = "html"
+
+[[source]]
+doc_id = "law-civil-procedure"
+tenant = "common"
+title = "中华人民共和国民事诉讼法（2023年修正）"
+# 原定最高院公报页 下载 502，改用上海市发改委网站转载的全文 PDF
+url = "https://fgw.sh.gov.cn/cmsres/d4/d4191427cbc840618ca960127996e834/f2d5a8396851dc9bbc6e3679da2dc4f0.pdf"
+issuer = "全国人民代表大会常务委员会"
+issued = "2023-09-01"
+kind = "pdf"
+
+# ---------- 市场监管总局合同示范文本库（版权所有，仅本地使用） ----------
+[[source]]
+doc_id = "tpl-industrial-goods-2023"
+tenant = "common"
+title = "京津冀地区工业品买卖合同（BTHF-2023-0102）"
+url = "https://htsfwb.samr.gov.cn/api/File/DownTemplate?id=8c9b5b96-d6f9-437a-b82d-7e1872ae50ab&type=1"
+issuer = "北京市、天津市、河北省市场监督管理局"
+issued = "2023"
+kind = "docx"
+
+[[source]]
+doc_id = "tpl-agri-products-2025"
+tenant = "common"
+title = "农副产品买卖合同（示范文本）"
+url = "https://htsfwb.samr.gov.cn/api/File/DownTemplate?id=8ed1cb2d-568e-41da-b4f3-4b1671c51af4&type=1"
+issuer = "国家市场监督管理总局"
+issued = "2025"
+kind = "docx"
+
+[[source]]
+doc_id = "tpl-entrustment-2025"
+tenant = "common"
+title = "委托合同（示范文本）"
+url = "https://htsfwb.samr.gov.cn/api/File/DownTemplate?id=50b57729-0fca-45d2-92c3-fe7e6a989815&type=1"
+issuer = "国家市场监督管理总局"
+issued = "2025"
+kind = "docx"
+
+[[source]]
+doc_id = "tpl-work-2024"
+tenant = "common"
+title = "京津冀地区承揽合同（示范文本）"
+url = "https://htsfwb.samr.gov.cn/api/File/DownTemplate?id=104d4342-c283-49f6-bb62-d358812a0c7f&type=1"
+issuer = "北京市、天津市、河北省市场监督管理局"
+issued = "2024"
+kind = "docx"
+
+[[source]]
+doc_id = "tpl-data-processing-2025"
+tenant = "common"
+title = "数据委托处理服务合同（示范文本）"
+url = "https://htsfwb.samr.gov.cn/api/File/DownTemplate?id=6cdbe704-5a82-4dfe-822f-8cbb60528321&type=1"
+issuer = "国家数据局、国家市场监督管理总局"
+issued = "2025"
+kind = "docx"
+
+[[source]]
+doc_id = "tpl-data-dev-2025"
+tenant = "common"
+title = "数据融合开发合同（示范文本）"
+url = "https://htsfwb.samr.gov.cn/api/File/DownTemplate?id=13a212b8-d0ca-467c-a793-9be21ffb08c3&type=1"
+issuer = "国家数据局、国家市场监督管理总局"
+issued = "2025"
+kind = "docx"
+
+[[source]]
+doc_id = "tpl-data-supply-2025"
+tenant = "common"
+title = "数据提供合同（示范文本）"
+url = "https://htsfwb.samr.gov.cn/api/File/DownTemplate?id=0912bdd8-c6f0-4c4b-bff1-cb9eb5762f2c&type=1"
+issuer = "国家数据局、国家市场监督管理总局"
+issued = "2025"
+kind = "docx"
+
+# ---------- 构造的租户内部合同审查规范（ADR 007；公司与内容均为虚构） ----------
+[[source]]
+doc_id = "huaxin-contract-policy"
+tenant = "huaxin"
+title = "华信制造有限公司合同审查管理规范（构造）"
+url = "repo:data/tenants/huaxin/contract-policy.txt"
+issuer = "华信制造有限公司（构造）"
+issued = "2026-01-01"
+kind = "txt"
+
+[[source]]
+doc_id = "yunqi-contract-policy"
+tenant = "yunqi"
+title = "云启科技有限公司合同审批与风险控制细则（构造）"
+url = "repo:data/tenants/yunqi/contract-policy.txt"
+issuer = "云启科技有限公司（构造）"
+issued = "2026-01-01"
+kind = "txt"
+
+[[source]]
+doc_id = "ruifeng-contract-policy"
+tenant = "ruifeng"
+title = "瑞丰贸易有限公司购销合同管理办法（构造）"
+url = "repo:data/tenants/ruifeng/contract-policy.txt"
+issuer = "瑞丰贸易有限公司（构造）"
+issued = "2026-01-01"
+kind = "txt"

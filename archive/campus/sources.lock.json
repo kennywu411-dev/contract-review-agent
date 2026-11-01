@@ -1,0 +1,62 @@
+{
+  "bnu-handbook-2025": {
+    "sha256": "42d412c50cab2678ff0dcea7537ae160cadfc939eccc0d7b43fc46a308b5f7f9"
+  },
+  "bnu-xuewei-2025": {
+    "sha256": "fe66ac2634d39396e610173d73a374798ce388825e87017b575f4ba978841dfe"
+  },
+  "cumt-tuimian-2021": {
+    "sha256": "c7860e52652064463397d49047c49ebeeab660f65bd4724e307f795a9c2292bb"
+  },
+  "cumt-xiaoli-2026": {
+    "sha256": "b41c37a7267423171007d658608596c670e6194ff754d42e93538c049a7102f8"
+  },
+  "cumt-xueji-2021": {
+    "sha256": "dc2b1ebfae1b650914f7b17313eda690ea3f12c75162cf5ff3cc42d7d0285034"
+  },
+  "cumt-xuewei-2025": {
+    "sha256": "0e1274adc2debe69685802654e456b71ec9885bf0294388d282d31e572193bdf"
+  },
+  "cumt-zhuanye-2021": {
+    "sha256": "6f49fb7a8ad611e846806376a2f9903709e89821e88b513ae1d789dcac73e7b4"
+  },
+  "lzu-jiangxuejin-2022": {
+    "sha256": "39c360e3947495d22ac2423e853474c5ef81aa292bb1e6fa094fd202c2c4bb82"
+  },
+  "lzu-tuimian-2026": {
+    "sha256": "196661bc816dad498028ab78ff6432a0c51ee6a7736ace359e2d29c136f49479"
+  },
+  "lzu-xueji-2026": {
+    "sha256": "7ee903d6f5ff946371cf0a159b2e986ba0141cbe5f85448688d20c09b670fe77"
+  },
+  "lzu-xuewei-2025": {
+    "sha256": "2dd920067fe21d3ce21192296ec186ff9c06ba0e6d7a77457499f7b8a644894e"
+  },
+  "lzu-zhuanye-2025": {
+    "sha256": "f432e4a090e7d5a7a3f6c28093061424a8ac0c254e2e5553e52aa90160262342"
+  },
+  "national-jzxj-2024": {
+    "sha256": "0dcdc47865e83fc832b0ec3d8f5a9e0dde0e1117e867aa35dc86b378ac9c8bd8"
+  },
+  "national-xsglgd": {
+    "sha256": "f16b58af6430e468fff61892c01cda94bab4e4b79691f209ae6770a4eeabd757"
+  },
+  "national-xwf": {
+    "sha256": "8a085ceaec7524e297f618b0ce601627e9ed84826747b9700170edf6edfc5f2a"
+  },
+  "njust-zhuanye-2024": {
+    "sha256": "fc665cf0349bfea3b00525b0a030b76daecc18cf7b19ad769abd1f44fcaed4ee"
+  },
+  "upc-handbook-2025": {
+    "sha256": "cd872db816e55960522782d354cefd9bf5c3b762fc24dc761b86af5c70f34314"
+  },
+  "zzu-jiangxuejin-2017": {
+    "sha256": "b0abcb2e1073df6c4ff889e5c84373ee475a274dcbe9b187fecf729b0f317375"
+  },
+  "zzu-xueji-2017": {
+    "sha256": "8c377a6e7f55eaf3fb3c60f5044a3d2079bc3b74cc15fe5d2c0f5459779de43d"
+  },
+  "zzu-zhuanye-2025": {
+    "sha256": "9b41a87e227c36ac7b01004800b4dc2b3c55c6506085b2c87031e3ccb07e6ab0"
+  }
+}
