@@ -371,7 +371,7 @@ def test_real_engine_first_turn_uses_review_mode(monkeypatch):
 
 
 def test_concurrent_request_on_same_session_rejected():
-    # 审查 I4：同一会话已有进行中的请求时，再来的追问直接 409，不并发改同一份记忆
+    # 同一会话已有进行中的请求时，再来的追问直接 409，不并发改同一份记忆
     import contract_review.api as api_mod
 
     eng = FakeEngine()
@@ -393,7 +393,7 @@ def test_concurrent_request_on_same_session_rejected():
 
 
 def test_answer_to_clarification_is_first_review():
-    # 审查 M3：首轮反问后，"我方是甲方"这一轮才是真正的首次审查，引擎要按首轮处理（可走多 Agent）
+    # 首轮反问后，"我方是甲方"这一轮才是真正的首次审查，引擎要按首轮处理（可走多 Agent）
     class ClarifyFirst(FakeEngine):
         def review(self, contract, tenant, on_step, history="", question="", first_review=False):
             self.calls.append(("first", first_review, question))

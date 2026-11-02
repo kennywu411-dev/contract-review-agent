@@ -129,7 +129,7 @@ class ReviewMemory:
     # ---------------- 渲染 ----------------
     def _summary_text(self) -> str:
         s = self.summary or {}
-        # 立场取全部轮次里最新的：换回立场可能发生在保留原文的最近几轮里（审查 M4）
+        # 立场取全部轮次里最新的：换回立场可能发生在保留原文的最近几轮里
         side = next((t.our_side for t in reversed(self.turns) if t.our_side), s.get("our_side", ""))
         lines = [f"较早对话摘要（第0–{self.summarized_upto}轮）：", f"我方：{side}方"]
         lines.append("意见台账：")
@@ -158,7 +158,7 @@ class ReviewMemory:
         else:
             out = self._render(self.turns)
             # 成批压缩：最近 keep_last 轮之外至少又攒了 keep_last 轮才压一次，
-            # 避免超预算后每轮都调摘要（审查 M1）
+            # 避免超预算后每轮都调摘要
             if (
                 self.mode == "compress"
                 and len(out) > self.budget
@@ -183,7 +183,7 @@ class ReviewMemory:
             f"已有摘要：{json.dumps(self.summary, ensure_ascii=False)}\n" if self.summary else ""
         ) + "\n".join(t.text for t in old)
         try:
-            if self.summarizer is None:  # 不给摘要模型：纯规则台账，不算错误（审查 M2）
+            if self.summarizer is None:  # 不给摘要模型：纯规则台账，不算错误
                 raise _RuleOnly()
             resp = self.summarizer.create(
                 # 自适应思考的 token 也算在上限里；1500 会把 JSON 截断（ADR 011 小样）
@@ -217,7 +217,7 @@ class ReviewMemory:
     def _backfill(self, summary: dict, side: str, by_model: bool, prev: dict) -> dict:
         """规则核对：每条被压缩过的意见都要在台账里（按 轮次+序号 对），缺的补录。
 
-        上一份摘要里有这条时沿用它的状态（如"已谈妥不再处理"），不能退化成"已报"（审查 I3）。
+        上一份摘要里有这条时沿用它的状态（如"已谈妥不再处理"），不能退化成"已报"。
         """
         have = {(f["turn"], f["no"]) for f in summary.get("findings", [])}
         before = {(f["turn"], f["no"]): f for f in prev.get("findings", [])}

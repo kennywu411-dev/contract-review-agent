@@ -351,7 +351,7 @@ def create_app(
                 raise HTTPException(400, "追问需要先在同一会话里审查一份合同")
             # 追问只针对会话里那份合同；请求里带来的 contract 不能把旧历史配到新合同上
             contract, memory = sess["contract"], sess["memory"]
-            # 同一会话同时只处理一个请求：并发追问会同时改同一份记忆（审查 I4）
+            # 同一会话同时只处理一个请求：并发追问会同时改同一份记忆
             if not sess["lock"].acquire(blocking=False):
                 raise HTTPException(409, "这个会话上一轮还没结束，请稍候再问")
         else:
@@ -380,7 +380,7 @@ def create_app(
                 review_sessions.pop(next(iter(review_sessions)))
         loop = asyncio.get_running_loop()
         queue: asyncio.Queue = asyncio.Queue()
-        # 首轮反问后，用户补充立场的那一轮才是真正的首次审查（审查 M3）
+        # 首轮反问后，用户补充立场的那一轮才是真正的首次审查
         first_review = not body.question or not sess["reviewed"]
         held = [True]
 

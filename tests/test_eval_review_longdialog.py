@@ -175,7 +175,7 @@ def test_clauses_in_ignores_opinion_numbers():
 
 
 def test_clauses_in_strips_law_refs_and_opinion_numbers():
-    # 审查 I5 的反例
+    # 反例
     assert clauses_in("依据《民法典》第七条诚信原则，第四条要改") == {"第四条"}
     assert clauses_in("《民事诉讼法》第三十四条规定，第二条要改") == {"第二条"}
     assert clauses_in("最开始你列的第1条对应第四条") == {"第四条"}

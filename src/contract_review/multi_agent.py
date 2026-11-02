@@ -264,7 +264,7 @@ def review_contract_multi(
     hint：用户补充的信息（如首轮反问后答"我方是甲方"），交给主审判断立场。
     """
     t0 = time.perf_counter()
-    # 检索和查表各一把锁：一次慢查询不会卡住另外两组的检索（审查 M5）
+    # 检索和查表各一把锁：一次慢查询不会卡住另外两组的检索
     search_lock, sql_lock = threading.Lock(), threading.Lock()
 
     def make_box():
@@ -328,7 +328,7 @@ def review_contract_multi(
     trace["ignored_assignments"] = [no for no in missing if no not in unknown]
     if not clauses or unknown or not any(assigned.values()):
         # 识别不出条款标题（如"一、价款"）或分派落空：不能产出"没问题"的空审查，
-        # 回退单 Agent 审全文（审查 C1）
+        # 回退单 Agent 审全文
         return _fallback_single(
             contract, tenant, llm, make_box(), on_step, contract_id, result, trace, t0, unknown
         )
@@ -363,7 +363,7 @@ def review_contract_multi(
             res, c, s, sub_trace = fut.result()
         except (
             Exception
-        ) as e:  # 一组出错（超时、网络）：其余组照常汇总，标注这类风险没审（审查 I1）
+        ) as e:  # 一组出错（超时、网络）：其余组照常汇总，标注这类风险没审
             failed.append(g)
             trace.setdefault("group_errors", {})[g] = f"{type(e).__name__}: {e}"[:300]
             summaries.append(f"{GROUPS[g]['label']}：本次未能完成审查，请重试或转人工。")

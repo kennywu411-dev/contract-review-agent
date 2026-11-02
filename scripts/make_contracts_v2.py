@@ -195,7 +195,7 @@ TERM_END = "2027-10-23"  # 合同期一年：资质在履行期内到期也算�
 
 
 def supplier_risk(tenant: str, name: str) -> str | None:
-    """台账里对方的异常：黑名单、资质已过期，或者资质将在一年履行期内到期（审查 v2 高 1）。"""
+    """台账里对方的异常：黑名单、资质已过期，或者资质将在一年履行期内到期。"""
     flag = supplier_flag(tenant, name)
     if flag:
         return flag
