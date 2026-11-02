@@ -9,3 +9,4 @@ data/raw/
 *.sqlite
 data/index/
 runs/
+data/feedback/

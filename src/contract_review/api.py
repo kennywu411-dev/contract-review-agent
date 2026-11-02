@@ -22,8 +22,9 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
 
-from contract_review.config import DB_PATH, ROOT, TENANTS
+from contract_review.config import DB_PATH, FEEDBACK_PATH, ROOT, TENANTS
 from contract_review.eval_retrieval import RUNS_DIR
+from contract_review.feedback import FeedbackStore, summarize
 from contract_review.review_memory import ReviewMemory
 from contract_review.sources import load_sources, raw_path
 
@@ -45,6 +46,22 @@ class ReviewBody(BaseModel):
     question: str | None = Field(default=None, min_length=1, max_length=2000)
     tenant: ClientTenant
     session_id: str | None = Field(default=None, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")
+
+
+class FindingRef(BaseModel):
+    """被打标意见的摘要，用于按类型、等级汇总；不含合同原文。"""
+
+    clause: str | None = Field(default=None, max_length=40)
+    risk_type: str = Field(max_length=40)
+    level: Literal["高", "中", "低"]
+
+
+class FeedbackBody(BaseModel):
+    session_id: str = Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")
+    review_id: str = Field(min_length=1, max_length=64)  # 审查轮的 trace_id
+    finding_index: int = Field(ge=0, le=200)
+    label: Literal["useful", "not_useful", "not_risk", "unclear"]
+    finding: FindingRef
 
 
 MAX_SESSIONS = 200  # 内存里最多保留这么多会话，超出就丢最早的（本地单机演示足够）
@@ -256,7 +273,9 @@ def _error_message(e: Exception) -> str:
     return f"{type(e).__name__}: {e}"
 
 
-def create_app(engine=None, review_mode: str = DEFAULT_REVIEW_MODE) -> FastAPI:
+def create_app(
+    engine=None, review_mode: str = DEFAULT_REVIEW_MODE, feedback_path: Path = FEEDBACK_PATH
+) -> FastAPI:
     from fastapi.middleware.cors import CORSMiddleware
 
     state = {"engine": engine}
@@ -420,6 +439,20 @@ def create_app(engine=None, review_mode: str = DEFAULT_REVIEW_MODE) -> FastAPI:
                 release()  # 任务还没开始就被取消时，work 的 finally 不会执行
 
         return EventSourceResponse(stream(), ping=15)
+
+    feedback = FeedbackStore(feedback_path)
+
+    @app.post("/api/feedback")
+    def add_feedback(body: FeedbackBody):
+        # 只接受本服务签发过的会话，防止随手刷数据
+        if body.session_id not in review_sessions:
+            raise HTTPException(404, "会话不存在或已过期，请重新审查后再反馈")
+        feedback.add(body.session_id, body.model_dump(exclude={"session_id"}))
+        return {"ok": True}
+
+    @app.get("/api/feedback/summary")
+    def feedback_summary():
+        return summarize(feedback.load())
 
     @app.get("/api/tenants")
     def tenants():

@@ -145,6 +145,34 @@ export const pdfUrl = (docId: string) => `${API_BASE}/api/docs/${encodeURICompon
 
 // ---------------- 合同审查 ----------------
 
+export type FeedbackLabel = "useful" | "not_useful" | "not_risk" | "unclear";
+
+export const FEEDBACK_LABELS: { value: FeedbackLabel; text: string }[] = [
+  { value: "useful", text: "有用" },
+  { value: "not_useful", text: "没用" },
+  { value: "not_risk", text: "不是风险" },
+  { value: "unclear", text: "看不懂" },
+];
+
+/** 试用反馈：对一条意见打标，同一条可以改标，汇总时以最后一次为准。 */
+export async function sendFeedback(body: {
+  session_id: string;
+  review_id: string;
+  finding_index: number;
+  label: FeedbackLabel;
+  finding: { clause: string | null; risk_type: string; level: "高" | "中" | "低" };
+}): Promise<void> {
+  const r = await fetch(`${API_BASE}/api/feedback`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!r.ok) {
+    const detail = await r.json().then((j) => j.detail).catch(() => "");
+    throw new Error(typeof detail === "string" && detail ? detail : `反馈没有保存（${r.status}）`);
+  }
+}
+
 export type Finding = {
   clause: string | null;
   clause_raw?: string;
