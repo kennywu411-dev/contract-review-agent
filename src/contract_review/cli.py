@@ -556,6 +556,28 @@ def cmd_eval_d4(args: argparse.Namespace) -> None:
     )
 
 
+def cmd_feedback_report(_: argparse.Namespace) -> None:
+    from contract_review.config import FEEDBACK_PATH
+    from contract_review.feedback import FeedbackStore, summarize
+
+    s = summarize(FeedbackStore(FEEDBACK_PATH).load())
+    if not s["rated"]:
+        print(f"还没有反馈（{FEEDBACK_PATH}）")
+        return
+
+    def pct(x):
+        return "-" if x is None else f"{x:.1%}"
+
+    print(f"高/中意见已打标 {s['rated']} 条，来自 {s['sessions']} 个会话")
+    print(
+        f"采纳率 {pct(s['adoption_rate'])}  误报反馈率 {pct(s['false_positive_rate'])}  "
+        f"看不懂 {pct(s['unclear_rate'])}"
+    )
+    print("标签：" + "  ".join(f"{k} {v}" for k, v in s["labels"].items()))
+    for t, v in sorted(s["by_risk_type"].items(), key=lambda kv: -kv[1]["rated"]):
+        print(f"  {t:<14} 打标 {v['rated']:>3}  有用 {v['useful']:>3}  不是风险 {v['not_risk']:>3}")
+
+
 def cmd_serve(args: argparse.Namespace) -> None:
     import uvicorn
 
@@ -735,6 +757,8 @@ def main() -> None:
     p.add_argument("--tag", default="d4")
     p.add_argument("--max-cost", type=float, default=5.0)
     p.set_defaults(func=cmd_eval_d4)
+    p = sub.add_parser("feedback-report", help="汇总试用反馈：采纳率、误报反馈率、按风险类型")
+    p.set_defaults(func=cmd_feedback_report)
     p = sub.add_parser("serve", help="启动 Web 界面（问答 / 评测看板 / 成本面板）")
     p.add_argument("--host", default="127.0.0.1")
     p.add_argument("--port", type=int, default=8000)

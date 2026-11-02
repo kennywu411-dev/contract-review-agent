@@ -9,6 +9,8 @@ import { TableCitationView } from "@/components/table-citation";
 import { TopNav } from "@/components/top-nav";
 import { TraceSteps } from "@/components/trace-steps";
 import {
+  FEEDBACK_LABELS,
+  type FeedbackLabel,
   type Finding,
   fmtMs,
   fmtUsd,
@@ -17,6 +19,7 @@ import {
   type ReviewResult,
   RISK_TYPES,
   type Sample,
+  sendFeedback,
   type Step,
   type Tenant,
   type VerifiedReview,
@@ -106,11 +109,52 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
+function FeedbackBar({ f, i, sessionId, reviewId }: { f: Finding; i: number; sessionId: string; reviewId: string }) {
+  const [label, setLabel] = useState<FeedbackLabel | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const pick = (value: FeedbackLabel) => {
+    if (saving) return;
+    const prev = label;
+    setLabel(value);
+    setSaving(true);
+    setError("");
+    sendFeedback({
+      session_id: sessionId,
+      review_id: reviewId,
+      finding_index: i,
+      label: value,
+      finding: { clause: f.clause, risk_type: f.risk_type, level: f.level },
+    })
+      .catch((e: Error) => {
+        setLabel(prev);
+        setError(e.message);
+      })
+      .finally(() => setSaving(false));
+  };
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 border-t pt-2 text-xs">
+      <span className="text-muted-foreground mr-1">这条意见</span>
+      {FEEDBACK_LABELS.map((o) => (
+        <button key={o.value} onClick={() => pick(o.value)} disabled={saving} aria-pressed={label === o.value}
+          className={cn(
+            "cursor-pointer rounded-md border px-2 py-0.5 transition-colors disabled:cursor-default",
+            label === o.value ? "bg-primary text-primary-foreground border-primary" : "hover:bg-muted",
+          )}>
+          {o.text}
+        </button>
+      ))}
+      {label && !saving && !error && <span className="text-muted-foreground inline-flex items-center gap-1"><Check className="size-3" />已记录</span>}
+      {error && <span className="text-destructive">{error}</span>}
+    </div>
+  );
+}
+
 function FindingCard({
-  f, i, result, active, onCite, onClause,
+  f, i, result, active, onCite, onClause, sessionId,
 }: {
   f: Finding; i: number; result: ReviewResult; active: string | null;
-  onCite: (cid: string) => void; onClause: (no: string) => void;
+  onCite: (cid: string) => void; onClause: (no: string) => void; sessionId: string;
 }) {
   return (
     <article className="bg-card space-y-2 rounded-xl border p-4" aria-label={`意见 ${i + 1}`}>
@@ -149,6 +193,7 @@ function FindingCard({
         </div>
         <p className="text-sm leading-relaxed whitespace-pre-wrap">{f.suggestion}</p>
       </div>
+      {sessionId && result.trace?.trace_id && <FeedbackBar f={f} i={i} sessionId={sessionId} reviewId={result.trace.trace_id} />}
     </article>
   );
 }
@@ -348,7 +393,7 @@ export default function ReviewPage() {
                       <p className="text-muted-foreground text-sm whitespace-pre-line">{t.result.summary}</p>
                       {(t.verified?.findings.length ? t.verified.findings : t.result.findings).map((f, i) => (
                         <FindingCard key={i} f={f} i={i} result={t.result!} active={open?.turnId === t.id ? open.cid : null}
-                          onCite={(cid) => setOpen({ turnId: t.id, cid })} onClause={pickClause} />
+                          onCite={(cid) => setOpen({ turnId: t.id, cid })} onClause={pickClause} sessionId={sessionId} />
                       ))}
                       {t.result.findings.length === 0 && <p className="text-sm">没有发现对我方明显不利的条款。</p>}
                     </>

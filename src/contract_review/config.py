@@ -10,6 +10,7 @@ RAW_DIR = DATA_DIR / "raw"
 DB_PATH = DATA_DIR / "contract_review.db"
 LEDGER_DB = DATA_DIR / "ledger" / "ledger.sqlite"
 LEDGER_SRC = DATA_DIR / "ledger_src"  # 构造的供应商台账 CSV（入 git）
+FEEDBACK_PATH = DATA_DIR / "feedback" / "feedback.jsonl"  # 试用反馈（不入 git）
 SOURCES_PATH = DATA_DIR / "sources.toml"
 
 # 租户 id → 名称。common 是所有租户共享的法律法规与官方示范文本；其余三家公司是构造的（ADR 007）
