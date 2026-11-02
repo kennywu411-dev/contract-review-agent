@@ -361,9 +361,7 @@ def review_contract_multi(
     for g, (box, fut) in jobs.items():
         try:
             res, c, s, sub_trace = fut.result()
-        except (
-            Exception
-        ) as e:  # 一组出错（超时、网络）：其余组照常汇总，标注这类风险没审
+        except Exception as e:  # 一组出错（超时、网络）：其余组照常汇总，标注这类风险没审
             failed.append(g)
             trace.setdefault("group_errors", {})[g] = f"{type(e).__name__}: {e}"[:300]
             summaries.append(f"{GROUPS[g]['label']}：本次未能完成审查，请重试或转人工。")
