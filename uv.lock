@@ -216,6 +216,7 @@ source = { editable = "." }
 dependencies = [
     { name = "anthropic" },
     { name = "docling" },
+    { name = "evalkit" },
     { name = "fastapi" },
     { name = "mcp" },
     { name = "numpy" },
@@ -242,6 +243,7 @@ dev = [
 requires-dist = [
     { name = "anthropic", specifier = ">=2.1" },
     { name = "docling", specifier = ">=2.142,<3" },
+    { name = "evalkit", editable = "../evalkit" },
     { name = "fastapi", specifier = ">=0.115" },
     { name = "mcp", specifier = ">=2.3" },
     { name = "numpy", specifier = ">=2" },
@@ -564,6 +566,19 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/d3/38/af70d7ab1ae9d4da450eeec1fa3918940a5fafb9055e934af8d6eb0c2313/et_xmlfile-2.0.0.tar.gz", hash = "sha256:dab3f4764309081ce75662649be815c4c9081e88f0837825f90fd28317d4da54", size = 17234, upload-time = "2024-10-25T17:25:40.039Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/c1/8b/5fe2cc11fee489817272089c4203e679c63b570a5aaeb18d852ae3cbba6a/et_xmlfile-2.0.0-py3-none-any.whl", hash = "sha256:7a91720bc756843502c3b7504c77b8fe44217c85c537d85037f0f536151b2caa", size = 18059, upload-time = "2024-10-25T17:25:39.051Z" },
+]
+
+[[package]]
+name = "evalkit"
+version = "0.1.0"
+source = { editable = "../evalkit" }
+
+[package.metadata]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pytest", specifier = ">=8" },
+    { name = "ruff", specifier = ">=0.6" },
 ]
 
 [[package]]

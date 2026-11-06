@@ -37,3 +37,14 @@
 - 干净合同带 `distractors`：刚好合规的数值、合法免责、对我方有利的单方条款、"签订地法院 + 签订地在我方"。
 - 抽查清单 `contracts_v2_spotcheck.md`（20 条）随生成器一起输出。
 - 跑法：`cra eval-review --evalset v2 [--multi-agent]`。
+
+## 运行记录格式
+
+`cra eval-review` 由评测平台 evalkit 运行，运行目录 `runs/<tag>-<时间>-<随机串>/` 里：
+
+- `results.jsonl`、`config.json`：evalkit 格式，每份合同一行（主指标 = 风险全部检出且没有误报；反问合同看是否反问），配置快照记录评测集各合同的内容哈希、模型和参数；
+- `traces/<trace_id>.json`：每份合同的完整过程，格式与之前相同；
+- `review_results.jsonl`、`summary.json`：由 `results.jsonl` 派生的逐项计数和汇总，依据校验、多轮追问、分析脚本和 Web 运行记录页都读它们；
+- `metrics.json`：看板上显示的检出率、精确率等指标。
+
+接入 evalkit 之前的运行只有 `review_results.jsonl`，`--resume` 续跑、`cra eval-gate`、`cra eval-dashboard` 会现场转换，原文件不改。

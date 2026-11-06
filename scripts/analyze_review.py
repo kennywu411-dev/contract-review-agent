@@ -13,7 +13,7 @@ import json
 from pathlib import Path
 
 from contract_review.contract_evalset import load_contracts, sample_contracts
-from contract_review.eval_review import score_contract, summarize_review
+from contract_review.eval_review import rescore_rows, summarize_review
 
 
 def brief(s: dict) -> dict:
@@ -26,7 +26,9 @@ def brief(s: dict) -> dict:
         "basis_acc": round(d["basis_accuracy"], 3),
         "precision": round(d["precision"], 3),
         "precision_hm": round(d["precision_hm"], 3),
-        "precision_strict": round(d["precision_strict"], 3),
+        "precision_strict": None
+        if d["precision_strict"] is None
+        else round(d["precision_strict"], 3),
         "clean_n": cl["n"],
         "clean_fp_rate": round(cl["fp_contract_rate"], 3),
         "clean_fp_rate_hm": round(cl["fp_contract_rate_hm"], 3),
@@ -45,19 +47,7 @@ def brief(s: dict) -> dict:
 
 
 def rescore(run: Path, rows: list[dict]) -> list[dict]:
-    contracts = {c.id: c for c in load_contracts()}
-    out = []
-    for row in rows:
-        t = json.loads((run / "traces" / f"{row['trace_id']}.json").read_text(encoding="utf-8"))
-        r = t["result"] | {
-            "citations": t["citations"],
-            "steps": len(t["steps"]),
-            "cost_usd": t["cost_usd"],
-            "latency_ms": t["latency_ms"],
-            "trace": {"end": t.get("end")},
-        }
-        out.append(score_contract(contracts[row["id"]], r) | {"trace_id": row["trace_id"]})
-    return out
+    return rescore_rows(run, rows, {c.id: c for c in load_contracts()})
 
 
 def main() -> None:

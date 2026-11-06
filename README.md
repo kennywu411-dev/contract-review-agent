@@ -120,6 +120,18 @@ uv run cra eval-contract-retrieval --backend milvus
 
 可选：`uv sync --extra milvus` 安装 Milvus Lite 后端。
 
+审查评测的运行、续跑、预算闸门、配对检验、回归门禁和看板由评测平台 [evalkit](../evalkit) 提供（`pyproject.toml` 里以同级目录依赖引入）。下面两条命令只读已有运行记录，不调用 API：
+
+```bash
+uv run cra eval-gate <基线运行> <候选运行> --rescore   # 显著变差或降幅超限时退出码 1
+```
+
+```bash
+uv run cra eval-dashboard --rescore                     # 生成 runs/dashboard/index.html
+```
+
+`--rescore` 表示先按当前金标准从 trace 重新判分，历史运行和新运行用同一口径比较。
+
 ## 评测集
 
 48 份构造合同，覆盖 7 类合同（工业品买卖、农产品买卖、加工承揽、仓储委托、数据委托处理、数据产品开发、数据供应），条款顺序参照官方示范文本、正文全部自写：

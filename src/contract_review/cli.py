@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import argparse
+import json
 import time
+from pathlib import Path
 
 from contract_review.config import DATA_DIR, DB_PATH, LEDGER_DB, LEDGER_SRC, ROOT
 from contract_review.eval_retrieval import RUNS_DIR
@@ -273,6 +275,12 @@ def cmd_eval_review(args: argparse.Namespace) -> None:
             )
 
     try:
+        # v1 的调试小样（20 份）参与过提示词调试，其余作为留出集（问题日志 P20）
+        dev = (
+            {c.id for c in sample_contracts(load_contracts(CONTRACTS_PATH), 20)}
+            if args.evalset == "v1"
+            else None
+        )
         out = run_review_eval(
             cs,
             run_one,
@@ -280,6 +288,10 @@ def cmd_eval_review(args: argparse.Namespace) -> None:
             args.max_cost,
             meta={"evalset": args.evalset, "multi_agent": args.multi_agent, "model": args.model},
             resume=(ROOT / "runs" / args.resume) if args.resume else None,
+            concurrency=args.concurrency,
+            dev_ids=dev,
+            dataset_name=f"contracts-{args.evalset}",
+            variant=f"{args.model}{'-multi' if args.multi_agent else ''}",
         )
     finally:
         if hasattr(sql, "close"):
@@ -556,6 +568,77 @@ def cmd_eval_d4(args: argparse.Namespace) -> None:
     )
 
 
+def _review_run_rows(name: str, rescore: bool) -> tuple[Path, list[dict]]:
+    """一次审查运行的 evalkit 结果行；rescore 时按当前金标准从 trace 重新判分。"""
+    from contract_review.contract_evalset import CONTRACTS_PATH, CONTRACTS_V2_PATH, load_contracts
+    from contract_review.eval_review import (
+        evalkit_rows,
+        rescore_rows,
+        review_rows,
+        to_evalkit_rows,
+    )
+
+    run = ROOT / "runs" / name
+    if not (run / "review_results.jsonl").exists():
+        raise SystemExit(f"{run} 不是合同审查运行（没有 review_results.jsonl）")
+    if not rescore:
+        return run, evalkit_rows(run)
+    review = review_rows(run)
+    meta = json.loads((run / "summary.json").read_text(encoding="utf-8"))
+    path = CONTRACTS_V2_PATH if meta.get("evalset") == "v2" else CONTRACTS_PATH
+    contracts = {c.id: c for c in load_contracts(path)}
+    return run, to_evalkit_rows(rescore_rows(run, review, contracts))
+
+
+def cmd_eval_gate(args: argparse.Namespace) -> None:
+    """回归门禁（evalkit.gate）：候选运行相对基线有没有显著变差，不通过时退出码 1。"""
+    from evalkit.gate import gate
+
+    _, base = _review_run_rows(args.baseline, args.rescore)
+    _, cand = _review_run_rows(args.candidate, args.rescore)
+    g = gate(base, cand, max_drop=args.max_drop, alpha=args.alpha)
+    print(g.render())
+    if args.summary_file:
+        Path(args.summary_file).write_text(g.render() + "\n", encoding="utf-8")
+    raise SystemExit(0 if g.passed else 1)
+
+
+def cmd_eval_dashboard(args: argparse.Namespace) -> None:
+    """把审查运行汇总成 evalkit 静态看板（单个 HTML，可直接打开或作为 CI 产物）。"""
+    import tempfile
+
+    from evalkit import store
+    from evalkit.dashboard import build
+
+    from contract_review.eval_review import DASHBOARD_METRICS, _v
+
+    names = args.runs or sorted(
+        p.name for p in (ROOT / "runs").iterdir() if (p / "review_results.jsonl").exists()
+    )
+    tmp = Path(tempfile.mkdtemp(prefix="cra-dashboard-")) / "contract-review"
+    dirs = []
+    for name in names:
+        run, rows = _review_run_rows(name, args.rescore)
+        d = tmp / name
+        store.write_rows(d, rows)
+        evalset = json.loads((run / "summary.json").read_text(encoding="utf-8")).get(
+            "evalset", "v1"
+        )
+        cfg = store.load_config(run) or {"dataset": {"name": f"contracts-{evalset}"}}
+        store.write_json(d / store.CONFIG, cfg)
+        detail = [r["scores"]["contract_review"]["detail"] for r in rows]
+        variant = rows[0]["variant"] if rows else "review"
+        store.write_json(
+            d / "metrics.json",
+            {variant: {label: _v(k, detail) for k, label in DASHBOARD_METRICS.items()}},
+        )
+        if (run / "traces").is_dir():
+            (d / "traces").symlink_to(run / "traces")
+        dirs.append(d)
+    out = build(dirs, Path(args.output), title="合同审查评测看板")
+    print(f"{len(dirs)} 次运行 → {out}")
+
+
 def cmd_feedback_report(_: argparse.Namespace) -> None:
     from contract_review.config import FEEDBACK_PATH
     from contract_review.feedback import FeedbackStore, summarize
@@ -722,7 +805,21 @@ def main() -> None:
     p.add_argument("--multi-agent", action="store_true", help="主审 + 三个专职审查员（ADR 012）")
     p.add_argument("--evalset", choices=["v1", "v2"], default="v1", help="v2 = 难评测集（ADR 013）")
     p.add_argument("--resume", help="runs/ 下已有的运行目录名：只补跑没有结果的合同")
+    p.add_argument("--concurrency", type=int, default=1, help="并行审查的合同数")
     p.set_defaults(func=cmd_eval_review)
+    p = sub.add_parser("eval-gate", help="回归门禁：候选运行相对基线是否显著变差（不调用 API）")
+    p.add_argument("baseline", help="runs/ 下的基线运行目录名")
+    p.add_argument("candidate", help="runs/ 下的候选运行目录名")
+    p.add_argument("--max-drop", type=float, default=0.05, help="允许的通过率降幅")
+    p.add_argument("--alpha", type=float, default=0.05, help="McNemar 检验的显著性水平")
+    p.add_argument("--rescore", action="store_true", help="先按当前金标准从 trace 重新判分")
+    p.add_argument("--summary-file", help="Markdown 结论另存一份（如 CI 的步骤摘要）")
+    p.set_defaults(func=cmd_eval_gate)
+    p = sub.add_parser("eval-dashboard", help="生成评测静态看板（evalkit）")
+    p.add_argument("runs", nargs="*", help="runs/ 下的运行目录名，默认全部审查运行")
+    p.add_argument("-o", "--output", default=str(ROOT / "runs" / "dashboard" / "index.html"))
+    p.add_argument("--rescore", action="store_true", help="先按当前金标准从 trace 重新判分")
+    p.set_defaults(func=cmd_eval_dashboard)
     p = sub.add_parser(
         "review-d4", help="复用一次 eval-review 运行：依据校验（Haiku）+ 评判（Sonnet）"
     )
