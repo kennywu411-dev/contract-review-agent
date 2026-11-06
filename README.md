@@ -1,5 +1,7 @@
 # Contract Risk Review Agent
 
+[![CI](https://github.com/kennywu411-dev/contract-review-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/kennywu411-dev/contract-review-agent/actions/workflows/ci.yml) ![Python 3.12](https://img.shields.io/badge/python-3.12-blue) ![License: MIT](https://img.shields.io/badge/license-MIT-green)
+
 合同风险审查。提交一份商业合同，系统站在我方立场逐条找出不利条款，给出风险类型、等级和可以直接替换的修改建议。每条意见都附上依据原文，来源包括《民法典》、合同编通则解释、《民事诉讼法》、官方合同示范文本和本公司的审查规范，点编号就能看到高亮的条文。
 
 - 单价会通过 [DataPilot](https://github.com/kennywu411-dev/datapilot) 的只读 MCP 查供应商台账，和历史成交价比较。
