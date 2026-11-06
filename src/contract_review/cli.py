@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import argparse
+import json
 import time
+from pathlib import Path
 
 from contract_review.config import DATA_DIR, DB_PATH, LEDGER_DB, LEDGER_SRC, ROOT
 from contract_review.eval_retrieval import RUNS_DIR
@@ -30,7 +32,7 @@ def render_report(
         "无文字页：PDF 文字层为空（空白页、图片页）；",
         "未解析页：有文字层但没解析出块（多为目录页）。",
         "",
-        "| 租户 | doc_id | 页数 | 块数 | 标题 | 表格 | 无文字页 | 未解析页 | 乱码比例 | 标记 |",
+        "| 学校 | doc_id | 页数 | 块数 | 标题 | 表格 | 无文字页 | 未解析页 | 乱码比例 | 标记 |",
         "|---|---|---|---|---|---|---|---|---|---|",
     ]
     for tenant, doc_id, q in rows:
@@ -273,6 +275,12 @@ def cmd_eval_review(args: argparse.Namespace) -> None:
             )
 
     try:
+        # v1 的调试小样（20 份）参与过提示词调试，其余作为留出集（问题日志 P20）
+        dev = (
+            {c.id for c in sample_contracts(load_contracts(CONTRACTS_PATH), 20)}
+            if args.evalset == "v1"
+            else None
+        )
         out = run_review_eval(
             cs,
             run_one,
@@ -280,6 +288,10 @@ def cmd_eval_review(args: argparse.Namespace) -> None:
             args.max_cost,
             meta={"evalset": args.evalset, "multi_agent": args.multi_agent, "model": args.model},
             resume=(ROOT / "runs" / args.resume) if args.resume else None,
+            concurrency=args.concurrency,
+            dev_ids=dev,
+            dataset_name=f"contracts-{args.evalset}",
+            variant=f"{args.model}{'-multi' if args.multi_agent else ''}",
         )
     finally:
         if hasattr(sql, "close"):
@@ -556,6 +568,77 @@ def cmd_eval_d4(args: argparse.Namespace) -> None:
     )
 
 
+def _review_run_rows(name: str, rescore: bool) -> tuple[Path, list[dict]]:
+    """一次审查运行的 evalkit 结果行；rescore 时按当前金标准从 trace 重新判分。"""
+    from contract_review.contract_evalset import CONTRACTS_PATH, CONTRACTS_V2_PATH, load_contracts
+    from contract_review.eval_review import (
+        evalkit_rows,
+        rescore_rows,
+        review_rows,
+        to_evalkit_rows,
+    )
+
+    run = ROOT / "runs" / name
+    if not (run / "review_results.jsonl").exists():
+        raise SystemExit(f"{run} 不是合同审查运行（没有 review_results.jsonl）")
+    if not rescore:
+        return run, evalkit_rows(run)
+    review = review_rows(run)
+    meta = json.loads((run / "summary.json").read_text(encoding="utf-8"))
+    path = CONTRACTS_V2_PATH if meta.get("evalset") == "v2" else CONTRACTS_PATH
+    contracts = {c.id: c for c in load_contracts(path)}
+    return run, to_evalkit_rows(rescore_rows(run, review, contracts))
+
+
+def cmd_eval_gate(args: argparse.Namespace) -> None:
+    """回归门禁（evalkit.gate）：候选运行相对基线有没有显著变差，不通过时退出码 1。"""
+    from evalkit.gate import gate
+
+    _, base = _review_run_rows(args.baseline, args.rescore)
+    _, cand = _review_run_rows(args.candidate, args.rescore)
+    g = gate(base, cand, max_drop=args.max_drop, alpha=args.alpha)
+    print(g.render())
+    if args.summary_file:
+        Path(args.summary_file).write_text(g.render() + "\n", encoding="utf-8")
+    raise SystemExit(0 if g.passed else 1)
+
+
+def cmd_eval_dashboard(args: argparse.Namespace) -> None:
+    """把审查运行汇总成 evalkit 静态看板（单个 HTML，可直接打开或作为 CI 产物）。"""
+    import tempfile
+
+    from evalkit import store
+    from evalkit.dashboard import build
+
+    from contract_review.eval_review import DASHBOARD_METRICS, _v
+
+    names = args.runs or sorted(
+        p.name for p in (ROOT / "runs").iterdir() if (p / "review_results.jsonl").exists()
+    )
+    tmp = Path(tempfile.mkdtemp(prefix="cra-dashboard-")) / "contract-review"
+    dirs = []
+    for name in names:
+        run, rows = _review_run_rows(name, args.rescore)
+        d = tmp / name
+        store.write_rows(d, rows)
+        evalset = json.loads((run / "summary.json").read_text(encoding="utf-8")).get(
+            "evalset", "v1"
+        )
+        cfg = store.load_config(run) or {"dataset": {"name": f"contracts-{evalset}"}}
+        store.write_json(d / store.CONFIG, cfg)
+        detail = [r["scores"]["contract_review"]["detail"] for r in rows]
+        variant = rows[0]["variant"] if rows else "review"
+        store.write_json(
+            d / "metrics.json",
+            {variant: {label: _v(k, detail) for k, label in DASHBOARD_METRICS.items()}},
+        )
+        if (run / "traces").is_dir():
+            (d / "traces").symlink_to(run / "traces")
+        dirs.append(d)
+    out = build(dirs, Path(args.output), title="合同审查评测看板")
+    print(f"{len(dirs)} 次运行 → {out}")
+
+
 def cmd_feedback_report(_: argparse.Namespace) -> None:
     from contract_review.config import FEEDBACK_PATH
     from contract_review.feedback import FeedbackStore, summarize
@@ -582,10 +665,7 @@ def cmd_serve(args: argparse.Namespace) -> None:
     import uvicorn
 
     from contract_review.api import WEB_DIST, create_app
-    from contract_review.llm import MISSING_API_KEY_MSG, api_key_missing
 
-    if api_key_missing():
-        print(f"警告：{MISSING_API_KEY_MSG}；在此之前审查请求都会失败")
     if not WEB_DIST.exists():
         print("提示：web/out 不存在，只启动 API。构建前端：cd web && npm install && npm run build")
     print(
@@ -678,24 +758,13 @@ def cmd_eval_dialog(args: argparse.Namespace) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(prog="cra")
     sub = parser.add_subparsers(required=True)
-    # 早期场景的命令：还能用，但不在 --help 里列出（3.12 的 argparse 对子命令不认 SUPPRESS，
-    # 所以不给 help，最后再把它们从命令列表里去掉）
-    hidden_cmds = {
-        "search",
-        "eval-retrieval",
-        "ask",
-        "eval-agent",
-        "eval-d4",
-        "reverify-d4",
-        "eval-dialog",
-    }
     p = sub.add_parser("ingest", help="下载缺失文件 → 解析入库 → 质量报告 → 结构化表库")
     p.add_argument("--force", action="store_true", help="忽略 sha256，全部重新解析")
     p.set_defaults(func=cmd_ingest)
     p = sub.add_parser("index", help="为切块策略建向量缓存（data/index/）")
     p.add_argument("--strategy", action="append", choices=["block", "fixed", "section"])
     p.set_defaults(func=cmd_index)
-    p = sub.add_parser("search")  # 检索调试
+    p = sub.add_parser("search", help="检索调试")
     p.add_argument("query")
     p.add_argument("--tenant", required=True)
     p.add_argument("--strategy", default="fixed", choices=["block", "fixed", "section"])
@@ -704,19 +773,19 @@ def main() -> None:
     )
     p.add_argument("-k", type=int, default=5)
     p.set_defaults(func=cmd_search)
-    p = sub.add_parser("eval-retrieval")  # 检索评测：切块策略 × 检索模式
+    p = sub.add_parser("eval-retrieval", help="检索评测：切块策略 × 检索模式")
     p.add_argument("--sample", type=int, help="按题型分层抽样 N 题先跑")
     p.add_argument("--strategy", action="append", choices=["block", "fixed", "section"])
     p.add_argument("--mode", action="append", choices=["bm25", "vector", "hybrid", "hybrid_rerank"])
     p.add_argument("--tag", default="retrieval")
     p.add_argument("--pool", type=int, default=15, help="每路召回和重排的候选数（ADR 002）")
     p.set_defaults(func=cmd_eval_retrieval)
-    p = sub.add_parser("ask")  # 向 agent 提问
+    p = sub.add_parser("ask", help="向 agent 提问")
     p.add_argument("question")
     p.add_argument("--tenant", required=True, choices=["huaxin", "yunqi", "ruifeng"])
     p.add_argument("--model", default="claude-haiku-5-5")
     p.set_defaults(func=cmd_ask)
-    p = sub.add_parser("eval-agent")  # agent 评测（会调用 Claude API）
+    p = sub.add_parser("eval-agent", help="agent 评测（会调用 Claude API）")
     p.add_argument("--sample", type=int)
     p.add_argument("--model", default="claude-haiku-5-5")
     p.add_argument("--tag", default="agent")
@@ -736,7 +805,21 @@ def main() -> None:
     p.add_argument("--multi-agent", action="store_true", help="主审 + 三个专职审查员（ADR 012）")
     p.add_argument("--evalset", choices=["v1", "v2"], default="v1", help="v2 = 难评测集（ADR 013）")
     p.add_argument("--resume", help="runs/ 下已有的运行目录名：只补跑没有结果的合同")
+    p.add_argument("--concurrency", type=int, default=1, help="并行审查的合同数")
     p.set_defaults(func=cmd_eval_review)
+    p = sub.add_parser("eval-gate", help="回归门禁：候选运行相对基线是否显著变差（不调用 API）")
+    p.add_argument("baseline", help="runs/ 下的基线运行目录名")
+    p.add_argument("candidate", help="runs/ 下的候选运行目录名")
+    p.add_argument("--max-drop", type=float, default=0.05, help="允许的通过率降幅")
+    p.add_argument("--alpha", type=float, default=0.05, help="McNemar 检验的显著性水平")
+    p.add_argument("--rescore", action="store_true", help="先按当前金标准从 trace 重新判分")
+    p.add_argument("--summary-file", help="Markdown 结论另存一份（如 CI 的步骤摘要）")
+    p.set_defaults(func=cmd_eval_gate)
+    p = sub.add_parser("eval-dashboard", help="生成评测静态看板（evalkit）")
+    p.add_argument("runs", nargs="*", help="runs/ 下的运行目录名，默认全部审查运行")
+    p.add_argument("-o", "--output", default=str(ROOT / "runs" / "dashboard" / "index.html"))
+    p.add_argument("--rescore", action="store_true", help="先按当前金标准从 trace 重新判分")
+    p.set_defaults(func=cmd_eval_dashboard)
     p = sub.add_parser(
         "review-d4", help="复用一次 eval-review 运行：依据校验（Haiku）+ 评判（Sonnet）"
     )
@@ -765,7 +848,7 @@ def main() -> None:
     p.add_argument("--tag", default="review-longdialog")
     p.add_argument("--max-cost", type=float, default=2.0)
     p.set_defaults(func=cmd_eval_review_longdialog)
-    p = sub.add_parser("eval-d4")  # 引用校验与拒答评测（Haiku 作答+校验，Sonnet 评判）
+    p = sub.add_parser("eval-d4", help="引用校验与拒答评测（Haiku 作答+校验，Sonnet 评判）")
     p.add_argument("--sample", type=int)
     p.add_argument("--model", default="claude-haiku-5-5")
     p.add_argument("--tag", default="d4")
@@ -783,12 +866,12 @@ def main() -> None:
         help="首轮审查方式（ADR 012）",
     )
     p.set_defaults(func=cmd_serve)
-    p = sub.add_parser("reverify-d4")  # 复用某次 D4 运行的原始回答，只换校验策略重评
+    p = sub.add_parser("reverify-d4", help="复用某次 D4 运行的原始回答，只换校验策略重评")
     p.add_argument("source", help="runs/ 下的 D4 运行目录名")
     p.add_argument("--tag", default="d4-reverify")
     p.add_argument("--max-cost", type=float, default=2.5)
     p.set_defaults(func=cmd_reverify_d4)
-    p = sub.add_parser("eval-dialog")  # 多轮对话评测：none / full / compress 三种记忆对比
+    p = sub.add_parser("eval-dialog", help="多轮对话评测：none / full / compress 三种记忆对比")
     p.add_argument("--limit", type=int, help="只跑前 N 组对话")
     p.add_argument("--mode", action="append", choices=["none", "full", "compress"])
     p.add_argument("--tag", default="dialog")
@@ -797,6 +880,5 @@ def main() -> None:
     sub.add_parser("link-datapilot", help="把供应商台账库链接进 DataPilot").set_defaults(
         func=cmd_link
     )
-    sub.metavar = "{" + ",".join(n for n in sub.choices if n not in hidden_cmds) + "}"
     args = parser.parse_args()
     args.func(args)

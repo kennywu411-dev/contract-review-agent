@@ -12,6 +12,8 @@ from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
 
+from evalkit.stats import percentile as _pct  # 排序后取第 int(p·n) 个，不插值
+
 from contract_review.eval_retrieval import RUNS_DIR, is_hit
 from contract_review.evalset import Question
 
@@ -65,11 +67,6 @@ def score_one(q: Question, r: dict) -> dict:
 
 def _rate(rows: list[dict], pred) -> float:
     return sum(1 for r in rows if pred(r)) / len(rows) if rows else 0.0
-
-
-def _pct(xs: list[float], p: float) -> float:
-    xs = sorted(xs)
-    return xs[min(len(xs) - 1, int(p * len(xs)))] if xs else 0.0
 
 
 def summarize_agent(rows: list[dict]) -> dict:

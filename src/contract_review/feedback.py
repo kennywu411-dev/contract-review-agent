@@ -1,64 +1,62 @@
 """试用反馈：用户对每条审查意见打标（有用 / 没用 / 不是风险 / 看不懂）。
 
-每次打标追加一行 JSONL；同一条意见可以改标，汇总时按最后一次为准。
-只记会话 id、意见序号、标签和意见摘要（条款、类型、等级），不记合同原文。
-主指标只算高、中等级的意见，口径见 docs/用户试用方案.md 第 5 节。
+存储和"按最后一次为准"的汇总由评测平台 evalkit.feedback 提供，这里只定义本产品的口径：
+- 一个打标目标 = (会话, 审查, 第几条意见)，同一条意见可以改标；
+- 只记会话 id、意见序号、标签和意见摘要（条款、类型、等级），不记合同原文；
+- 主指标只算高、中等级的意见，口径见 docs/用户试用方案.md 第 5 节。
 """
 
 from __future__ import annotations
 
-import json
-import threading
-import time
 from pathlib import Path
+
+from evalkit import feedback as ek
 
 LABELS = ("useful", "not_useful", "not_risk", "unclear")
 MAIN_LEVELS = ("高", "中")
+KEY = ("session_id", "review_id", "finding_index")
 
 
 class FeedbackStore:
     def __init__(self, path: Path):
         self.path = path
-        self._lock = threading.Lock()
+        self._store = ek.FeedbackStore(path, labels=LABELS)
 
     def add(self, session_id: str, entry: dict) -> None:
-        row = {"ts": time.time(), "session_id": session_id, **entry}
-        with self._lock:
-            self.path.parent.mkdir(parents=True, exist_ok=True)
-            with self.path.open("a", encoding="utf-8") as f:
-                f.write(json.dumps(row, ensure_ascii=False) + "\n")
+        self._store.add({"session_id": session_id, **entry})
 
     def load(self) -> list[dict]:
-        if not self.path.exists():
-            return []
-        with self.path.open(encoding="utf-8") as f:
-            return [json.loads(line) for line in f if line.strip()]
+        return self._store.load()
 
 
-def _rate(n: int, total: int) -> float | None:
-    return round(n / total, 3) if total else None
+def _round(x: float | None) -> float | None:
+    return None if x is None else round(x, 3)
 
 
 def summarize(rows: list[dict]) -> dict:
-    latest: dict[tuple, dict] = {}
-    for r in rows:  # 追加顺序即时间顺序，后来的覆盖先来的
-        latest[(r["session_id"], r["review_id"], r["finding_index"])] = r
-    main = [r for r in latest.values() if r["finding"].get("level") in MAIN_LEVELS]
-    labels = {k: sum(r["label"] == k for r in main) for k in LABELS}
-    by_type: dict[str, dict] = {}
-    for r in main:
-        t = by_type.setdefault(
-            r["finding"].get("risk_type", "?"), {"rated": 0, "useful": 0, "not_risk": 0}
-        )
-        t["rated"] += 1
-        t["useful"] += r["label"] == "useful"
-        t["not_risk"] += r["label"] == "not_risk"
+    s = ek.summarize(
+        rows,
+        key=KEY,
+        labels=LABELS,
+        positive="useful",
+        negative="not_risk",
+        where=lambda r: r["finding"].get("level") in MAIN_LEVELS,
+        by="finding.risk_type",
+    )
+    groups = s["by"]["groups"] if "by" in s else {}
     return {
-        "rated": len(main),
-        "sessions": len({r["session_id"] for r in main}),
-        "labels": labels,
-        "adoption_rate": _rate(labels["useful"], len(main)),
-        "false_positive_rate": _rate(labels["not_risk"], len(main)),
-        "unclear_rate": _rate(labels["unclear"], len(main)),
-        "by_risk_type": by_type,
+        "rated": s["rated"],
+        "sessions": s["sessions"],
+        "labels": s["labels"],
+        "adoption_rate": _round(s["positive_rate"]),
+        "false_positive_rate": _round(s["negative_rate"]),
+        "unclear_rate": _round(s["rates"]["unclear"]),
+        "by_risk_type": {
+            ("?" if t == "None" else t): {
+                "rated": g["rated"],
+                "useful": g["useful"],
+                "not_risk": g["not_risk"],
+            }
+            for t, g in groups.items()
+        },
     }

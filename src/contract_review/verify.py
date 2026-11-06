@@ -227,7 +227,7 @@ def verify_result(result, verifier: HaikuVerifier) -> VerifiedAnswer:
             if not support or not (label == "supported" or text != s["text"]):
                 v.dropped.append({"sentence": s, "reason": f"校验未通过（{label}）"})
                 continue
-            # 数字检查：文档用原文，表格只用数据行（表头里的数字不算依据）
+            # 数字检查：文档用原文，表格只用数据行（表头里的数字不算依据，
             texts = [
                 result.citations[c]["text"] for c in support if result.citations[c]["kind"] == "doc"
             ]

@@ -36,7 +36,7 @@
 - 长对话压缩：12 组 8 轮对话，结构化摘要和保留全部历史的正确率一样（98.8%），只留最近 2 轮掉到 75.0%。压缩后历史短了 32%，但总花费只降 1%，因为每轮的大头是合同全文和检索结果（[ADR 011](docs/adr/011-长对话上下文压缩.md)）。
 - 和 DeepSeek 对比：检出、类型、依据持平，精确率低约 6 个点，单份花费约 2.4 倍。默认用 Haiku，DeepSeek 作为私有化部署的备选（[ADR 010](docs/adr/010-国产模型对比-DeepSeek.md)）。
 
-全部数字、运行 ID 和测量条件见 [docs/numbers.md](docs/numbers.md)。
+全部数字、运行 ID 和测量条件见 [docs/numbers.md](docs/numbers.md)。评测的运行、配对统计、反馈汇总和看板由 [evalkit](https://github.com/kennywu411-dev/evalkit) 提供。
 
 ## 难评测集 v2
 

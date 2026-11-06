@@ -14,7 +14,7 @@
 | `source_type` | `faq`（学校或教育部官方 FAQ 的问题）/ `public`（知乎、贴吧等公开提问，已改写）/ `doc`（照着文件目录出的题） |
 | `source_url` | faq/public 必填，取自 `docs/真实提问来源.md`；doc 为 null |
 | `gold` | 标准出处列表，命中任意一个即算对。PDF：`{"doc_id", "page", "clause": null}`；网页：`{"doc_id", "page": null, "clause": "第二十八条"}`（clause 必须是该段开头的原文前缀；没有"第X条"的通知类文件写段首几个字，如 `（一）增加本专科生国家奖学金`）；需查表题另加 `{"table": "scholarships", "where": "school='bnu' AND name='京师奖学金'"}`。refuse 题为 `[]` |
-| `answer_hint` | 标准答案要点（一两句，用于 D4/D5 判分），refuse 题写应如何拒答 |
+| `answer_hint` | 标准答案要点（一两句，用于 阶段 4/D5 判分），refuse 题写应如何拒答 |
 | `note` | 出题说明，可空 |
 
 ## 出题规则

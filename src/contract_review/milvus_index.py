@@ -65,7 +65,7 @@ def _reap(proc: subprocess.Popen) -> None:
 def _ensure_server(data_dir: Path) -> str:
     """同一数据目录只起一个服务；只监听 127.0.0.1。
 
-    先取空闲端口再交给子进程绑定，中间可能被别人抢走：子进程退出就换端口重试。
+    先取空闲端口再交给子进程绑定，中间可能被别人抢走子进程退出就换端口重试。
     """
     key = str(data_dir.resolve())
     proc = _SERVERS.get(key)

@@ -42,7 +42,7 @@ class Contract:
     gold: list[dict] = field(default_factory=list)
     borderline: list[dict] = field(default_factory=list)
     favorable: list[dict] = field(default_factory=list)
-    # 金标准没植入、但按租户规范报出来是对的意见（代码审查订正，见问题日志 P21）：不算误报
+    # 金标准没植入、但按租户规范报出来是对的意见（复核订正，见问题日志 P21）：不算误报
     acceptable: list[dict] = field(default_factory=list)
     # v2：干净合同里的干扰项（刚好合规的数值、合法免责、对我方有利条款等），报出算误报，按类别统计
     distractors: list[dict] = field(default_factory=list)

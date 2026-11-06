@@ -2,12 +2,7 @@ import sqlite3
 
 import pytest
 
-from contract_review.datapilot_client import (
-    LocalBackend,
-    MCPBackend,
-    datapilot_available,
-    link_datapilot,
-)
+from contract_review.datapilot_client import DATAPILOT_DIR, LocalBackend, MCPBackend, link_datapilot
 
 
 @pytest.fixture
@@ -47,7 +42,7 @@ def test_link_is_idempotent(tmp_path, monkeypatch):
     assert link_datapilot() == target and target.is_symlink()
 
 
-@pytest.mark.skipif(not datapilot_available(), reason="本机没有 DataPilot")
+@pytest.mark.skipif(not (DATAPILOT_DIR / "src").exists(), reason="本机没有 DataPilot")
 def test_mcp_backend_roundtrip():
     link_datapilot()
     backend = MCPBackend()

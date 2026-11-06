@@ -267,3 +267,113 @@ def test_run_review_eval_resumes_existing_run(tmp_path, monkeypatch):
     assert [r["id"] for r in rows] == ["goods-r1", "goods-r2", "goods-r3"]
     s = json.loads((out / "summary.json").read_text())
     assert s["n"] == 3 and s["resumed_from"] == 2
+
+
+def _fake_run_one(calls):
+    from types import SimpleNamespace as NS
+
+    def run_one(c):
+        calls.append(c.id)
+        d = result([finding("第四条", "inspection")])
+        return NS(trace={"trace_id": f"t-{c.id}", "steps": []} | d["trace"], to_dict=lambda: d)
+
+    return run_one
+
+
+def test_run_review_eval_writes_evalkit_run(tmp_path, monkeypatch):
+    # 运行由 evalkit 负责：results.jsonl / config.json / traces 是平台格式，review_results.jsonl 派生
+    import json
+
+    from evalkit import store
+
+    import contract_review.eval_review as er
+
+    monkeypatch.setattr(er, "RUNS_DIR", tmp_path)
+    cs = [contract(id=f"goods-r{i}") for i in range(1, 4)]
+    out = er.run_review_eval(
+        cs, _fake_run_one([]), "x", dev_ids={"goods-r1"}, variant="haiku", concurrency=2
+    )
+    rows = store.load_rows(out)
+    assert {r["item_id"] for r in rows} == {"goods-r1", "goods-r2", "goods-r3"}
+    assert {r["split"] for r in rows} == {"dev", "holdout"}
+    cfg = store.load_config(out)
+    assert cfg["dataset"]["n"] == 3 and cfg["primary_metric"] == "contract_review"
+    # trace 文件仍是本项目的格式（依据校验、追问评测、Web 回放都按 trace_id 读它）
+    t = json.loads((out / "traces" / "t-goods-r2.json").read_text())
+    assert t["end"] == "submit_review" and t["item_id"] == "goods-r2"
+    review = [json.loads(x) for x in (out / "review_results.jsonl").open()]
+    assert [r["id"] for r in review] == ["goods-r1", "goods-r2", "goods-r3"]
+    assert review[0]["trace_id"] == "t-goods-r1"
+    metrics = json.loads((out / "metrics.json").read_text())
+    assert set(metrics["haiku"]) >= {"检出率", "精确率（严格）"}
+
+
+def test_resume_converts_legacy_run(tmp_path, monkeypatch):
+    # 接入 evalkit 之前的运行只有 review_results.jsonl：续跑时先转换，已跑过的合同不重跑
+    import json
+
+    import contract_review.eval_review as er
+
+    monkeypatch.setattr(er, "RUNS_DIR", tmp_path)
+    legacy = tmp_path / "x-legacy"
+    legacy.mkdir()
+    row = score_contract(contract(id="goods-r1"), result([finding("第四条", "inspection")]))
+    (legacy / "review_results.jsonl").write_text(
+        json.dumps(row | {"trace_id": "old"}, ensure_ascii=False) + "\n"
+    )
+    calls = []
+    cs = [contract(id="goods-r1"), contract(id="goods-r2")]
+    out = er.run_review_eval(cs, _fake_run_one(calls), "x", resume=legacy)
+    assert calls == ["goods-r2"]
+    s = json.loads((out / "summary.json").read_text())
+    assert s["n"] == 2 and s["resumed_from"] == 1
+
+
+def test_contract_passed_and_evalkit_rows():
+    from contract_review.eval_review import contract_passed, to_evalkit_rows
+
+    good = score_contract(
+        contract(),
+        result(
+            [
+                finding("第四条", "inspection"),
+                finding(None, "confidentiality"),
+                finding("第一条", "unit_price", ["T1"]),
+            ]
+        ),
+    )
+    miss = score_contract(contract(), result([finding("第四条", "inspection")]))
+    assert contract_passed(good) and not contract_passed(miss)
+    rows = to_evalkit_rows([good | {"trace_id": "a"}, miss | {"trace_id": "b"}], "haiku")
+    assert [r["passed"] for r in rows] == [True, False]
+    assert rows[0]["scores"]["contract_review"]["detail"]["id"] == "goods-r1"
+
+
+def test_legacy_rows_without_strict_hits_report_none():
+    # 严格口径是后来加的：早期运行没有 strict_hits，汇总不报错，严格精确率记为空
+    row = score_contract(contract(), result([finding("第四条", "inspection")]))
+    row.pop("strict_hits")
+    s = summarize_review([row])
+    assert s["detection"]["precision_strict"] is None
+    assert s["detection"]["precision"] == 1.0
+
+
+def test_gate_on_review_runs():
+    from evalkit.gate import gate
+
+    from contract_review.eval_review import to_evalkit_rows
+
+    def rows(n_ok, n):
+        out = []
+        for i in range(n):
+            fs = [
+                finding("第四条", "inspection"),
+                finding(None, "confidentiality"),
+                finding("第一条", "unit_price", ["T1"]),
+            ]
+            r = score_contract(contract(id=f"c{i}"), result(fs if i < n_ok else []))
+            out.append(r | {"trace_id": f"t{i}"})
+        return to_evalkit_rows(out)
+
+    assert gate(rows(20, 20), rows(19, 20), max_drop=0.1).passed
+    assert not gate(rows(20, 20), rows(12, 20), max_drop=0.1).passed

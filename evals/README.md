@@ -1,10 +1,10 @@
 # 合同审查评测集（构造）
 
-`contracts.jsonl` 由 `uv run python scripts/make_contracts.py` 生成（固定随机种子，可复现），**全部是构造数据**：公司、价格、条款均为虚构。
+`contracts.jsonl` 由 `uv run python scripts/make_contracts.py` 生成（固定随机种子，可复现），全部是构造数据：公司、价格、条款均为虚构。
 
 ## 怎么构造的
 
-- 7 类合同（工业品买卖、农产品买卖、加工承揽、仓储委托、数据委托处理、数据产品开发、数据供应），条款顺序参照 7 份官方示范文本（`data/sources.toml` 里的 `tpl-*`）。**条款正文全部自写，不复制示范文本原文**，所以评测合同可以入 git（示范文本没有开放许可，见 ADR 007）。
+- 7 类合同（工业品买卖、农产品买卖、加工承揽、仓储委托、数据委托处理、数据产品开发、数据供应），条款顺序参照 7 份官方示范文本（`data/sources.toml` 里的 `tpl-*`）。条款正文全部自写，不复制示范文本原文，所以评测合同可以入 git（示范文本没有开放许可，见 ADR 007）。
 - 我方是 3 家构造公司之一（租户 huaxin / yunqi / ruifeng），合同里写明是甲方还是乙方；甲方固定是付款方、接收方。
 - 每份合同 14–16 条。干净条款是对双方都常规的写法；风险条款按"受损方 = 我方"植入，每类 2–3 种写法。
 - 单价风险按 `data/ledger_src/purchase_history.csv` 的历史均价植入：风险合同 ×1.28–1.45，干净合同 ×0.97–1.03。
@@ -31,9 +31,20 @@
 
 ## v2 难评测集（ADR 013）
 
-`contracts_v2.jsonl` 由 `uv run python scripts/make_contracts_v2.py` 生成（固定种子），**全部是构造数据**。60 份长合同（每份 25–30 条），30 份植入 75 处风险、30 份干净：
+`contracts_v2.jsonl` 由 `uv run python scripts/make_contracts_v2.py` 生成（固定种子），全部是构造数据。60 份长合同（每份 25–30 条），30 份植入 75 处风险、30 份干净：
 
 - 风险分 5 类：隐蔽位置 18、换说法 18、跨条款组合 12（`clauses` 记多条）、临界值 15、标准位置对照 12；每处带 `category`、`why`、`alt_types`。
 - 干净合同带 `distractors`：刚好合规的数值、合法免责、对我方有利的单方条款、"签订地法院 + 签订地在我方"。
 - 抽查清单 `contracts_v2_spotcheck.md`（20 条）随生成器一起输出。
 - 跑法：`cra eval-review --evalset v2 [--multi-agent]`。
+
+## 运行记录格式
+
+`cra eval-review` 由评测平台 evalkit 运行，运行目录 `runs/<tag>-<时间>-<随机串>/` 里：
+
+- `results.jsonl`、`config.json`：evalkit 格式，每份合同一行（主指标 = 风险全部检出且没有误报；反问合同看是否反问），配置快照记录评测集各合同的内容哈希、模型和参数；
+- `traces/<trace_id>.json`：每份合同的完整过程，格式与之前相同；
+- `review_results.jsonl`、`summary.json`：由 `results.jsonl` 派生的逐项计数和汇总，依据校验、多轮追问、分析脚本和 Web 运行记录页都读它们；
+- `metrics.json`：看板上显示的检出率、精确率等指标。
+
+接入 evalkit 之前的运行只有 `review_results.jsonl`，`--resume` 续跑、`cra eval-gate`、`cra eval-dashboard` 会现场转换，原文件不改。
