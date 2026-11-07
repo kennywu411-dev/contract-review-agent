@@ -540,7 +540,7 @@ GEN_DATE = "2026-10-23"  # 生成日：台账里资质有效期早于这天的�
 
 
 def supplier_flag(tenant: str, name: str) -> str | None:
-    """台账里对方的异常（黑名单或资质过期）；按规范报出属于正确意见（全分支审查 Important 2）。"""
+    """台账里对方的异常（黑名单或资质过期）；按规范报出属于正确意见。"""
     _, status = ledger()
     s = status.get((tenant, name))
     if s is None:
@@ -671,7 +671,7 @@ def build_contract(
             and slot not in borderline
         ):
             # 甲方视角的安全写法把"侵犯知识产权、违反保密义务"等排除在上限之外，例外对我方同样适用，
-            # 我方对外赔偿可能无上限——按华信第十四条、云启第十一条报出是对的（全分支审查 Important 3）
+            # 我方对外赔偿可能无上限，按华信第十四条、云启第十一条报出是对的
             acceptable.append(
                 {
                     "clauses": [no],

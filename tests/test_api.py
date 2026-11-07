@@ -220,7 +220,7 @@ def start_session(c, contract=CONTRACT, tenant="huaxin"):
 
 
 def test_session_id_is_issued_by_server():
-    # 审查 Minor 5a：会话 id 由服务端签发（不可猜），客户端自带的 id 不被采用
+    # 会话 id 由服务端签发（不可猜），客户端自带的 id 不被采用
     eng = FakeEngine()
     c = TestClient(create_app(engine=eng))
     r = c.post("/api/review", json={"contract": CONTRACT, "tenant": "huaxin", "session_id": "mine"})
@@ -281,7 +281,7 @@ def test_contract_run_kinds_and_rows(client):
 
 
 def test_followup_ignores_new_contract_and_survives_eviction(monkeypatch):
-    # 全分支审查 Important 5：追问时带来的 contract 不能替换会话里的合同；会话中途被淘汰不报 KeyError
+    # 追问时带来的 contract 不能替换会话里的合同；会话中途被淘汰不报 KeyError
     import contract_review.api as api_mod
 
     eng = FakeEngine()
@@ -306,7 +306,7 @@ def test_followup_ignores_new_contract_and_survives_eviction(monkeypatch):
 
 
 def test_contract_delimiter_in_text_cannot_close_block():
-    # 审查 Minor 9：正文里的 </合同> 不能提前闭合分隔符
+    # 正文里的 </合同> 不能提前闭合分隔符
     from contract_review.review_agent import review_contract
     from tests.test_agent import FakeLLM, tool
     from tests.test_tools import box
@@ -319,7 +319,7 @@ def test_contract_delimiter_in_text_cannot_close_block():
 
 
 def test_scope_sql_rejects_common_tenant():
-    # 审查 Minor 11：common 不是客户租户，不能作为查询范围
+    # common 不是客户租户，不能作为查询范围
     from contract_review.tools import scope_sql
 
     with pytest.raises(ValueError):
@@ -327,7 +327,7 @@ def test_scope_sql_rejects_common_tenant():
 
 
 def test_app_shutdown_closes_engine():
-    # 审查 Minor 10：服务关闭时回收 MCP 后端等资源
+    # 服务关闭时回收 MCP 后端等资源
     class Closable(FakeEngine):
         closed = False
 
@@ -371,7 +371,7 @@ def test_real_engine_first_turn_uses_review_mode(monkeypatch):
 
 
 def test_concurrent_request_on_same_session_rejected():
-    # 审查 I4：同一会话已有进行中的请求时，再来的追问直接 409，不并发改同一份记忆
+    # 同一会话已有进行中的请求时，再来的追问直接 409，不并发改同一份记忆
     import contract_review.api as api_mod
 
     eng = FakeEngine()
@@ -393,7 +393,7 @@ def test_concurrent_request_on_same_session_rejected():
 
 
 def test_answer_to_clarification_is_first_review():
-    # 审查 M3：首轮反问后，"我方是甲方"这一轮才是真正的首次审查，引擎要按首轮处理（可走多 Agent）
+    # 首轮反问后，"我方是甲方"这一轮才是真正的首次审查，引擎要按首轮处理（可走多 Agent）
     class ClarifyFirst(FakeEngine):
         def review(self, contract, tenant, on_step, history="", question="", first_review=False):
             self.calls.append(("first", first_review, question))

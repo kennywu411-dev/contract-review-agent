@@ -157,7 +157,7 @@ def test_first_turn_has_no_followup_tool():
 
 
 def test_missing_clause_skips_quote_check():
-    # 审查 Minor 7：缺失型意见的摘录常写"无"，不应判成摘录与原文不符
+    # 缺失型意见的摘录常写"无"，不应判成摘录与原文不符
     miss = FINDING | {"clause": "缺失", "quote": "（无保密条款）", "risk_type": "confidentiality"}
     llm = FakeLLM([[tool("submit_review", REVIEW | {"findings": [miss]})]])
     r = review_contract(CONTRACT, "huaxin", llm, box())

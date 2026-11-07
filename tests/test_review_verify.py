@@ -119,7 +119,7 @@ def test_verify_skips_non_review_and_survives_verifier_error():
 
 
 def test_law_refs_catches_other_named_laws():
-    # 全分支审查 Important 4：白名单外的法名也要抽出来，凭记忆引用别的法最该被拦
+    # 白名单外的法名也要抽出来，凭记忆引用别的法最该被拦
     assert law_refs("依据《个人信息保护法》第二十一条，受托人应当……") == {
         ("其他:个人信息保护法", "第二十一条")
     }
@@ -139,7 +139,7 @@ def test_other_law_is_always_unretrieved():
 
 
 def test_verifier_support_ids_are_normalized():
-    # 审查 Minor 8：校验器返回 "[C1]" 也要认
+    # 校验器返回 "[C1]" 也要认
     from contract_review.review_verify import verify_review
 
     r = {"kind": "review", "citations": CITES, "findings": [_f("依据民法典第六百二十一条。")]}

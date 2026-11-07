@@ -164,7 +164,7 @@ def test_backfill_not_counted_when_fallback_after_success():
 
 
 def test_backfill_keeps_previous_status():
-    # 审查 I3：第二次压缩时模型漏掉了上次摘要里"已谈妥"的那条，补录要沿用旧状态，不能退化成"已报"
+    # 第二次压缩时模型漏掉了上次摘要里"已谈妥"的那条，补录要沿用旧状态，不能退化成"已报"
     first = {
         "our_side": "甲",
         "findings": [
@@ -203,7 +203,7 @@ def test_backfill_keeps_previous_status():
 
 
 def test_compression_is_batched_and_backfill_counted_once():
-    # 审查 M1：超预算后不能每轮都调摘要模型；同一条意见的补录只计一次
+    # 超预算后不能每轮都调摘要模型；同一条意见的补录只计一次
     s = FakeSummarizer({"our_side": "甲", "findings": [], "decisions": [], "cited": []})
     mem = ReviewMemory(mode="compress", keep_last=2, budget_chars=50, summarizer=s)
     mem.add_review(REVIEW)
@@ -214,14 +214,14 @@ def test_compression_is_batched_and_backfill_counted_once():
 
 
 def test_compress_without_summarizer_uses_rule_ledger_silently():
-    # 审查 M2：不给摘要模型就是"纯规则台账"，不算错误；keep_last=0 也不能崩
+    # 不给摘要模型就是"纯规则台账"，不算错误；keep_last=0 也不能崩
     mem = build(ReviewMemory(mode="compress", keep_last=0, budget_chars=50, summarizer=None))
     h = mem.render()
     assert mem.compress_errors == 0 and "第0轮第1条：第四条" in h
 
 
 def test_summary_side_uses_latest_turn():
-    # 审查 M4：换回立场发生在保留原文的轮次里时，摘要头部的"我方"也要是最新的
+    # 换回立场发生在保留原文的轮次里时，摘要头部的"我方"也要是最新的
     payload = {"our_side": "乙", "findings": [], "decisions": [], "cited": []}
     mem = ReviewMemory(
         mode="compress", keep_last=1, budget_chars=50, summarizer=FakeSummarizer(payload)
@@ -233,7 +233,7 @@ def test_summary_side_uses_latest_turn():
 
 
 def test_first_review_marker_after_clarification():
-    # 审查 M3：首轮是反问时，"首次审查"标在第一次给出意见的那一轮
+    # 首轮是反问时，"首次审查"标在第一次给出意见的那一轮
     mem = ReviewMemory(mode="full")
     mem.add_review({"kind": "clarify", "clarification": "我方是甲方还是乙方？"})
     mem.add_followup("我方是甲方", REVIEW)

@@ -25,7 +25,7 @@ kind = "html"
 doc_id = "law-civil-procedure"
 tenant = "common"
 title = "中华人民共和国民事诉讼法（2023年修正）"
-# 原定最高院公报页 2026-10-23 下载 502，改用上海市发改委网站转载的全文 PDF
+# 原定最高院公报页下载 502，改用上海市发改委网站转载的全文 PDF
 url = "https://fgw.sh.gov.cn/cmsres/d4/d4191427cbc840618ca960127996e834/f2d5a8396851dc9bbc6e3679da2dc4f0.pdf"
 issuer = "全国人民代表大会常务委员会"
 issued = "2023-09-01"

@@ -243,7 +243,7 @@ dev = [
 requires-dist = [
     { name = "anthropic", specifier = ">=2.1" },
     { name = "docling", specifier = ">=2.142,<3" },
-    { name = "evalkit", editable = "../evalkit" },
+    { name = "evalkit", git = "https://github.com/kennywu411-dev/evalkit?rev=816ce037cc853db55e0961aaf7e7616242469fb3" },
     { name = "fastapi", specifier = ">=0.115" },
     { name = "mcp", specifier = ">=2.3" },
     { name = "numpy", specifier = ">=2" },
@@ -571,15 +571,7 @@ wheels = [
 [[package]]
 name = "evalkit"
 version = "0.1.0"
-source = { editable = "../evalkit" }
-
-[package.metadata]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "pytest", specifier = ">=8" },
-    { name = "ruff", specifier = ">=0.6" },
-]
+source = { git = "https://github.com/kennywu411-dev/evalkit?rev=816ce037cc853db55e0961aaf7e7616242469fb3#816ce037cc853db55e0961aaf7e7616242469fb3" }
 
 [[package]]
 name = "faiss-cpu"

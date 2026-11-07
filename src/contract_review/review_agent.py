@@ -124,7 +124,7 @@ def normalize_clause(raw: str) -> str | None:
 
 
 def _defang(text: str) -> str:
-    """用户文本里的 <合同> / </合同> 换成全角书名号，不能提前闭合分隔符（审查 Minor 9）。"""
+    """用户文本里的 <合同> / </合同> 换成全角书名号，不能提前闭合分隔符。"""
     return (text or "").replace("</合同>", "〈/合同〉").replace("<合同>", "〈合同〉")
 
 

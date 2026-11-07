@@ -59,8 +59,8 @@ dev = [
 "scripts/compare_v2.py" = ["E501"]
 
 [tool.uv.sources]
-# 评测平台（同级目录的 evalkit 仓库）：运行、统计、门禁、反馈、看板都由它提供
-evalkit = { path = "../evalkit", editable = true }
+# 评测平台 evalkit：运行、统计、门禁、反馈、看板都由它提供
+evalkit = { git = "https://github.com/kennywu411-dev/evalkit", rev = "816ce037cc853db55e0961aaf7e7616242469fb3" }
 
 [tool.uv.build-backend]
 module-name = "contract_review"

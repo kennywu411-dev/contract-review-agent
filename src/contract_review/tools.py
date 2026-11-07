@@ -19,14 +19,14 @@ SQL_PREVIEW_ROWS = 30
 SCOPED_TABLES = ("suppliers", "purchase_history")
 _WITH = re.compile(r"^\s*with\s+(recursive\s+)?", re.IGNORECASE)
 # 带 schema 的限定名（main.suppliers、"main"."x"、[temp].x）直接解析到真实表，
-# CTE 遮蔽不生效，一律拒绝（全分支审查 Critical 1）
+# CTE 遮蔽不生效，一律拒绝
 _SCHEMA = re.compile(
     r"""(?:\b(?:main|temp|temporary)\b|["`\[](?:main|temp|temporary)["`\]])\s*\.""", re.I
 )
 
 
 def scope_sql(sql: str, tenant: str) -> str:
-    # tenant 会拼进 SQL，只接受固定取值；common 不是客户租户（审查 Minor 11）
+    # tenant 会拼进 SQL，只接受固定取值；common 不是客户租户
     if tenant not in TENANTS or tenant == "common":
         raise ValueError(f"未知租户：{tenant}")
     if _SCHEMA.search(sql):

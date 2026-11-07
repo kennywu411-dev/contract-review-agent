@@ -202,7 +202,7 @@ def verify_result(result, verifier: HaikuVerifier) -> VerifiedAnswer:
     v = VerifiedAnswer(result.kind, unanswered=result.unanswered)
     kept: dict[int, dict] = {}
     facts: list[tuple[int, dict]] = []
-    # note 句也交给校验器：无数字的"研究生也能申请国奖"被标成 note 也不能免检（审查 Important 1）
+    # note 句也交给校验器：无数字的"研究生也能申请国奖"被标成 note 也不能免检
     # 校验器对只说明边界、建议咨询部门的 note 句标 supported、support 可为空。
     for i, s in enumerate(result.sentences):
         facts.append((i, s))
@@ -227,7 +227,7 @@ def verify_result(result, verifier: HaikuVerifier) -> VerifiedAnswer:
             if not support or not (label == "supported" or text != s["text"]):
                 v.dropped.append({"sentence": s, "reason": f"校验未通过（{label}）"})
                 continue
-            # 数字检查：文档用原文，表格只用数据行（表头里的数字不算依据，审查 Important 3）
+            # 数字检查：文档用原文，表格只用数据行（表头里的数字不算依据，
             texts = [
                 result.citations[c]["text"] for c in support if result.citations[c]["kind"] == "doc"
             ]

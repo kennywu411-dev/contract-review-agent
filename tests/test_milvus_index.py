@@ -73,7 +73,7 @@ def test_default_uri_runs_server_in_separate_process(tmp_path, fake_encoder, mon
 
 
 def test_server_start_retries_when_port_taken(tmp_path, monkeypatch):
-    # 审查 Minor 10：先取空闲端口再让子进程绑定有竞争；端口被占时换一个重试
+    # 先取空闲端口再让子进程绑定有竞争；端口被占时换一个重试
     import socket
 
     from contract_review import milvus_index

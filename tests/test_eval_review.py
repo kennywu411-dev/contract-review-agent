@@ -140,7 +140,7 @@ def test_low_level_findings_reported_separately():
 
 
 def test_acceptable_findings_are_not_false_positives():
-    # 全分支审查 Important 2/3：金标准漏标的正确意见（台账资质过期、责任上限例外对我方同样适用）
+    # 金标准漏标的正确意见（台账资质过期、责任上限例外对我方同样适用）
     c = contract(
         id="goods-c3",
         gold=[],
@@ -160,7 +160,7 @@ def test_acceptable_findings_are_not_false_positives():
 
 
 def test_strict_precision_counts_one_correct_finding_per_gold():
-    # 审查 Minor 6：同一条款多条意见、类型判错的意见不计入严格精确率
+    # 同一条款多条意见、类型判错的意见不计入严格精确率
     r = result(
         [
             finding("第四条", "inspection"),

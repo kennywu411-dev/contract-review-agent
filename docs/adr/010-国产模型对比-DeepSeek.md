@@ -1,16 +1,15 @@
-# ADR 010：国产模型对比（DeepSeek）——默认仍用 Haiku 5.5，DeepSeek 作为可切换的私有化备选
+# ADR 010：国产模型对比（DeepSeek），默认仍用 Haiku 5.5，DeepSeek 作为可切换的私有化备选
 
-- 日期：2026-10-23
 - 状态：已采纳
 - 运行（同一份代码、同一段系统提示词、同一套金标准，均用 `scripts/compare_models.py` 从 trace 重算）：
-  - Haiku 5.5：`runs/review-haiku-v2-20261023-230827`
-  - DeepSeek（`deepseek-flash`，Beta 端点 + strict 工具调用）：`runs/review-ds-full-20261023-223412`
-  - 依据评判：Haiku `runs/review-d4-20261023-211639`（对应早一版 Haiku 全量）、DeepSeek `runs/review-d4-ds-20261023-230825`
-  - 调试：`runs/review-ds-smoke-20261023-221742`、`runs/review-ds-s20-20261023-221845`、`runs/review-ds-strict-smoke-20261023-223240`
+  - Haiku 5.5：`runs/review-haiku-v2-f434af`
+  - DeepSeek（`deepseek-flash`，Beta 端点 + strict 工具调用）：`runs/review-ds-full-778a82`
+  - 依据评判：Haiku `runs/review-d4-464de8`（对应早一版 Haiku 全量）、DeepSeek `runs/review-d4-ds-0910d5`
+  - 调试：`runs/review-ds-smoke-9cb7fb`、`runs/review-ds-s20-fc3013`、`runs/review-ds-strict-smoke-2a3bcb`
 
 ## 背景
 
-私有化或国内部署时可能不能用 Claude。agent 代码只依赖一个 `create(**Anthropic 风格参数)` 接口，`openai_compat.py` 把它翻译成 OpenAI 兼容格式，切换模型只改 `--model`。这里比较换成 DeepSeek 之后质量、成本、速度各差多少。
+私有化或国内部署时可能不能用 Claude。agent 代码只依赖一个 `create(Anthropic 风格参数)` 接口，`openai_compat.py` 把它翻译成 OpenAI 兼容格式，切换模型只改 `--model`。这里比较换成 DeepSeek 之后质量、成本、速度各差多少。
 
 ## 先修的协议问题（问题日志 P22）
 
@@ -48,4 +47,4 @@
 
 ## 需要注意的波动
 
-同一份代码 Haiku 跑两次（`review-full-20261023-201800` 与 `review-haiku-v2-20261023-230827`），干净合同误报（高/中）分别是 66.7% 和 83.3%，检出 100% 和 98.6%。干净合同只有 12 份，差一两份就是十几个百分点；两模型在这个指标上的差距（75.0% vs 83.3%）在波动范围之内，不能据此说哪个误报更少。精确率按意见计（120 多条），相对稳一些。
+同一份代码 Haiku 跑两次（`review-full-357021` 与 `review-haiku-v2-f434af`），干净合同误报（高/中）分别是 66.7% 和 83.3%，检出 100% 和 98.6%。干净合同只有 12 份，差一两份就是十几个百分点；两模型在这个指标上的差距（75.0% vs 83.3%）在波动范围之内，不能据此说哪个误报更少。精确率按意见计（120 多条），相对稳一些。

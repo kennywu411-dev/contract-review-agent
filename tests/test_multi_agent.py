@@ -196,7 +196,7 @@ def test_split_contract_accepts_bracket_headings():
 
 
 def test_unparseable_contract_falls_back_to_single_agent():
-    # 审查 C1：识别不出条款时不能产出"空审查"，回退单 Agent 审全文
+    # 识别不出条款时不能产出"空审查"，回退单 Agent 审全文
     contract = "采购合同\n一、价款\n单价3600元\n二、验收\n交付即视为合格"
     plan = {"our_side": "甲", "assignments": [{"clause": "第一条", "groups": ["pricing"]}]}
 
@@ -228,7 +228,7 @@ def test_unparseable_contract_falls_back_to_single_agent():
 
 
 def test_failed_group_does_not_fail_review():
-    # 审查 I1：一组异常，其余两组的结果照常汇总，标注哪组没审
+    # 一组异常，其余两组的结果照常汇总，标注哪组没审
     class Boom(RoutedLLM):
         def create(self, **kw):
             content = kw["messages"][0]["content"]
@@ -245,7 +245,7 @@ def test_failed_group_does_not_fail_review():
 
 
 def test_invalid_citation_kept_visible():
-    # 审查 I2：子 agent 引用了没检索过的编号，要进 invalid_citations，而不是悄悄丢掉
+    # 子 agent 引用了没检索过的编号，要进 invalid_citations，而不是悄悄丢掉
     extra = {
         "pricing": {
             "our_side": "甲",

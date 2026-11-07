@@ -1,4 +1,4 @@
-"""Claude API 封装：模型、价格、成本。价格来自 claude-api skill（2026-10-06），变动时只改这里。"""
+"""Claude API 封装：模型、价格、成本。价格来自 Anthropic 官方价目表，变动时只改这里。"""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ DEFAULT_MODEL = HAIKU
 PRICING = {
     HAIKU: (0.10, 0.50, 0.01),
     SONNET: (2.00, 10.00, 0.20),
-    # DeepSeek 官网（2026-10-23 核实）：高峰价，非高峰为一半；这里统一按高峰价计，花费只会偏高
+    # DeepSeek 官网：高峰价，非高峰为一半；这里统一按高峰价计，花费只会偏高
     "deepseek-flash": (0.30, 1.20, 0.006),
 }
 
@@ -49,8 +49,8 @@ def _load_dotenv() -> None:
 
 
 class AnthropicLLM:
-    """fallbacks=True 时走 beta 接口并开启服务端 refusal fallback（claude-api skill 对
-    Sonnet 5.5 的默认要求）；被拒时由服务端换模型重跑，响应的 model 字段会变。"""
+    """fallbacks=True 时走 beta 接口并开启服务端 refusal fallback（官方对
+    Sonnet 5.5 的推荐做法）；被拒时由服务端换模型重跑，响应的 model 字段会变。"""
 
     def __init__(self, model: str = DEFAULT_MODEL, fallbacks: bool = False) -> None:
         import anthropic
