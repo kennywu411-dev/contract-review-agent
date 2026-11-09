@@ -60,7 +60,7 @@ dev = [
 
 [tool.uv.sources]
 # 评测平台 evalkit：运行、统计、门禁、反馈、看板都由它提供
-evalkit = { git = "https://github.com/kennywu411-dev/evalkit", rev = "816ce037cc853db55e0961aaf7e7616242469fb3" }
+evalkit = { git = "https://github.com/kennywu411-dev/evalkit", rev = "3a8cd4034ec7ee81fa488606526f74aed461c4d8" }
 
 [tool.uv.build-backend]
 module-name = "contract_review"
