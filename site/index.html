@@ -1,0 +1,643 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>合同风险审查 Agent · 审查过程回放</title>
+<meta name="description" content="合同风险审查 Agent 的真实运行回放：主审判断立场并分派条款，三个审查 Agent 并行检索法条、查供应商台账，依据校验后给出逐条意见。纯静态页面，不调用模型。">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%23111826%27/%3E%3Cpath d=%27M9 10h14M9 16h14M9 22h8%27 stroke=%27%23f6d548%27 stroke-width=%272.6%27 stroke-linecap=%27round%27/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" media="print" onload="this.media='all'" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Noto+Sans+SC:wght@400;500;700;900&family=Schibsted+Grotesk:wght@500;700;800&display=swap">
+<style>
+/* 版式沿用 UIPilot 展示页：冷色的报告纸，正文墨蓝，荧光黄只用来标“正在看的地方”。 */
+:root {
+  --paper: #f3f5f8;
+  --surface: #fbfcfd;
+  --ink: #111826;
+  --ink-2: #566175;
+  --line: #d9dee6;
+  --mark: #f6d548;
+  --mark-ink: #2f2600;
+  --pass: #1d7f55;
+  --fail: #b8402c;
+  --warn: #a8690a;
+  --shadow: 0 1px 0 rgba(17, 24, 38, .04), 0 12px 32px -18px rgba(17, 24, 38, .28);
+  --display: "Schibsted Grotesk", "Noto Sans SC", "PingFang SC", system-ui, sans-serif;
+  --body: "Noto Sans SC", "PingFang SC", "Hiragino Sans GB", system-ui, sans-serif;
+  --mono: "JetBrains Mono", "SFMono-Regular", Menlo, monospace;
+  --radius: 10px;
+  --top: 60px;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #0e131a; --surface: #141b24; --ink: #e5eaf1; --ink-2: #98a4b6; --line: #253041;
+    --mark: #e9c93c; --mark-ink: #221b00; --pass: #3fb984; --fail: #ef6b57; --warn: #e0a441;
+    --shadow: 0 1px 0 rgba(0, 0, 0, .3), 0 14px 36px -18px rgba(0, 0, 0, .7);
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--body); font-size: 15.5px; line-height: 1.7; -webkit-font-smoothing: antialiased; }
+[hidden] { display: none !important; }
+a { color: inherit; }
+button { font: inherit; color: inherit; }
+.wrap { max-width: 1240px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+h1, h2, h3, h4 { font-family: var(--display); text-wrap: balance; margin: 0; letter-spacing: -.01em; }
+h2 { font-size: clamp(24px, 3vw, 34px); line-height: 1.2; font-weight: 800; }
+h3 { font-size: 17px; font-weight: 700; line-height: 1.35; }
+p { margin: 0; }
+.lede { color: var(--ink-2); max-width: 66ch; }
+.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+mark { background: var(--mark); color: var(--mark-ink); padding: 0 .2em; border-radius: 3px; }
+:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; border-radius: 4px; }
+
+/* 顶栏 */
+.top { position: sticky; top: 0; z-index: 20; background: color-mix(in oklab, var(--paper) 88%, transparent); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
+.top .wrap { display: flex; align-items: center; gap: 28px; height: var(--top); }
+.brand { font-family: var(--display); font-weight: 800; font-size: 18px; text-decoration: none; letter-spacing: -.02em; white-space: nowrap; }
+.brand span { font-family: var(--mono); font-weight: 600; font-size: 12px; color: var(--ink-2); margin-left: 8px; letter-spacing: 0; }
+.nav { display: flex; gap: 22px; margin-left: auto; font-size: 14px; }
+.nav a { text-decoration: none; color: var(--ink-2); }
+.nav a:hover { color: var(--ink); }
+.btn { display: inline-flex; align-items: center; gap: 8px; height: 34px; padding: 0 14px; border-radius: 999px; font-size: 13.5px; font-weight: 500; text-decoration: none; border: 1px solid var(--ink); white-space: nowrap; background: transparent; cursor: pointer; transition: transform .15s ease, background-color .15s ease; }
+.btn:hover { background: var(--surface); }
+.btn:active { transform: translateY(1px) scale(.98); }
+.btn-primary { background: var(--ink); color: var(--paper); }
+.btn-primary:hover { background: var(--ink); opacity: .9; }
+@media (max-width: 720px) { .nav { display: none; } .top .btn { margin-left: auto; } .brand span { display: none; } }
+
+/* 首屏 */
+.hero { padding-block: 52px 8px; }
+.hero h1 { font-size: clamp(30px, 4.2vw, 50px); line-height: 1.14; font-weight: 900; max-width: 20ch; }
+.hero .lede { margin-top: 18px; font-size: 16.5px; }
+.notice { margin-top: 24px; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; align-items: start; max-width: 820px; padding: 14px 16px; border: 1px solid color-mix(in oklab, var(--mark) 70%, var(--line)); background: color-mix(in oklab, var(--mark) 22%, var(--surface)); border-radius: var(--radius); font-size: 14.5px; }
+.notice b { font-weight: 700; }
+.notice .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--mark); margin-top: 8px; box-shadow: 0 0 0 4px color-mix(in oklab, var(--mark) 35%, transparent); }
+@media (max-width: 860px) { .hero { padding-block: 34px 0; } }
+
+section.block { padding-block: 64px 0; }
+.head { display: grid; gap: 10px; margin-bottom: 26px; }
+
+/* 回放：合同选择 */
+.tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 16px; }
+.tab { font-size: 14px; padding: 7px 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--ink-2); cursor: pointer; transition: background-color .15s ease, color .15s ease; }
+.tab[aria-selected="true"] { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.case { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); padding: 18px 20px; display: grid; gap: 12px; margin-bottom: 14px; }
+.case .row { display: flex; gap: 8px 10px; flex-wrap: wrap; align-items: center; }
+.case p { color: var(--ink-2); font-size: 14.5px; max-width: 90ch; }
+.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-top: 1px solid var(--line); padding-top: 12px; gap: 10px 18px; }
+.stat b { display: block; font-family: var(--mono); font-size: 20px; font-weight: 600; line-height: 1.25; }
+.stat span { font-size: 12.5px; color: var(--ink-2); }
+.srcline { font-size: 12.5px; color: var(--ink-2); font-family: var(--mono); overflow-wrap: anywhere; }
+@media (max-width: 720px) { .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+.chip { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 500; line-height: 1.5; padding: 1px 9px; border-radius: 999px; border: 1px solid var(--line); color: var(--ink-2); white-space: nowrap; }
+.chip.mark { color: var(--mark-ink); background: var(--mark); border-color: var(--mark); }
+.chip.high { color: var(--fail); border-color: currentColor; }
+.chip.mid { color: var(--warn); border-color: currentColor; }
+.chip.low { color: var(--ink-2); border-color: currentColor; }
+.chip.human { color: var(--ink); border-style: dashed; border-color: var(--ink-2); }
+.chip.pass { color: var(--pass); border-color: currentColor; }
+
+/* 回放：左合同、右过程 */
+.player { display: grid; grid-template-columns: minmax(0, .82fr) minmax(0, 1.18fr); gap: 14px; align-items: start; }
+.doc { position: sticky; top: calc(var(--top) + 12px); border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow); display: flex; flex-direction: column; max-height: calc(100vh - var(--top) - 24px); max-height: calc(100dvh - var(--top) - 24px); min-width: 0; }
+.doc .bar, .proc .bar { display: flex; align-items: center; gap: 10px; padding: 9px 14px; border-bottom: 1px solid var(--line); font-size: 12.5px; color: var(--ink-2); min-width: 0; }
+.doc .bar b, .proc .bar b { color: var(--ink); font-weight: 600; font-size: 13.5px; }
+.doc .bar .sp, .proc .bar .sp { margin-left: auto; }
+.linkbtn { background: none; border: 0; padding: 0; color: var(--ink-2); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; font-size: 12.5px; }
+.doc-body { overflow-y: auto; padding: 16px 18px 22px; font-size: 14px; line-height: 1.8; overscroll-behavior: contain; scroll-behavior: smooth; }
+.doc-head { color: var(--ink-2); font-size: 13px; margin-bottom: 10px; }
+.doc-head .t { color: var(--ink); font-family: var(--display); font-weight: 800; font-size: 17px; }
+.clause { padding: 7px 10px; margin: 2px -10px; border-radius: 8px; border-left: 3px solid transparent; transition: background-color .2s ease; }
+.clause h4 { font-family: var(--body); font-size: 14px; font-weight: 700; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.clause p { color: var(--ink); }
+.clause .dots { display: inline-flex; gap: 3px; }
+.clause .dots i { width: 7px; height: 7px; border-radius: 50%; background: var(--ink-2); }
+.clause .dots i.high { background: var(--fail); } .clause .dots i.mid { background: var(--warn); }
+.clause.has { cursor: pointer; }
+.clause.has:hover { background: color-mix(in oklab, var(--mark) 12%, transparent); }
+.clause.on { background: color-mix(in oklab, var(--mark) 26%, transparent); border-left-color: var(--mark); }
+.clause.peek { background: color-mix(in oklab, var(--ink) 7%, transparent); }
+.doc-flash { margin: 0 0 10px; padding: 8px 12px; border: 1px dashed var(--ink-2); border-radius: 8px; font-size: 13px; color: var(--ink-2); }
+
+.proc { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow); min-width: 0; }
+.proc-body { padding: 4px 18px 20px; }
+.progress { flex: 1; height: 3px; background: var(--line); border-radius: 3px; overflow: hidden; min-width: 40px; }
+.progress i { display: block; height: 100%; background: var(--ink); width: 100%; transition: width .25s ease; }
+.stage { display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 0 12px; padding-top: 18px; }
+.stage > .n { width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--ink); display: grid; place-items: center; font-family: var(--mono); font-size: 12px; font-weight: 600; background: var(--surface); }
+.stage > .c { min-width: 0; display: grid; gap: 8px; padding-bottom: 4px; }
+.stage .who { font-size: 12px; color: var(--ink-2); font-family: var(--mono); }
+.stage .meta { font-size: 12px; color: var(--ink-2); font-family: var(--mono); }
+.stage.user > .n { background: var(--ink); color: var(--paper); }
+.bubble { justify-self: start; max-width: 100%; padding: 8px 14px; border-radius: 14px 14px 14px 4px; background: var(--paper); border: 1px solid var(--line); font-size: 14.5px; }
+.bubble.me { background: var(--ink); color: var(--paper); border-color: var(--ink); border-radius: 14px 14px 4px 14px; }
+.turn-sep { margin: 22px 0 0; border: 0; border-top: 1px dashed var(--line); }
+.seq.wait { display: none; }
+@media (prefers-reduced-motion: no-preference) {
+  .seq.in { animation: rise .45s cubic-bezier(.16, 1, .3, 1) both; }
+  @keyframes rise { from { opacity: .001; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+}
+
+/* 分派 */
+.assign { display: grid; gap: 8px; }
+.assign .g { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 10px; align-items: start; }
+.assign .g > b { font-size: 13.5px; font-weight: 600; padding-top: 1px; }
+.nos { display: flex; flex-wrap: wrap; gap: 4px; }
+.no { font-size: 12px; line-height: 1.5; padding: 1px 7px; border-radius: 6px; border: 1px solid var(--line); background: var(--paper); cursor: pointer; }
+.no:hover { border-color: var(--ink-2); }
+.hint { font-size: 13px; color: var(--ink-2); }
+
+/* 时间线条 */
+.gantt { display: grid; gap: 5px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); }
+.gantt .r { display: grid; grid-template-columns: 82px minmax(0, 1fr) 54px; gap: 8px; align-items: center; font-size: 12px; color: var(--ink-2); }
+.gantt .track { position: relative; height: 10px; border-radius: 5px; background: color-mix(in oklab, var(--line) 60%, transparent); }
+.gantt .track i { position: absolute; top: 0; bottom: 0; border-radius: 5px; background: var(--ink); min-width: 3px; }
+.gantt .track i.v { background: var(--pass); }
+.gantt .r span:last-child { font-family: var(--mono); text-align: right; }
+
+/* 审查 Agent */
+.agents { display: grid; gap: 10px; }
+.agent { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.agent > summary { list-style: none; cursor: pointer; display: flex; gap: 8px 12px; align-items: center; flex-wrap: wrap; padding: 9px 12px; background: var(--paper); font-size: 13.5px; }
+.agent > summary::-webkit-details-marker { display: none; }
+.agent > summary b { font-weight: 700; }
+.agent > summary .meta { margin-left: auto; }
+.agent > summary::after { content: "展开"; font-size: 12px; color: var(--ink-2); text-decoration: underline; text-underline-offset: 3px; }
+.agent[open] > summary::after { content: "收起"; }
+.rounds { padding: 4px 12px 12px; display: grid; gap: 4px; }
+.round { font-size: 12px; color: var(--ink-2); font-family: var(--mono); padding-top: 8px; }
+.call { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 4px 10px; padding: 6px 0; border-top: 1px solid var(--line); font-size: 13.5px; align-items: start; }
+.call:first-of-type { border-top: 0; }
+.call .tool { font-family: var(--mono); font-size: 12px; font-weight: 600; padding-top: 2px; }
+.call .tool small { display: block; font-weight: 400; color: var(--ink-2); }
+.call .q { overflow-wrap: anywhere; }
+.call .hits { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; align-items: center; }
+.call .hits span.l { font-size: 12px; color: var(--ink-2); }
+.cite { font-family: var(--mono); font-size: 12px; line-height: 1.5; padding: 1px 7px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface); cursor: pointer; display: inline-flex; align-items: center; gap: 5px; }
+.cite:hover { border-color: var(--ink); }
+.cite::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--ink-2); }
+.cite.law::before { background: var(--ink); }
+.cite.policy::before { background: var(--warn); }
+.cite.template::before { background: transparent; border: 1px solid var(--ink-2); }
+.cite.table::before { background: var(--pass); border-radius: 1px; }
+pre.sql { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--mono); font-size: 12px; line-height: 1.6; background: var(--paper); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; }
+.tbl-wrap { overflow-x: auto; margin-top: 6px; }
+table.tbl { border-collapse: collapse; font-size: 12.5px; font-family: var(--mono); }
+.tbl th, .tbl td { border: 1px solid var(--line); padding: 3px 9px; text-align: left; white-space: nowrap; }
+.tbl th { color: var(--ink-2); font-weight: 400; background: var(--paper); }
+.legend { display: flex; gap: 6px 14px; flex-wrap: wrap; font-size: 12px; color: var(--ink-2); align-items: center; }
+
+/* 校验 */
+.vgrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.vgrid div { border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; background: var(--paper); }
+.vgrid b { font-family: var(--mono); font-size: 18px; display: block; line-height: 1.3; }
+.vgrid span { font-size: 12.5px; color: var(--ink-2); }
+
+/* 意见卡片 */
+.findings { display: grid; gap: 10px; }
+.finding { border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; display: grid; gap: 8px; cursor: pointer; background: var(--surface); transition: border-color .15s ease, box-shadow .15s ease; text-align: left; }
+.finding:hover { border-color: var(--ink-2); }
+.finding.on { border-color: var(--ink); box-shadow: inset 3px 0 0 var(--mark); }
+.finding .hd { display: flex; gap: 6px 8px; flex-wrap: wrap; align-items: center; }
+.finding .hd b { font-size: 14.5px; }
+.finding .hd .by { font-size: 12px; color: var(--ink-2); margin-left: auto; }
+.finding blockquote { margin: 0; padding: 6px 10px; border-left: 3px solid var(--mark); background: color-mix(in oklab, var(--mark) 14%, transparent); font-size: 13.5px; border-radius: 0 6px 6px 0; }
+.finding dl { margin: 0; display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 6px 10px; font-size: 14px; }
+.finding dt { color: var(--ink-2); font-size: 12.5px; padding-top: 2px; }
+.finding dd { margin: 0; overflow-wrap: anywhere; }
+.finding .cites { display: flex; flex-wrap: wrap; gap: 4px; }
+.vnote { font-size: 13px; padding: 6px 10px; border-radius: 6px; border: 1px dashed var(--ink-2); color: var(--ink); }
+.vnote.soft { border-color: var(--line); color: var(--ink-2); }
+.vnote details summary { cursor: pointer; }
+.vnote details p { margin-top: 6px; color: var(--ink-2); }
+.empty { border: 1px dashed var(--line); border-radius: 8px; padding: 16px; color: var(--ink-2); font-size: 14px; }
+.sum { font-size: 13.5px; color: var(--ink-2); white-space: pre-line; }
+details.more > summary { cursor: pointer; font-size: 13px; color: var(--ink-2); }
+
+@media (max-width: 960px) {
+  .player { grid-template-columns: 1fr; }
+  .doc { top: var(--top); max-height: 36vh; max-height: 36dvh; border-radius: 0 0 var(--radius) var(--radius); z-index: 5; }
+  .doc.folded .doc-body { display: none; }
+  .assign .g { grid-template-columns: 1fr; gap: 4px; }
+  .call { grid-template-columns: 1fr; }
+  .finding dl { grid-template-columns: 1fr; gap: 2px 0; }
+  .finding dt { padding-top: 6px; }
+  .proc-body { padding: 4px 12px 16px; }
+  .stage { grid-template-columns: 22px minmax(0, 1fr); gap: 0 8px; }
+  .stage > .n { width: 22px; height: 22px; font-size: 11px; }
+}
+@media (min-width: 961px) { #fold { display: none; } }
+
+/* 依据弹窗 */
+dialog.src { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); color: var(--ink); padding: 0; width: min(680px, calc(100vw - 32px)); max-height: min(80vh, 720px); box-shadow: var(--shadow); }
+dialog.src::backdrop { background: color-mix(in oklab, var(--ink) 55%, transparent); }
+.src-in { display: flex; flex-direction: column; max-height: min(80vh, 720px); }
+.src-hd { padding: 14px 18px; border-bottom: 1px solid var(--line); display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; align-items: start; }
+.src-hd h3 { font-size: 16px; }
+.src-hd p { font-size: 12.5px; color: var(--ink-2); grid-column: 1; }
+.src-hd button { grid-row: 1 / span 3; grid-column: 2; }
+.src-bd { padding: 16px 18px 20px; overflow-y: auto; font-size: 14.5px; line-height: 1.85; }
+.src-bd .txt { white-space: pre-wrap; overflow-wrap: anywhere; }
+.src-bd .withheld { border: 1px dashed var(--ink-2); border-radius: 8px; padding: 12px 14px; color: var(--ink-2); font-size: 14px; }
+.src-bd .cap { font-size: 12.5px; color: var(--ink-2); margin-bottom: 10px; }
+
+/* 数字 */
+.figs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.figc { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); padding: 20px; display: grid; gap: 8px; align-content: start; min-width: 0; }
+.figc .num { font-size: clamp(22px, 2.3vw, 28px); font-weight: 600; line-height: 1.2; }
+.figc.cost { border-color: color-mix(in oklab, var(--fail) 45%, var(--line)); }
+.figc.cost .num { color: var(--fail); }
+.figc p { color: var(--ink-2); font-size: 14px; }
+.figc a { font-size: 12.5px; color: var(--ink-2); font-family: var(--mono); overflow-wrap: anywhere; }
+@media (max-width: 960px) { .figs { grid-template-columns: 1fr; } }
+
+/* 说明 */
+.notes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.notec { border-top: 2px solid var(--ink); padding-top: 14px; display: grid; gap: 6px; align-content: start; }
+.notec p { color: var(--ink-2); font-size: 14px; }
+@media (max-width: 860px) { .notes { grid-template-columns: 1fr; } }
+
+footer { margin-top: 80px; border-top: 1px solid var(--line); padding-block: 26px 40px; font-size: 13.5px; color: var(--ink-2); }
+footer .wrap { display: flex; gap: 14px 20px; flex-wrap: wrap; justify-content: space-between; }
+footer nav { display: flex; gap: 6px 18px; flex-wrap: wrap; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } html { scroll-behavior: auto; } }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="#top">Contract Review Agent<span>审查回放</span></a>
+    <nav class="nav" aria-label="页面导航">
+      <a href="#replay">回放</a><a href="#numbers">数字</a><a href="#notes">说明</a>
+    </nav>
+    <a class="btn" href="https://github.com/kennywu411-dev/contract-review-agent">GitHub</a>
+  </div>
+</header>
+
+<main id="top">
+  <section class="hero">
+    <div class="wrap">
+      <h1>看合同风险审查 Agent 怎么审一份合同</h1>
+      <p class="lede">提交一份商业合同，它站在我方立场逐条找出不利条款，给出风险等级、可以直接替换的修改建议和依据原文。下面是 4 份合同从判断立场到给出意见的完整过程。</p>
+      <div class="notice" role="note">
+        <span class="dot" aria-hidden="true"></span>
+        <p><b>这是真实运行记录的回放，不是在线服务。</b>页面是纯静态的，不调用模型，也不能上传合同。每一步工具调用、每条意见、耗时和花费都来自本地运行时保存的记录；合同、公司和供应商台账都是构造的。</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="replay">
+    <div class="wrap">
+      <div class="head">
+        <h2>审查回放</h2>
+        <p class="lede">一边是合同正文，一边是审查过程和结果。点一条意见，合同里高亮对应的条款；点依据编号，看检索到的条文原文。</p>
+      </div>
+      <div class="tabs" id="tabs" role="tablist" aria-label="选择合同"></div>
+      <div id="case"></div>
+      <div class="player">
+        <aside class="doc" id="doc" aria-label="合同正文">
+          <div class="bar"><b>合同正文</b><span id="doc-meta"></span><span class="sp"></span><button class="linkbtn" id="fold" type="button">收起</button></div>
+          <div class="doc-body" id="doc-body"></div>
+        </aside>
+        <div class="proc" aria-label="审查过程和结果">
+          <div class="bar"><b>审查过程</b><div class="progress" aria-hidden="true"><i id="bar"></i></div><button class="btn btn-primary" id="play" type="button">▶ 逐步回放</button></div>
+          <div class="proc-body" id="proc"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="numbers">
+    <div class="wrap">
+      <div class="head">
+        <h2>评测数字</h2>
+        <p class="lede">数字都来自仓库里的 <a id="numlink" href="#">docs/numbers.md</a>，每个都写了口径。评测合同是自己构造的，结论只代表这套数据上的表现。</p>
+      </div>
+      <div class="figs" id="figs"></div>
+    </div>
+  </section>
+
+  <section class="block" id="notes">
+    <div class="wrap">
+      <div class="head"><h2>几点说明</h2></div>
+      <div class="notes">
+        <div class="notec">
+          <h3>数据都是构造的</h3>
+          <p>合同、三家公司的审查规范和供应商台账都是为评测构造的，公司名是虚构的。合同的条款顺序参照官方示范文本，正文是自己写的。</p>
+        </div>
+        <div class="notec">
+          <h3>示范文本不显示原文</h3>
+          <p>法律和司法解释的条文、构造的公司规范会显示检索到的原文片段。官方合同示范文本有版权，原文不随仓库公开，这里只显示名称和条目编号。</p>
+        </div>
+        <div class="notec">
+          <h3>不构成法律意见</h3>
+          <p>模型是 Haiku 5.5。依据核实不了的意见不删除，改为提示人工复核；拿不准的条款应当由法务判断。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>Contract Risk Review Agent · 代码使用 MIT 许可</span>
+    <nav aria-label="相关链接">
+      <a href="https://github.com/kennywu411-dev/contract-review-agent">仓库</a>
+      <a href="https://github.com/kennywu411-dev/contract-review-agent/blob/main/docs/numbers.md">数字登记表</a>
+      <a href="https://github.com/kennywu411-dev/contract-review-agent/blob/main/docs/PRD.md">PRD</a>
+      <a href="https://github.com/kennywu411-dev/datapilot">DataPilot</a>
+      <a href="https://github.com/kennywu411-dev/evalkit">evalkit</a>
+      <a href="https://kennywu411-dev.github.io/uipilot/">UIPilot</a>
+    </nav>
+  </div>
+</footer>
+
+<dialog class="src" id="src" aria-labelledby="src-title">
+  <div class="src-in">
+    <div class="src-hd">
+      <h3 id="src-title"></h3>
+      <button class="btn" id="src-close" type="button">关闭</button>
+      <p id="src-sub"></p>
+    </div>
+    <div class="src-bd" id="src-bd"></div>
+  </div>
+</dialog>
+
+<script>
+const $ = (s, el = document) => el.querySelector(s);
+const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const sec = (ms) => (ms / 1000).toFixed(1) + " 秒";
+const usd = (x) => "$" + x.toFixed(4);
+const LEVEL = { 高: "high", 中: "mid", 低: "low" };
+const FLAG = {
+  unsupported: "依据未能在检索到的原文中核实",
+  partial: "依据只能部分核实",
+  unverified: "校验器出错，未能核实",
+  quote_mismatch: "摘录与合同原文不一致",
+};
+const flagText = (f) => (f.startsWith("unretrieved:") ? `点名的条文没有被检索到（${f.slice(12)}）` : FLAG[f] ?? f);
+const KIND = { law: "法律条文", policy: "公司规范（构造）", template: "合同示范文本", table: "台账查询结果" };
+
+let D, R, timer = null, picked = null;
+
+function citeKind(turn, id) {
+  const c = turn.citations[id];
+  return c.chunk ? D.chunks[c.chunk].kind : "table";
+}
+function citeTitle(turn, id) {
+  const c = turn.citations[id];
+  if (!c.chunk) return "台账查询结果";
+  const k = D.chunks[c.chunk];
+  return `${k.title}${k.articles.length ? " " + k.articles.join("、") : ""}`;
+}
+const citeBtn = (ti, id) => {
+  const t = R.turns[ti];
+  return `<button type="button" class="cite ${citeKind(t, id)}" data-turn="${ti}" data-cite="${id}" title="${esc(citeTitle(t, id))}">${id}</button>`;
+};
+
+/* ---------- 合同 ---------- */
+function renderDoc() {
+  const marks = {};
+  R.turns.forEach((t) => (t.findings || []).forEach((f) => { if (f.clause) (marks[f.clause] ||= []).push(f.level); }));
+  const head = R.header.filter((l) => l.trim());
+  $("#doc-meta").textContent = `${R.clauses.length} 条 · ${R.source}`;
+  $("#doc-body").innerHTML =
+    `<div id="flash"></div><div class="doc-head"><div class="t">${esc(head[0] || R.title)}</div>${head.slice(1).map((l) => `<div>${esc(l)}</div>`).join("")}</div>` +
+    R.clauses.map((c) => {
+      const ls = marks[c.no] || [];
+      const dots = ls.length ? `<span class="dots" title="这一条有 ${ls.length} 条意见">${ls.map((l) => `<i class="${LEVEL[l]}"></i>`).join("")}</span>` : "";
+      return `<section class="clause${ls.length ? " has" : ""}" data-no="${esc(c.no)}"><h4>${esc(c.title)}${dots}</h4>${c.body.map((l) => `<p>${esc(l)}</p>`).join("")}</section>`;
+    }).join("");
+}
+function clauseEl(no) { return $$("#doc-body .clause").find((e) => e.dataset.no === no); }
+function scrollDocTo(el) {
+  const box = $("#doc-body");
+  $("#doc").classList.remove("folded"); $("#fold").textContent = "收起";
+  box.scrollTop = el.offsetTop - box.offsetTop - 12;
+}
+function clearDoc() {
+  $$("#doc-body .clause").forEach((e) => {
+    e.classList.remove("on", "peek");
+    const c = R.clauses.find((x) => x.no === e.dataset.no);
+    $$("p", e).forEach((p, i) => (p.textContent = c.body[i]));
+  });
+  $("#flash").innerHTML = "";
+}
+function peekClause(no) {
+  clearDoc(); picked = null;
+  $$(".finding").forEach((e) => e.classList.remove("on"));
+  const el = clauseEl(no);
+  if (el) { el.classList.add("peek"); scrollDocTo(el); }
+}
+function pickFinding(ti, fi) {
+  const f = R.turns[ti].findings[fi];
+  clearDoc();
+  picked = `${ti}-${fi}`;
+  $$(".finding").forEach((e) => e.classList.toggle("on", e.dataset.key === picked));
+  if (!f.clause) {
+    $("#flash").innerHTML = `<div class="doc-flash">这条意见指出的是合同里<b>缺少</b>的条款，所以没有可以高亮的原文。</div>`;
+    $("#doc-body").scrollTop = 0;
+    $("#doc").classList.remove("folded");
+    return;
+  }
+  const el = clauseEl(f.clause);
+  if (!el) return;
+  el.classList.add("on");
+  if (f.quote) $$("p", el).forEach((p) => {
+    const s = p.textContent, i = s.indexOf(f.quote);
+    if (i >= 0) p.innerHTML = esc(s.slice(0, i)) + "<mark>" + esc(f.quote) + "</mark>" + esc(s.slice(i + f.quote.length));
+  });
+  scrollDocTo(el);
+}
+
+/* ---------- 过程 ---------- */
+function stage(n, who, title, meta, body, cls = "") {
+  return `<div class="stage seq ${cls}"><div class="n">${n}</div><div class="c"><div><div class="who">${esc(who)}</div><h3>${title}</h3></div>${body}${meta ? `<div class="meta">${meta}</div>` : ""}</div></div>`;
+}
+function gantt(t) {
+  const total = t.review_ms + t.verify_ms, p0 = t.planner.llm_ms;
+  const row = (label, a, b, cls = "") => `<div class="r"><span>${label}</span><div class="track"><i class="${cls}" style="left:${(a / total * 100).toFixed(2)}%;width:${((b - a) / total * 100).toFixed(2)}%"></i></div><span>${sec(b - a)}</span></div>`;
+  let h = row("主审", 0, p0);
+  t.agents.forEach((a) => { const end = a.steps.at(-1).end_ms; if (end) h += row(a.label, p0, end); });
+  if (t.verify.ran) h += row("依据校验", t.review_ms, total, "v");
+  return `<div class="gantt" role="img" aria-label="各环节在这次运行里的起止时间">${h}</div>`;
+}
+function callHtml(ti, c, backend) {
+  if (c.name === "submit_review") return `<div class="call"><div class="tool">submit_review<small>提交</small></div><div class="q">提交 ${c.n_findings} 条意见</div></div>`;
+  const t = R.turns[ti];
+  if (c.name === "run_sql") {
+    const tb = c.hits.map((id) => { const r = t.citations[id]; return `<div class="tbl-wrap"><table class="tbl"><thead><tr>${r.columns.map((x) => `<th>${esc(x)}</th>`).join("")}</tr></thead><tbody>${r.rows.map((row) => `<tr>${row.map((x) => `<td>${esc(x ?? "—")}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`; }).join("");
+    const via = backend === "datapilot-mcp" ? "经 DataPilot 只读 MCP" : "本地只读库";
+    return `<div class="call"><div class="tool">run_sql<small>查台账</small></div><div class="q"><pre class="sql">${esc(c.input)}</pre>${tb}<div class="hits"><span class="l">${via} · ${c.ms.toFixed(0)} 毫秒 · 结果记为</span>${c.hits.map((id) => citeBtn(ti, id)).join("")}</div></div></div>`;
+  }
+  return `<div class="call"><div class="tool">search_docs<small>检索</small></div><div class="q">${esc(c.input)}<div class="hits"><span class="l">命中</span>${c.hits.map((id) => citeBtn(ti, id)).join("")}<span class="l">· ${sec(c.ms)}</span></div></div></div>`;
+}
+function agentHtml(ti, a, backend, open) {
+  const calls = a.steps.flatMap((s) => s.calls);
+  const n = (name) => calls.filter((c) => c.name === name).length;
+  const sub = calls.find((c) => c.name === "submit_review");
+  const bits = [`检索 ${n("search_docs")} 次`];
+  if (n("run_sql")) bits.push(`查台账 ${n("run_sql")} 次`);
+  bits.push(sub ? `提交 ${sub.n_findings} 条` : "未提交");
+  const cost = a.steps.reduce((x, s) => x + s.cost, 0);
+  const rounds = a.steps.map((s, i) => `<div class="round">第 ${i + 1} 轮模型调用 · ${sec(s.llm_ms)} · ${usd(s.cost)}</div>${s.calls.map((c) => callHtml(ti, c, backend)).join("")}`).join("");
+  return `<details class="agent"${open ? " open" : ""}><summary><b>${esc(a.label)}</b><span class="hint">${a.clauses.length} 个条款 · ${bits.join(" · ")}</span><span class="meta">${a.steps.length} 轮 · ${usd(cost)}</span></summary><div class="rounds">${rounds}</div></details>`;
+}
+function findingHtml(ti, fi, f) {
+  const notes = [];
+  if (f.verify_flags.length) notes.push(`<div class="vnote"><b>依据校验：</b>${f.verify_flags.map(flagText).map(esc).join("；")}。这条意见没有删除，改为提示人工复核。</div>`);
+  if (f.revised_from) notes.push(`<div class="vnote soft">理由已由校验器改写，只保留有原文依据的部分。<details><summary>看改写前的理由</summary><p>${esc(f.revised_from)}</p></details></div>`);
+  if (f.cited_by_model.length) notes.push(`<div class="vnote soft">依据编号经校验改正；审查 Agent 原先引用的是 ${f.cited_by_model.map((id) => citeBtn(ti, id)).join(" ")}</div>`);
+  const human = f.needs_human_review ? `<span class="chip human" title="${f.human_by_model ? "审查 Agent 提交时自己标记" : "依据校验后新标记"}">提示人工复核</span>` : "";
+  const by = f.groups.map((g) => D.groups[g]).join("、");
+  return `<article class="finding seq" data-key="${ti}-${fi}" data-turn="${ti}" data-f="${fi}" tabindex="0" role="button" aria-label="意见 ${fi + 1}：${esc(f.clause || "缺少条款")}，${esc(f.risk_label)}">
+    <div class="hd"><span class="chip ${LEVEL[f.level]}">${esc(f.level)}风险</span><b>${esc(f.clause || "缺少条款")}</b><span class="chip">${esc(f.risk_label)}</span>${human}<span class="by">${esc(by)}</span></div>
+    ${f.quote ? `<blockquote>${esc(f.quote)}</blockquote>` : ""}
+    <dl><dt>理由</dt><dd>${esc(f.reason)}</dd><dt>修改建议</dt><dd>${esc(f.suggestion)}</dd><dt>依据</dt><dd><div class="cites">${f.citations.map((id) => citeBtn(ti, id)).join("") || '<span class="hint">无</span>'}</div></dd></dl>
+    ${notes.join("")}
+  </article>`;
+}
+function turnHtml(t, ti, n0) {
+  let n = n0, h = "";
+  if (t.question) h += `<hr class="turn-sep seq">` + stage("答", "用户", `<div class="bubble me">${esc(t.question)}</div>`, "", "", "user");
+  const pm = `模型调用 ${sec(t.planner.llm_ms)} · ${usd(t.planner.cost)} · trace ${t.trace_id}`;
+  if (t.kind === "clarify") {
+    h += stage(++n, "主审 · ask_clarification", "看不出我方是哪一方，先反问", pm, `<div class="bubble">${esc(t.planner.clarification)}</div><p class="hint">没有判断出立场之前不开始审查，也不产生意见。</p>`);
+    return [h, n];
+  }
+  h += stage(++n, "主审 · 判断立场", `我方是${esc(t.planner.our_side)}方`, pm, `<p class="hint">${esc(R.tenant)}。${t.question ? "主审收到用户的回答后给出判断。" : ""}</p>`);
+  const assign = t.agents.map((a) => `<div class="g"><b>${esc(a.label)}</b><div class="nos">${a.clauses.map((no) => `<button type="button" class="no" data-no="${esc(no)}">${esc(no)}</button>`).join("") || '<span class="hint">没有分到条款</span>'}</div></div>`).join("");
+  const defs = t.plan.definitions.length ? `<p class="hint">定义条款（${t.plan.definitions.map(esc).join("、")}）自动发给每个组。</p>` : "";
+  const auto = Object.keys(t.plan.auto_assigned).length ? `<p class="hint">主审漏分、按关键词兜底的条款：${Object.keys(t.plan.auto_assigned).map(esc).join("、")}。</p>` : "";
+  h += stage(++n, "主审 · plan_review", "把条款分派给三个审查 Agent", "", `<div class="assign">${assign}</div>${defs}${auto}<p class="hint">一个条款可以同时分给几个组。点条款号可以在左边定位。</p>`);
+  const legend = `<div class="legend"><span>依据编号：</span><span class="cite law">法律条文</span><span class="cite policy">公司规范</span><span class="cite template">示范文本</span><span class="cite table">台账</span></div>`;
+  h += stage(++n, "三个审查 Agent 并行", "检索依据、查台账、提交意见", `审查阶段共 ${sec(t.review_ms)} · ${usd(t.review_cost)}`, gantt(t) + `<div class="agents">${t.agents.map((a, i) => agentHtml(ti, a, R.sql_backend, i === 0)).join("")}</div>` + legend);
+  if (t.findings.length) {
+    const v = t.verify, extra = t.findings.filter((f) => f.verify_flags.length).length;
+    h += stage(++n, "依据校验", "逐条核对理由有没有原文支撑", `1 次模型调用 · ${sec(t.verify_ms)} · ${usd(t.verify_cost)}`,
+      `<div class="vgrid"><div><b>${v.repaired}</b><span>条改正了依据编号</span></div><div><b>${v.revised}</b><span>条改写了理由</span></div><div><b>${extra}</b><span>条依据不足，提示人工复核</span></div></div>` +
+      `<p class="hint">依据不足的意见不删除：漏掉一处风险比多一条待复核的意见代价大。${extra && !v.flagged ? "这次依据不足的意见，审查 Agent 提交时已经自己标了人工复核。" : ""}</p>`);
+  } else {
+    h += stage(++n, "依据校验", "没有意见需要校验", "", `<p class="hint">三个组都没有提交意见，校验这一步跳过。</p>`);
+  }
+  const hm = t.findings.filter((f) => f.needs_human_review).length;
+  const list = t.findings.length ? `<div class="findings">${t.findings.map((f, i) => findingHtml(ti, i, f)).join("")}</div>` : `<div class="empty">这份合同没有报出意见。</div>`;
+  const summary = t.summary ? `<details class="more"><summary>各组写的总体结论</summary><p class="sum">${esc(t.summary)}</p></details>` : "";
+  h += stage(++n, "结果", `${t.findings.length} 条审查意见`, "", `<p class="hint">其中 ${hm} 条提示人工复核。点一条意见，在合同里高亮对应条款。</p>${list}${summary}`);
+  return [h, n];
+}
+function renderProc() {
+  let n = 0, h = "";
+  R.turns.forEach((t, ti) => { const [x, m] = turnHtml(t, ti, n); h += x; n = m; });
+  $("#proc").innerHTML = h;
+}
+function renderCase() {
+  const t = R.totals;
+  $("#case").innerHTML = `<div class="case">
+    <div class="row"><h3>${esc(R.title)}</h3><span class="chip">我方：${esc(R.tenant)}</span>${R.tags.map((x) => `<span class="chip mark">${esc(x)}</span>`).join("")}</div>
+    <p>${esc(R.note)}</p>
+    <div class="stats">
+      <div class="stat"><b>${sec(t.wall_ms)}</b><span>实际耗时（含依据校验）</span></div>
+      <div class="stat"><b>${t.model_calls} 次</b><span>模型调用${t.turns > 1 ? `，用户 ${t.turns} 轮` : ""}</span></div>
+      <div class="stat"><b>${usd(t.cost)}</b><span>花费（Haiku 5.5）</span></div>
+      <div class="stat"><b>${R.turns.at(-1).findings ? R.turns.at(-1).findings.length : 0} 条</b><span>审查意见</span></div>
+    </div>
+    <div class="srcline">合同 ${esc(R.id)}（${esc(R.source)}，构造）· 查台账后端 ${esc(R.sql_backend)} · trace ${R.turns.map((x) => x.trace_id).join("、")}</div>
+  </div>`;
+}
+
+/* ---------- 回放 ---------- */
+function stopPlay(showAll = true) {
+  clearInterval(timer); timer = null;
+  if (showAll) $$("#proc .seq").forEach((e) => e.classList.remove("wait", "in"));
+  $("#bar").style.width = "100%";
+  $("#play").textContent = "▶ 逐步回放";
+}
+function play() {
+  if (timer) return stopPlay();
+  const items = $$("#proc .seq");
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  items.forEach((e) => { e.classList.add("wait"); e.classList.remove("in"); });
+  clearDoc(); $$(".finding").forEach((e) => e.classList.remove("on"));
+  $("#play").textContent = "■ 显示全部";
+  $("#bar").style.width = "0%";
+  let i = 0;
+  const step = () => {
+    if (i >= items.length) return stopPlay(false);
+    const e = items[i++];
+    e.classList.remove("wait"); e.classList.add("in");
+    $("#bar").style.width = (i / items.length * 100).toFixed(1) + "%";
+  };
+  step();
+  timer = setInterval(step, 900);
+}
+
+/* ---------- 依据弹窗 ---------- */
+function openCite(ti, id) {
+  const t = R.turns[ti], c = t.citations[id];
+  if (!c.chunk) {
+    $("#src-title").textContent = `${id} · 台账查询结果`;
+    $("#src-sub").textContent = R.sql_backend === "datapilot-mcp" ? "经 DataPilot 的只读 MCP 查询构造的供应商台账" : "本地只读库";
+    $("#src-bd").innerHTML = `<pre class="sql">${esc(c.sql)}</pre><div class="tbl-wrap"><table class="tbl"><thead><tr>${c.columns.map((x) => `<th>${esc(x)}</th>`).join("")}</tr></thead><tbody>${c.rows.map((r) => `<tr>${r.map((x) => `<td>${esc(x ?? "—")}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
+  } else {
+    const k = D.chunks[c.chunk];
+    $("#src-title").textContent = `${id} · ${k.title}`;
+    $("#src-sub").textContent = [KIND[k.kind], k.path.join(" › "), k.articles.join("、"), k.pages.length ? `第 ${k.pages.join("、")} 页` : ""].filter(Boolean).join(" · ");
+    $("#src-bd").innerHTML = k.text === null
+      ? `<div class="withheld">这是官方合同示范文本里的一个片段。示范文本有版权，原文不随仓库公开，这里只显示名称和条目编号${k.articles.length ? `（${esc(k.articles.join("、"))}）` : ""}。本地运行时可以看到原文。</div>`
+      : `<p class="cap">检索到的片段。依据库按固定长度切块，所以开头和结尾可能停在句子中间。</p><div class="txt">${esc(k.text)}</div>`;
+  }
+  $("#src").showModal();
+}
+
+/* ---------- 装配 ---------- */
+function select(i) {
+  stopPlay();
+  R = D.replays[i]; picked = null;
+  $$("#tabs .tab").forEach((b, j) => b.setAttribute("aria-selected", j === i ? "true" : "false"));
+  renderCase(); renderDoc(); renderProc();
+  $("#doc-body").scrollTop = 0;
+}
+function init(d) {
+  D = d;
+  $("#numlink").href = d.numbers_url;
+  $("#tabs").innerHTML = d.replays.map((r, i) => `<button type="button" class="tab" role="tab" data-i="${i}">${esc(r.tab)}</button>`).join("");
+  $("#figs").innerHTML = d.numbers.map((n) => `<div class="figc ${n.tone || ""}"><span class="num">${esc(n.value)}</span><h3>${esc(n.title)}</h3><p>${esc(n.scope)}</p><a href="${d.numbers_url}#${encodeURIComponent(n.anchor)}">出处：docs/numbers.md</a></div>`).join("");
+  $("#tabs").addEventListener("click", (e) => { const b = e.target.closest(".tab"); if (b) select(+b.dataset.i); });
+  $("#play").addEventListener("click", play);
+  $("#fold").addEventListener("click", () => { const f = $("#doc").classList.toggle("folded"); $("#fold").textContent = f ? "展开" : "收起"; });
+  $("#src-close").addEventListener("click", () => $("#src").close());
+  $("#src").addEventListener("click", (e) => { if (e.target === $("#src")) $("#src").close(); });
+  $("#proc").addEventListener("click", (e) => {
+    const c = e.target.closest(".cite");
+    if (c) { e.stopPropagation(); return openCite(+c.dataset.turn, c.dataset.cite); }
+    const no = e.target.closest(".no");
+    if (no) return peekClause(no.dataset.no);
+    if (e.target.closest("summary")) return;
+    const f = e.target.closest(".finding");
+    if (f) pickFinding(+f.dataset.turn, +f.dataset.f);
+  });
+  $("#proc").addEventListener("keydown", (e) => {
+    if ((e.key === "Enter" || e.key === " ") && e.target.classList.contains("finding")) { e.preventDefault(); pickFinding(+e.target.dataset.turn, +e.target.dataset.f); }
+  });
+  $("#doc-body").addEventListener("click", (e) => {
+    const cl = e.target.closest(".clause.has");
+    if (!cl) return;
+    const el = $$(".finding").find((x) => { const f = R.turns[+x.dataset.turn].findings[+x.dataset.f]; return f.clause === cl.dataset.no && x.dataset.key !== picked; }) || $$(".finding").find((x) => R.turns[+x.dataset.turn].findings[+x.dataset.f].clause === cl.dataset.no);
+    if (el) { pickFinding(+el.dataset.turn, +el.dataset.f); el.scrollIntoView({ block: "nearest", behavior: "smooth" }); }
+  });
+  select(0);
+}
+fetch("data.json").then((r) => r.json()).then(init).catch((e) => {
+  $("#proc").innerHTML = `<div class="empty">回放数据没有加载出来（${esc(e.message)}）。这个页面需要通过 HTTP 打开，直接双击本地文件看不到数据。</div>`;
+});
+</script>
+</body>
+</html>

@@ -8,6 +8,8 @@
 - 看不出我方是甲方还是乙方时，先反问。
 - 依据核实不了的意见不删除，标为"转法务复核"。
 
+**[在线回放](https://kennywu411-dev.github.io/contract-review-agent/)**：4 份合同的真实审查过程，不用装环境，每一步工具调用和每条依据都能点开。
+
 ![演示](docs/demo/contract-review-demo.gif)
 
 演示里的合同、三家公司的审查规范和供应商台账都是构造的，说明见 [evals/README.md](evals/README.md)。
