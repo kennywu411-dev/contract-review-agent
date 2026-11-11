@@ -149,6 +149,8 @@ class ReviewResult:
     answer_needs_human: bool = False
     invalid_citations: list[str] = field(default_factory=list)
     citations: dict = field(default_factory=dict)
+    # 金额测算（ADR 014）：抄出的数字、每个测算项的金额和算式、合计与谈判优先级；没做测算时为空
+    quant: dict = field(default_factory=dict)
     steps: int = 0
     cost_usd: float = 0.0
     latency_ms: float = 0.0
@@ -156,6 +158,21 @@ class ReviewResult:
 
     def to_dict(self) -> dict:
         return asdict(self)
+
+
+def add_quant(result: ReviewResult, q: dict, trace: dict) -> None:
+    """把金额测算结果并进审查结果：每条意见挂上金额或"无法量化"，花费计入本次审查。
+
+    result.steps 仍只数审查 agent 的模型调用（和之前的运行记录可比）；金额测算的那一次调用
+    记在 trace 的步骤里（agent="quant"）。"""
+    from contract_review.quant_extract import apply_to_findings
+
+    step = q.pop("step", None)
+    result.quant = q
+    result.findings = apply_to_findings(result.findings, q)
+    result.cost_usd += q.get("cost_usd", 0.0)
+    if step is not None:
+        trace["steps"].append(step | {"agent": "quant"})
 
 
 def review_contract(
@@ -169,8 +186,11 @@ def review_contract(
     history: str = "",
     contract_id: str = "",
     question: str = "",
+    quant: bool = True,
 ) -> ReviewResult:
-    """question 为空是首轮审查；否则是追问轮，history 放上一轮的审查意见（history_from_review）。"""
+    """question 为空是首轮审查；否则是追问轮，history 放上一轮的审查意见（history_from_review）。
+
+    quant=True 时，给出审查意见的那一轮再做金额测算（ADR 014）；追问只回答问题的轮次不做。"""
     t0 = time.perf_counter()
     company = TENANTS[tenant].removesuffix("（构造）")
     contract, question = _defang(contract), _defang(question)
@@ -215,6 +235,11 @@ def review_contract(
     )
     if terminal is not None:
         _finish(result, terminal, toolbox, contract)
+    if quant and result.kind == "review" and result.our_side in ("甲", "乙"):
+        from contract_review.quant_extract import run_quant
+
+        q = run_quant(contract, tenant, result.our_side, llm, toolbox.sql, on_step)
+        add_quant(result, q, trace)
     result.citations = toolbox.citations
     result.latency_ms = (time.perf_counter() - t0) * 1000
     trace["result"] = {
@@ -222,6 +247,7 @@ def review_contract(
         "our_side": result.our_side,
         "summary": result.summary,
         "findings": result.findings,
+        "quant": result.quant,
         "clarification": result.clarification,
         "answer": result.answer,
         "answer_clause": result.answer_clause,

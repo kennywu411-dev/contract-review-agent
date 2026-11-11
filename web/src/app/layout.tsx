@@ -6,8 +6,8 @@ const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Contract Risk Review Agent · 合同风险审查智能体",
-  description: "合同风险审查：逐条溯源、幻觉治理、拿不准转人工",
+  title: "采购合同审查 Agent · 把每条风险算成钱",
+  description: "采购合同审查：逐条找出不利条款，把每条风险换算成金额，按金额排出谈判优先级",
 };
 
 // 深色为默认；用户切换后记在 localStorage，首屏前同步应用，避免闪烁（与 DataPilot 一致）

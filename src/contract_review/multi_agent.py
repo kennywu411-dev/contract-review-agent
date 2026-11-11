@@ -21,11 +21,13 @@ from contract_review.agent import tool_loop
 from contract_review.config import TENANTS
 from contract_review.contract_evalset import RISK_TYPES
 from contract_review.prompts import review_system_prompt
+from contract_review.quant_extract import run_quant
 from contract_review.review_agent import (
     REVIEW_TOOLS,
     ReviewResult,
     _defang,
     _finish,
+    add_quant,
     normalize_clause,
 )
 from contract_review.tools import _tool
@@ -258,10 +260,12 @@ def review_contract_multi(
     on_step=None,
     contract_id: str = "",
     hint: str = "",
+    quant: bool = True,
 ) -> ReviewResult:
     """toolbox_factory() -> ToolBox（每个 agent 一个，检索器和查表后端共用并加锁）。
 
     hint：用户补充的信息（如首轮反问后答"我方是甲方"），交给主审判断立场。
+    quant：和三个专职组并行做金额测算（ADR 014），结果挂到汇总后的意见上。
     """
     t0 = time.perf_counter()
     # 检索和查表各一把锁：一次慢查询不会卡住另外两组的检索
@@ -330,11 +334,25 @@ def review_contract_multi(
         # 识别不出条款标题（如"一、价款"）或分派落空：不能产出"没问题"的空审查，
         # 回退单 Agent 审全文
         return _fallback_single(
-            contract, tenant, llm, make_box(), on_step, contract_id, result, trace, t0, unknown
+            contract,
+            tenant,
+            llm,
+            make_box(),
+            on_step,
+            contract_id,
+            result,
+            trace,
+            t0,
+            unknown,
+            quant,
         )
 
     jobs = {}
-    with ThreadPoolExecutor(max_workers=len(GROUPS)) as pool:
+    quant_job = None
+    with ThreadPoolExecutor(max_workers=len(GROUPS) + 1) as pool:
+        if quant and side in ("甲", "乙"):
+            # 金额测算读全文、只抄数字，和三个专职组互不依赖，一起并行
+            quant_job = pool.submit(run_quant, contract, tenant, side, llm, make_box().sql, on_step)
         for g in GROUPS:
             nos = sorted(set(assigned[g]) | set(defs), key=_clause_no) if assigned[g] else []
             parts = "\n".join(clauses[no] for no in nos)
@@ -384,16 +402,22 @@ def review_contract_multi(
     result.invalid_citations = invalid
     if len(failed) == len(GROUPS):
         result.kind = "fallback"
+    elif quant_job is not None:
+        add_quant(result, quant_job.result(), trace)  # run_quant 自己兜住异常，不会抛
     trace["out_of_scope"] = out_of_scope
     trace["failed_groups"] = failed
     trace["end"] = "submit_review"
     return _close(result, trace, t0, citations)
 
 
-def _fallback_single(contract, tenant, llm, box, on_step, contract_id, result, trace, t0, unknown):
+def _fallback_single(
+    contract, tenant, llm, box, on_step, contract_id, result, trace, t0, unknown, quant=True
+):
     from contract_review.review_agent import review_contract
 
-    single = review_contract(contract, tenant, llm, box, on_step=on_step, contract_id=contract_id)
+    single = review_contract(
+        contract, tenant, llm, box, on_step=on_step, contract_id=contract_id, quant=quant
+    )
     single.cost_usd += result.cost_usd
     single.steps += result.steps
     single.trace["steps"] = trace["steps"] + single.trace["steps"]
@@ -418,6 +442,7 @@ def _close(result: ReviewResult, trace: dict, t0: float, citations: dict) -> Rev
         "our_side": result.our_side,
         "summary": result.summary,
         "findings": result.findings,
+        "quant": result.quant,
         "clarification": result.clarification,
         "invalid_citations": result.invalid_citations,
     }

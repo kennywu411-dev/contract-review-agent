@@ -3,7 +3,7 @@
   uv run python scripts/build_site.py [--runs runs/demo]
 
 数据来源：runs/demo/*.json（scripts/record_demo.py 录制的真实运行）、evals/ 下的构造合同、
-docs/numbers.md。只做整理和裁剪，不改任何意见、依据、耗时和花费。
+docs/numbers.md。只做整理和裁剪，不改任何意见、依据、金额、算式、耗时和花费。
 
 合同示范文本（tpl-*）有版权、原文不进仓库：这里只输出名称和条目编号，不输出原文；
 检索工具返回的原始文本也不输出，只保留命中了哪些片段。脚本最后会检查输出里没有示范文本的原文。
@@ -46,6 +46,23 @@ RISK_TYPES = {
 # 展示哪几份、怎么介绍。介绍只描述合同是怎么构造的，审查结果全部来自运行记录。
 REPLAYS = [
     {
+        "id": "v3-goods-12",
+        "tab": "采购合同：每条风险算成钱",
+        "tags": ["金额测算", "4 行标的逐行比价", "谈判优先级"],
+        "note": "4 种标的的采购合同，来自采购金额测算集 v3。金额测算和三个审查 Agent 并行：模型只把合同里的数字抄出来，"
+        "规则代码逐个核对原文、经 DataPilot 的只读 MCP 查台账均价、按公式计算。这一份算出 4 项金额，"
+        "和构造合同时的标准答案一致；其中“付款条件的资金占用成本”没有被审查 Agent 报成风险，在汇总区单独列出。"
+        "审查意见里对第四条（检验期三十日）的那条，按构造属于多报。",
+    },
+    {
+        "id": "v3-agri-10",
+        "tab": "算不了的不硬算",
+        "tags": ["金额测算", "背靠背付款", "违约金以损失为基数"],
+        "note": "同样来自 v3。第五条的付款时间取决于下游客户回款，第八条的违约金以实际损失为基数，"
+        "这两项没有可以确定性计算的数，标为“无法量化”并写明原因，不给金额；定金超过法定上限的部分照常算出。"
+        "第一条有一行标的单价略高于台账均价，但在公司规范允许的范围内，显示出来、不计入合计。",
+    },
+    {
         "id": "goods-r3",
         "tab": "先反问，再查台账比价",
         "tags": ["立场不明 → 反问", "MCP 查台账"],
@@ -79,6 +96,49 @@ REPLAYS = [
 
 # 数字区：每个数字都要能在 docs/numbers.md 里找到（evidence 是必须原样出现在该文件里的片段）
 NUMBERS = [
+    {
+        "value": "133 / 133 · 132 / 133",
+        "title": "留出集上算对的金额（两次运行）",
+        "scope": "60 份没参与调试的构造采购合同，133 个应有金额的测算项，模型抄数 + 规则计算两次分别算对 133 和 132 个"
+        "（误差 ≤ 1% 算对，判定方式跑之前写好）。让同一个模型直接给金额是 129–132 个，差别在统计上不显著。",
+        "anchor": "金额测算adr-014",
+        "evidence": [
+            "| 金额正确（133 项，误差 ≤ 1%） | 133 / 132（100% / 99.2%） | 132 / 131（99.2% / 98.5%） "
+            "| 130 / 129（97.7% / 97.0%） |",
+        ],
+    },
+    {
+        "value": "100% 对 77–81%",
+        "title": "给出的金额分毫不差的比例",
+        "scope": "规则计算给出的金额和标准答案相差不超过 1 分钱：133/133 和 132/132。模型直接给金额时是 102–108/133。"
+        "同一份合同跑两次，规则方案 300 项里 299 项结论完全一样，直接给金额是 271–274 项。",
+        "anchor": "金额测算adr-014",
+        "evidence": [
+            "| 其中分毫不差 | 133 / 132（100% / 99.2%） | 108 / 102（81.2% / 76.7%） | 107 / 107（80.5% / 80.5%） |",
+            "| 两次运行同一项的结论完全一样（300 项） | 299（99.7%） | 274（91.3%） | 271（90.3%） |",
+        ],
+    },
+    {
+        "value": "26 / 26",
+        "title": "算不了的条款没有硬算",
+        "scope": "留出集里 26 个有条款但算不了的测算项（背靠背付款、付款时间另行确定、以实际损失为基数的违约金、"
+        "质保金比例另行约定），两次运行都标成“无法量化”，没有给出金额。",
+        "anchor": "金额测算adr-014",
+        "evidence": [
+            "| 无法量化判对（26 项）/ 硬给了金额 | 26 / 26，硬给 0 | 26 / 26，硬给 0 | 26 / 26，硬给 0 |"
+        ],
+    },
+    {
+        "value": "93.5%",
+        "title": "教训：第一版输给了让模型直接算",
+        "tone": "cost",
+        "scope": "调试集第一次全量，模型抄数 + 规则计算只算对 129/138，直接给金额是 135 和 138。12 处错里 9 处是同一个原因："
+        "模型把“另行协商”声明成“算不了”，规则照单全收。修正加在规则一侧后，才在留出集上跑出上面的数字。",
+        "anchor": "金额测算adr-014",
+        "evidence": [
+            "| 金额正确（138 项） | 129（93.5%） | 138（100%） | 135（97.8%） | 138（100%） |"
+        ],
+    },
     {
         "value": "6.6% → 0.8%",
         "title": "无依据且没有提示复核的意见",
@@ -146,6 +206,11 @@ NUMBERS = [
     },
 ]
 
+# 示范文本原文检查的例外：只列"几乎每份合同都有、审查 Agent 自己写修改建议时也会用到"的套话。
+# 这一条出现在两份旧回放的修改建议里（那两次运行并没有检索到含这句话的示范文本），
+# 后来另一份回放检索到的示范文本片段里恰好也有同样的 15 个字。只放行这一句，其余照旧检查。
+GENERIC_PHRASES = ["因本合同引起的或与本合同有关的"]
+
 _HEAD = re.compile(r"^\s*(第[零一二三四五六七八九十百\d]+条)(?!的|约定|规定|所|中|之|项下|第)")
 
 
@@ -166,7 +231,7 @@ def split_contract(text: str) -> tuple[list[str], list[dict]]:
 
 def load_contracts() -> dict:
     out = {}
-    for name in ("contracts.jsonl", "contracts_v2.jsonl"):
+    for name in ("contracts.jsonl", "contracts_v2.jsonl", "contracts_v3.jsonl"):
         for line in (ROOT / "evals" / name).read_text(encoding="utf-8").splitlines():
             if line.strip():
                 c = json.loads(line)
@@ -232,8 +297,10 @@ def build_turn(turn: dict, sources: Sources) -> dict:
             "clarification": result.get("clarification", ""),
         },
     }
+    out["quant"] = None
     if result["kind"] != "review":
         return out
+    out["quant"] = build_quant(result.get("quant"), trace, ends)
 
     # 引用编号：全局编号 → chunk 或查表结果
     citations = {}
@@ -324,6 +391,7 @@ def build_turn(turn: dict, sources: Sources) -> dict:
                 "revised_from": f.get("revised_from", ""),
                 "cited_by_model": f.get("cited_by_model", []),
                 "groups": submitted.get((f["clause_raw"], f["risk_type"]), []),
+                "quant": f.get("quant"),
             }
         )
     out["findings"] = findings
@@ -335,6 +403,53 @@ def build_turn(turn: dict, sources: Sources) -> dict:
         "error": ver["verifier_error"],
     }
     return out
+
+
+def build_quant(q: dict | None, trace: dict, ends: dict) -> dict | None:
+    """金额测算：抄出的数字（含核对结果）、每个测算项的金额、算式、假设，以及合计和谈判优先级。
+    金额测算上线之前录制的回放没有这一段，返回 None。"""
+    if not q:
+        return None
+    step = next((s for s in trace["steps"] if s.get("agent") == "quant"), None)
+    lookup = next(
+        (c for c in (step or {}).get("tool_calls", []) if c["name"] == "ledger_lookup"), None
+    )
+    return {
+        "status": q["status"],
+        "error": q.get("error", ""),
+        "llm_ms": step["llm_ms"] if step else 0,
+        "cost": q.get("cost_usd", 0.0),
+        "tokens_out": step["usage"]["output_tokens"] if step else 0,
+        "end_ms": ends.get(("quant", 1)),
+        "backend": q.get("ledger_backend"),
+        "ledger_sql": lookup["input"]["sql"] if lookup else "",
+        "ledger_ms": lookup.get("ms") if lookup else None,
+        "lines": [
+            {
+                k: ln[k]
+                for k in ("item", "unit", "unit_price", "quantity", "clause", "ok", "why", "ledger")
+            }
+            for ln in q.get("lines", [])
+        ],
+        "figures": [
+            {k: f.get(k) for k in ("label", "value", "quote", "clause", "ok", "why", "soft")}
+            for f in q.get("figures", [])
+        ],
+        "uncomputable": [
+            {k: u.get(k) for k in ("topic", "quote", "reason", "clause", "source")}
+            for u in q.get("uncomputable", [])
+        ],
+        "flags_dropped": [
+            {k: u.get(k) for k in ("topic", "quote", "why")} for u in q.get("flags_dropped", [])
+        ],
+        "items": q.get("items", []),
+        "summary": q.get("summary", {}),
+        "warnings": q.get("warnings", []),
+        "params": {
+            k: q["params"][k]
+            for k in ("capital_cost_rate_pct", "scenario_delay_days", "std_payment_days")
+        },
+    }
 
 
 def check_numbers() -> None:
@@ -404,7 +519,8 @@ def main() -> None:
         r"\s+",
         "",
         "".join(c["title"] + (c["text"] or "") for c in sources.chunks.values())
-        + "".join(c["text"] for c in contracts.values()),
+        + "".join(c["text"] for c in contracts.values())
+        + "".join(GENERIC_PHRASES),
     )
     leaks = check_withheld(re.sub(r"\s+", "", payload), sources.withheld, allowed)
     assert not leaks, f"输出里出现了示范文本原文：{leaks[:5]}"

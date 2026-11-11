@@ -180,7 +180,7 @@ def test_subagent_brief_restates_perspective_rule():
     sub = [
         q["messages"][0]["content"]
         for q in llm.requests
-        if "plan_review" not in {t["name"] for t in q["tools"]}
+        if not {"plan_review", "submit_terms"} & {t["name"] for t in q["tools"]}
     ]
     assert sub and all("只约束对方、保护我方" in c for c in sub)
 

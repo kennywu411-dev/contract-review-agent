@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>合同风险审查 Agent · 审查过程回放</title>
-<meta name="description" content="合同风险审查 Agent 的真实运行回放：主审判断立场并分派条款，三个审查 Agent 并行检索法条、查供应商台账，依据校验后给出逐条意见。纯静态页面，不调用模型。">
+<title>采购合同审查 Agent：把每条风险算成钱 · 审查过程回放</title>
+<meta name="description" content="采购合同审查 Agent 的真实运行回放：逐条找出对我方不利的条款，把每条能算的风险换算成金额，按金额排出谈判优先级。金额由规则代码计算，模型只负责从合同里抄数字。纯静态页面，不调用模型。">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%23111826%27/%3E%3Cpath d=%27M9 10h14M9 16h14M9 22h8%27 stroke=%27%23f6d548%27 stroke-width=%272.6%27 stroke-linecap=%27round%27/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -211,6 +211,35 @@ table.tbl { border-collapse: collapse; font-size: 12.5px; font-family: var(--mon
 .finding dt { color: var(--ink-2); font-size: 12.5px; padding-top: 2px; }
 .finding dd { margin: 0; overflow-wrap: anywhere; }
 .finding .cites { display: flex; flex-wrap: wrap; gap: 4px; }
+/* 金额测算 */
+.money { font-family: var(--mono); font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
+.qline { border: 1px solid color-mix(in oklab, var(--pass) 45%, var(--line)); border-radius: 6px; background: color-mix(in oklab, var(--pass) 7%, transparent); font-size: 13.5px; }
+.qline > summary { cursor: pointer; padding: 6px 10px; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; list-style: none; }
+.qline > summary::-webkit-details-marker { display: none; }
+.qline > summary .money { font-size: 16px; }
+.qline > summary .how { margin-left: auto; font-size: 12px; color: var(--ink-2); text-decoration: underline; text-underline-offset: 3px; }
+.qline .qbody { border-top: 1px solid var(--line); padding: 8px 10px; display: grid; gap: 10px; }
+.qno { font-size: 13px; color: var(--ink-2); padding: 5px 10px; border: 1px dashed var(--line); border-radius: 6px; }
+.qitem { display: grid; gap: 5px; font-size: 13px; min-width: 0; }
+.qitem .t { display: flex; flex-wrap: wrap; gap: 2px 10px; align-items: baseline; }
+.qitem .t b { font-size: 13.5px; }
+.qitem .t .k { font-size: 12px; color: var(--ink-2); }
+.qitem .f { font-family: var(--mono); font-size: 12.5px; line-height: 1.65; padding: 6px 9px; border: 1px solid var(--line); border-radius: 6px; background: var(--paper); overflow-wrap: anywhere; }
+.qitem ul { margin: 0; padding-left: 18px; color: var(--ink-2); font-size: 12.5px; }
+.qitem .as { color: var(--ink-2); font-size: 12.5px; }
+.qsum { border: 1px solid var(--ink); border-radius: 8px; padding: 14px; display: grid; gap: 12px; background: var(--surface); }
+.qsum .big { display: flex; flex-wrap: wrap; gap: 8px 28px; align-items: flex-end; }
+.qsum .big .money { font-size: clamp(24px, 3vw, 30px); display: block; line-height: 1.2; }
+.qsum .big small { font-size: 12.5px; color: var(--ink-2); display: block; }
+.qsum .split { font-size: 13px; color: var(--ink-2); display: grid; gap: 2px; }
+.qsum .big .split .money { color: var(--ink); font-size: 14px; display: inline; }
+.qsum ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; font-size: 14px; }
+.qsum ol li { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 8px; align-items: baseline; border-top: 1px solid var(--line); padding-top: 6px; }
+.qsum ol li .rk { font-family: var(--mono); color: var(--ink-2); font-size: 12.5px; }
+.qsum ol li .ti small { color: var(--ink-2); font-size: 12px; margin-left: 6px; }
+.qcopy { display: grid; gap: 6px; }
+.qcopy .tbl td.bad { color: var(--fail); }
+@media (max-width: 720px) { .qsum ol li { grid-template-columns: 18px minmax(0, 1fr); } .qsum ol li .money { grid-column: 2; } }
 .vnote { font-size: 13px; padding: 6px 10px; border-radius: 6px; border: 1px dashed var(--ink-2); color: var(--ink); }
 .vnote.soft { border-color: var(--line); color: var(--ink-2); }
 .vnote details summary { cursor: pointer; }
@@ -272,7 +301,7 @@ footer nav { display: flex; gap: 6px 18px; flex-wrap: wrap; }
 
 <header class="top">
   <div class="wrap">
-    <a class="brand" href="#top">Contract Review Agent<span>审查回放</span></a>
+    <a class="brand" href="#top">采购合同审查 Agent<span>把每条风险算成钱</span></a>
     <nav class="nav" aria-label="页面导航">
       <a href="#replay">回放</a><a href="#numbers">数字</a><a href="#notes">说明</a>
     </nav>
@@ -283,8 +312,8 @@ footer nav { display: flex; gap: 6px 18px; flex-wrap: wrap; }
 <main id="top">
   <section class="hero">
     <div class="wrap">
-      <h1>看合同风险审查 Agent 怎么审一份合同</h1>
-      <p class="lede">提交一份商业合同，它站在我方立场逐条找出不利条款，给出风险等级、可以直接替换的修改建议和依据原文。下面是 4 份合同从判断立场到给出意见的完整过程。</p>
+      <h1>采购合同审查 Agent：把每条风险算成钱</h1>
+      <p class="lede">签采购合同之前，它站在我方立场逐条找出不利条款，给出修改建议和依据原文；能算的风险换算成金额，告诉采购这份合同不改最坏多花多少钱、先谈哪一条。<b>金额由规则代码按公式计算，模型只负责从合同里抄数字。</b>下面是 6 份合同的完整审查过程，前两份带金额测算。</p>
       <div class="notice" role="note">
         <span class="dot" aria-hidden="true"></span>
         <p><b>这是真实运行记录的回放，不是在线服务。</b>页面是纯静态的，不调用模型，也不能上传合同。每一步工具调用、每条意见、耗时和花费都来自本地运行时保存的记录；合同、公司和供应商台账都是构造的。</p>
@@ -296,7 +325,7 @@ footer nav { display: flex; gap: 6px 18px; flex-wrap: wrap; }
     <div class="wrap">
       <div class="head">
         <h2>审查回放</h2>
-        <p class="lede">一边是合同正文，一边是审查过程和结果。点一条意见，合同里高亮对应的条款；点依据编号，看检索到的条文原文。</p>
+        <p class="lede">一边是合同正文，一边是审查过程和结果。点一条意见，合同里高亮对应的条款；点依据编号，看检索到的条文原文；点“怎么算的”，看金额的算式、用到的合同原文和假设。</p>
       </div>
       <div class="tabs" id="tabs" role="tablist" aria-label="选择合同"></div>
       <div id="case"></div>
@@ -336,6 +365,10 @@ footer nav { display: flex; gap: 6px 18px; flex-wrap: wrap; }
           <p>法律和司法解释的条文、构造的公司规范会显示检索到的原文片段。官方合同示范文本有版权，原文不随仓库公开，这里只显示名称和条目编号。</p>
         </div>
         <div class="notec">
+          <h3>金额是测算，不是报价</h3>
+          <p>金额按公开写明的公式计算，用到的资金成本率、逾期天数、质保金标准是假设，每个金额旁边都列了出来，换一组假设结果就会变。背靠背付款、以实际损失为基数的违约金、解除权、管辖这类没有确定数字的风险，标“无法量化”，不给金额。</p>
+        </div>
+        <div class="notec">
           <h3>不构成法律意见</h3>
           <p>模型是 Haiku 5.5。依据核实不了的意见不删除，改为提示人工复核；拿不准的条款应当由法务判断。</p>
         </div>
@@ -346,7 +379,7 @@ footer nav { display: flex; gap: 6px 18px; flex-wrap: wrap; }
 
 <footer>
   <div class="wrap">
-    <span>Contract Risk Review Agent · 代码使用 MIT 许可</span>
+    <span>采购合同审查 Agent（Contract Review Agent）· 代码使用 MIT 许可</span>
     <nav aria-label="相关链接">
       <a href="https://github.com/kennywu411-dev/contract-review-agent">仓库</a>
       <a href="https://github.com/kennywu411-dev/contract-review-agent/blob/main/docs/numbers.md">数字登记表</a>
@@ -461,11 +494,59 @@ function pickFinding(ti, fi) {
 function stage(n, who, title, meta, body, cls = "") {
   return `<div class="stage seq ${cls}"><div class="n">${n}</div><div class="c"><div><div class="who">${esc(who)}</div><h3>${title}</h3></div>${body}${meta ? `<div class="meta">${meta}</div>` : ""}</div></div>`;
 }
+const yuan = (x) => "¥" + Number(x).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const NATURE = { sure: "不改就确定多花", exposure: "最坏情景下的敞口" };
+function noBtn(no) { return no ? `<button type="button" class="no" data-no="${esc(no)}">${esc(no)}</button>` : ""; }
+function qItemHtml(i) {
+  const inputs = i.inputs.length ? `<ul>${i.inputs.map((x) => `<li>${esc(x.label)} = ${esc(x.value)}，来自 ${noBtn(x.clause)} “${esc(x.quote)}”</li>`).join("")}</ul>` : "";
+  const as = i.assumptions.length ? `<div class="as">假设与标准：${i.assumptions.map(esc).join("；")}</div>` : "";
+  const state = i.status === "unquantifiable" ? `<span class="chip">无法量化</span>` : i.status === "needs_check" ? `<span class="chip human">需人工核对</span>` : i.status === "within_standard" ? `<span class="chip">在公司标准内，不计入合计</span>` : "";
+  return `<div class="qitem"><div class="t"><b>${esc(i.title)}</b>${i.amount != null ? `<span class="money">${yuan(i.amount)}</span>` : ""}${state}<span class="k">${NATURE[i.nature]}</span></div>${i.formula ? `<div class="f">${esc(i.formula)}</div>` : ""}${i.note ? `<div class="as">${esc(i.note)}</div>` : ""}${inputs}${as}</div>`;
+}
+function findingQuantHtml(t, f) {
+  const q = f.quant;
+  if (!q) return "";
+  if (q.status === "quantified" && q.amount != null) {
+    const items = t.quant.items.filter((i) => q.keys.includes(i.key) && i.status === "quantified");
+    return `<details class="qline"><summary><span>这条不改，最坏多花</span><span class="money">${yuan(q.amount)}</span><span class="how">怎么算的</span></summary><div class="qbody">${items.map(qItemHtml).join("")}${items.length > 1 ? `<p class="hint">同一条款的两种口径只取较大的一项，不相加。</p>` : ""}</div></details>`;
+  }
+  const head = q.status === "needs_check" ? "金额需人工核对" : "无法量化";
+  return `<div class="qno"><b>${head}：</b>${esc(q.reason)}</div>`;
+}
+function quantStageBody(t) {
+  const q = t.quant;
+  if (q.status !== "ok") return `<p class="hint">金额测算这一步没有完成（${esc(q.error)}），审查意见不受影响。</p>`;
+  const via = q.backend === "datapilot-mcp" ? "经 DataPilot 只读 MCP" : "本地只读库";
+  const lines = q.lines.length ? `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>标的</th><th>合同单价</th><th>数量</th><th>台账均价</th><th>核对原文</th></tr></thead><tbody>${q.lines.map((l) => `<tr><td>${esc(l.item)}</td><td>${esc(l.unit_price)}</td><td>${esc(l.quantity)}</td><td>${l.ledger ? esc(Number(l.ledger.avg).toFixed(2)) + `（${l.ledger.n} 笔）` : "—"}</td><td class="${l.ok ? "" : "bad"}">${l.ok ? "通过" : esc(l.why)}</td></tr>`).join("")}</tbody></table></div>` : "";
+  const figs = `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>抄出的数字</th><th>值</th><th>条款</th><th>核对原文</th></tr></thead><tbody>${q.figures.map((f) => `<tr><td>${esc(f.label)}</td><td>${esc(f.value)}</td><td>${esc(f.clause || "—")}</td><td class="${f.ok ? "" : "bad"}">${f.ok ? "通过" : esc(f.why)}</td></tr>`).join("")}</tbody></table></div>`;
+  const unc = q.uncomputable.length ? `<p class="hint">有条款但算不了：${q.uncomputable.map((u) => `${noBtn(u.clause)} ${esc(u.reason)}`).join("；")}</p>` : "";
+  const dropped = q.flags_dropped.length ? `<p class="hint">模型声明“算不了”但规则没有采纳的 ${q.flags_dropped.length} 条：${q.flags_dropped.map((u) => esc(u.why)).join("；")}。</p>` : "";
+  const ok = q.figures.filter((f) => f.ok).length + q.lines.filter((l) => l.ok).length * 2, all = q.figures.length + q.lines.length * 2;
+  return `<div class="vgrid"><div><b>${all}</b><span>个数字由模型抄出</span></div><div><b>${ok}</b><span>个通过原文核对</span></div><div><b>${q.items.filter((i) => i.status === "quantified").length}</b><span>项算出金额</span></div></div>
+    <details class="more"><summary>抄出的数字和核对结果</summary><div class="qcopy">${lines}${figs}<p class="hint">台账均价：${via}，固定的一句 SQL（${esc(q.ledger_sql)}），不拼接模型输出。</p></div></details>${unc}${dropped}
+    <p class="hint">模型只抄数字、不做计算；金额由规则代码按公式算，核对不上的数字不参与计算。</p>`;
+}
+function quantSummaryHtml(t) {
+  const q = t.quant, s = q.summary;
+  if (q.status !== "ok" || (!s.priorities.length && !q.items.length)) return "";
+  const attached = new Set(t.findings.flatMap((f) => (f.quant ? f.quant.keys : [])));
+  const pri = s.priorities.map((p) => `<li><span class="rk">${p.rank}</span><span class="ti">${noBtn(p.clause)} ${esc(p.title)}${attached.has(p.key) ? "" : "<small>未列为风险</small>"}</span><span class="money">${yuan(p.amount)}</span></li>`).join("");
+  const rest = q.items.filter((i) => !attached.has(i.key));
+  return `<div class="qsum seq">
+    <div class="big"><div><small>按现在的条款签，最坏情况多花</small><span class="money">${yuan(s.worst_total)}</span></div>
+      <div class="split"><span>不改就确定多花 <span class="money">${yuan(s.sure_total)}</span></span><span>最坏情景下的敞口 <span class="money">${yuan(s.exposure_total)}</span></span></div></div>
+    ${q.warnings.map((w) => `<div class="vnote">${esc(w)}</div>`).join("")}
+    ${pri ? `<div><p class="hint">谈判优先级（按金额从大到小）</p><ol>${pri}</ol></div>` : ""}
+    ${rest.length ? `<details class="more"><summary>没有挂在审查意见上的测算项（${rest.length}）</summary><div class="qbody" style="display:grid;gap:10px;margin-top:8px">${rest.map(qItemHtml).join("")}</div></details>` : ""}
+    <p class="hint">假设：年化资金成本率 ${q.params.capital_cost_rate_pct}%、违约金情景按双方各逾期 ${q.params.scenario_delay_days} 天、公司标准账期 ${q.params.std_payment_days} 日。${s.unquantifiable ? `另有 ${s.unquantifiable} 项无法量化，没有计入。` : ""}${s.needs_check ? `${s.needs_check} 项需人工核对。` : ""}</p>
+  </div>`;
+}
 function gantt(t) {
   const total = t.review_ms + t.verify_ms, p0 = t.planner.llm_ms;
   const row = (label, a, b, cls = "") => `<div class="r"><span>${label}</span><div class="track"><i class="${cls}" style="left:${(a / total * 100).toFixed(2)}%;width:${((b - a) / total * 100).toFixed(2)}%"></i></div><span>${sec(b - a)}</span></div>`;
   let h = row("主审", 0, p0);
   t.agents.forEach((a) => { const end = a.steps.at(-1).end_ms; if (end) h += row(a.label, p0, end); });
+  if (t.quant && t.quant.end_ms) h += row("金额测算", p0, t.quant.end_ms);
   if (t.verify.ran) h += row("依据校验", t.review_ms, total, "v");
   return `<div class="gantt" role="img" aria-label="各环节在这次运行里的起止时间">${h}</div>`;
 }
@@ -501,6 +582,7 @@ function findingHtml(ti, fi, f) {
     <div class="hd"><span class="chip ${LEVEL[f.level]}">${esc(f.level)}风险</span><b>${esc(f.clause || "缺少条款")}</b><span class="chip">${esc(f.risk_label)}</span>${human}<span class="by">${esc(by)}</span></div>
     ${f.quote ? `<blockquote>${esc(f.quote)}</blockquote>` : ""}
     <dl><dt>理由</dt><dd>${esc(f.reason)}</dd><dt>修改建议</dt><dd>${esc(f.suggestion)}</dd><dt>依据</dt><dd><div class="cites">${f.citations.map((id) => citeBtn(ti, id)).join("") || '<span class="hint">无</span>'}</div></dd></dl>
+    ${findingQuantHtml(R.turns[ti], f)}
     ${notes.join("")}
   </article>`;
 }
@@ -519,6 +601,7 @@ function turnHtml(t, ti, n0) {
   h += stage(++n, "主审 · plan_review", "把条款分派给三个审查 Agent", "", `<div class="assign">${assign}</div>${defs}${auto}<p class="hint">一个条款可以同时分给几个组。点条款号可以在左边定位。</p>`);
   const legend = `<div class="legend"><span>依据编号：</span><span class="cite law">法律条文</span><span class="cite policy">公司规范</span><span class="cite template">示范文本</span><span class="cite table">台账</span></div>`;
   h += stage(++n, "三个审查 Agent 并行", "检索依据、查台账、提交意见", `审查阶段共 ${sec(t.review_ms)} · ${usd(t.review_cost)}`, gantt(t) + `<div class="agents">${t.agents.map((a, i) => agentHtml(ti, a, R.sql_backend, i === 0)).join("")}</div>` + legend);
+  if (t.quant) h += stage(++n, "金额测算 · 和三个审查 Agent 并行", "模型抄数字，规则算金额", `1 次模型调用 · ${sec(t.quant.llm_ms)} · ${usd(t.quant.cost)}${t.quant.ledger_ms != null ? ` · 查台账 ${t.quant.ledger_ms.toFixed(0)} 毫秒` : ""}`, quantStageBody(t));
   if (t.findings.length) {
     const v = t.verify, extra = t.findings.filter((f) => f.verify_flags.length).length;
     h += stage(++n, "依据校验", "逐条核对理由有没有原文支撑", `1 次模型调用 · ${sec(t.verify_ms)} · ${usd(t.verify_cost)}`,
@@ -530,7 +613,9 @@ function turnHtml(t, ti, n0) {
   const hm = t.findings.filter((f) => f.needs_human_review).length;
   const list = t.findings.length ? `<div class="findings">${t.findings.map((f, i) => findingHtml(ti, i, f)).join("")}</div>` : `<div class="empty">这份合同没有报出意见。</div>`;
   const summary = t.summary ? `<details class="more"><summary>各组写的总体结论</summary><p class="sum">${esc(t.summary)}</p></details>` : "";
-  h += stage(++n, "结果", `${t.findings.length} 条审查意见`, "", `<p class="hint">其中 ${hm} 条提示人工复核。点一条意见，在合同里高亮对应条款。</p>${list}${summary}`);
+  const qs = t.quant ? quantSummaryHtml(t) : `<p class="hint">这份回放录制于金额测算加入之前，没有金额。</p>`;
+  const nq = t.findings.filter((f) => f.quant && f.quant.status === "quantified").length;
+  h += stage(++n, "结果", `${t.findings.length} 条审查意见${t.quant && t.quant.status === "ok" ? `，${nq} 条算出了金额` : ""}`, "", `${qs}<p class="hint">其中 ${hm} 条提示人工复核。点一条意见，在合同里高亮对应条款。</p>${list}${summary}`);
   return [h, n];
 }
 function renderProc() {
@@ -547,7 +632,7 @@ function renderCase() {
       <div class="stat"><b>${sec(t.wall_ms)}</b><span>实际耗时（含依据校验）</span></div>
       <div class="stat"><b>${t.model_calls} 次</b><span>模型调用${t.turns > 1 ? `，用户 ${t.turns} 轮` : ""}</span></div>
       <div class="stat"><b>${usd(t.cost)}</b><span>花费（Haiku 5.5）</span></div>
-      <div class="stat"><b>${R.turns.at(-1).findings ? R.turns.at(-1).findings.length : 0} 条</b><span>审查意见</span></div>
+      <div class="stat"><b>${R.turns.at(-1).findings ? R.turns.at(-1).findings.length : 0} 条</b><span>审查意见${R.turns.at(-1).quant && R.turns.at(-1).quant.status === "ok" ? `，最坏多花 ${yuan(R.turns.at(-1).quant.summary.worst_total)}` : ""}</span></div>
     </div>
     <div class="srcline">合同 ${esc(R.id)}（${esc(R.source)}，构造）· 查台账后端 ${esc(R.sql_backend)} · trace ${R.turns.map((x) => x.trace_id).join("、")}</div>
   </div>`;

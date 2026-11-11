@@ -260,7 +260,12 @@ def cmd_eval_review(args: argparse.Namespace) -> None:
 
         def run_one(c):
             return review_contract_multi(
-                c.text, c.tenant, llm, lambda: ToolBox(c.tenant, retr, sql), contract_id=c.id
+                c.text,
+                c.tenant,
+                llm,
+                lambda: ToolBox(c.tenant, retr, sql),
+                contract_id=c.id,
+                quant=not args.no_quant,
             )
     else:
 
@@ -272,6 +277,7 @@ def cmd_eval_review(args: argparse.Namespace) -> None:
                 ToolBox(c.tenant, retr, sql),
                 cache=args.cache,
                 contract_id=c.id,
+                quant=not args.no_quant,
             )
 
     try:
@@ -327,6 +333,75 @@ def cmd_eval_review(args: argparse.Namespace) -> None:
                 f"{k} {v['flag_rate_hm']:.0%}（{v['n']}）" for k, v in s["distractors"].items()
             )
         )
+
+
+def cmd_eval_quant(args: argparse.Namespace) -> None:
+    import json
+
+    from contract_review.config import ROOT
+    from contract_review.datapilot_client import make_backend
+    from contract_review.eval_quant import ARMS, EVALSETS, print_summary, run_eval
+    from contract_review.llm import make_llm
+
+    if args.consistency:
+        from contract_review.eval_quant import consistency
+
+        res = consistency(*args.consistency.split(","))
+        print(json.dumps(res, ensure_ascii=False, indent=1))
+        return
+    if args.rescore:
+        from contract_review.eval_quant import rescore
+
+        out = rescore(args.rescore)
+        s = json.loads((out / "summary_rescored.json").read_text("utf-8"))
+        (out / "summary_rescored.json").write_text(
+            json.dumps(
+                s | {"model": "", "total_cost_usd": 0.0, "paired": {}}, ensure_ascii=False, indent=1
+            ),
+            "utf-8",
+        )
+        print_summary(out, "summary_rescored.json")
+        return
+    arms = [a for a in args.arms.split(",") if a]
+    if set(arms) - set(ARMS):
+        raise SystemExit(f"未知方案：{set(arms) - set(ARMS)}（可选：{', '.join(ARMS)}）")
+    sql = make_backend()
+    try:
+        out = run_eval(
+            make_llm(args.model),
+            sql,
+            arms,
+            args.tag,
+            args.sample,
+            args.max_cost,
+            args.workers,
+            evalset=ROOT / "evals" / EVALSETS[args.evalset],
+        )
+    finally:
+        if hasattr(sql, "close"):
+            sql.close()
+    print_summary(out)
+
+
+def cmd_eval_quant_e2e(args: argparse.Namespace) -> None:
+    from contract_review.datapilot_client import make_backend
+    from contract_review.eval_quant import run_e2e
+    from contract_review.llm import make_llm
+
+    sql = make_backend()
+    try:
+        run_e2e(
+            make_llm("claude-haiku-5-5"),
+            _retriever("fixed"),
+            sql,
+            args.tag,
+            args.sample,
+            args.max_cost,
+            args.workers,
+        )
+    finally:
+        if hasattr(sql, "close"):
+            sql.close()
 
 
 def cmd_review_d4(args: argparse.Namespace) -> None:
@@ -806,7 +881,31 @@ def main() -> None:
     p.add_argument("--evalset", choices=["v1", "v2"], default="v1", help="v2 = 难评测集（ADR 013）")
     p.add_argument("--resume", help="runs/ 下已有的运行目录名：只补跑没有结果的合同")
     p.add_argument("--concurrency", type=int, default=1, help="并行审查的合同数")
+    p.add_argument("--no-quant", action="store_true", help="不做金额测算（ADR 014 之前的流程）")
     p.set_defaults(func=cmd_eval_review)
+    p = sub.add_parser(
+        "eval-quant", help="金额测算评测：字段抽取、金额正确率、直接给金额的对照（ADR 014）"
+    )
+    p.add_argument("--arms", default="extract,direct-low,direct-high", help="逗号分隔")
+    p.add_argument("--sample", type=int, default=0, help="只跑前 N 份（调试用）；0 = 全部 60 份")
+    p.add_argument("--tag", default="quant")
+    p.add_argument("--max-cost", type=float, default=1.5, help="累计花费上限（美元）")
+    p.add_argument("--workers", type=int, default=4)
+    p.add_argument("--model", default="claude-haiku-5-5")
+    p.add_argument("--evalset", choices=["v3", "v3-holdout"], default="v3")
+    p.add_argument(
+        "--rescore", help="runs/ 下的运行目录名：用当前规则重算保存下来的模型输出，不调 API"
+    )
+    p.add_argument("--consistency", help="两个运行目录名（逗号分隔）：同一项两次结论是否完全一样")
+    p.set_defaults(func=cmd_eval_quant)
+    p = sub.add_parser(
+        "eval-quant-e2e", help="完整审查流程里的金额测算：金额是否挂到了对应的审查意见上"
+    )
+    p.add_argument("--sample", type=int, default=20)
+    p.add_argument("--tag", default="quant-e2e")
+    p.add_argument("--max-cost", type=float, default=1.0)
+    p.add_argument("--workers", type=int, default=2)
+    p.set_defaults(func=cmd_eval_quant_e2e)
     p = sub.add_parser("eval-gate", help="回归门禁：候选运行相对基线是否显著变差（不调用 API）")
     p.add_argument("baseline", help="runs/ 下的基线运行目录名")
     p.add_argument("candidate", help="runs/ 下的候选运行目录名")

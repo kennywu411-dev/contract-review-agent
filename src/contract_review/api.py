@@ -316,8 +316,9 @@ def create_app(
     def samples():
         """评测集里的构造合同，供演示时一键填入（不含金标准答案）。"""
         from contract_review.contract_evalset import load_contracts
+        from contract_review.eval_quant import V3_PATH, load_v3
 
-        return [
+        out = [
             {
                 "id": c.id,
                 "title": c.title,
@@ -329,6 +330,10 @@ def create_app(
             }
             for c in load_contracts()
         ]
+        # 采购金额测算集（ADR 014）的前 12 份排在最前面：金额测算在这些合同上最有内容
+        keys = ("id", "title", "tenant", "our_name", "counterparty", "text", "constructed")
+        v3 = [{k: c[k] for k in keys} for c in load_v3()[:12]] if V3_PATH.exists() else []
+        return v3 + out
 
     @app.post("/api/review")
     async def review(body: ReviewBody):
@@ -561,6 +566,8 @@ def create_app(
             RUNS_DIR.glob("*/summary.json"), key=lambda p: p.stat().st_mtime, reverse=True
         ):
             s = json.loads(d.read_text(encoding="utf-8"))
+            if str(s.get("kind", "")).startswith("quant"):
+                continue  # 金额测算评测（ADR 014）的结果格式不同，看板不展示，看 docs/numbers.md
             out.append(
                 {
                     "run": d.parent.name,

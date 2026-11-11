@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, Check, ChevronRight, Copy, FileText, Loader2, Pencil, SendHorizonal, ShieldCheck, UserCheck } from "lucide-react";
+import { AlertTriangle, Calculator, Check, ChevronRight, Copy, FileText, Loader2, Pencil, SendHorizonal, ShieldCheck, UserCheck } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { CiteChip } from "@/components/answer-view";
@@ -14,7 +14,10 @@ import {
   type Finding,
   fmtMs,
   fmtUsd,
+  fmtYuan,
   getJSON,
+  type Quant,
+  type QuantItem,
   review,
   type ReviewResult,
   RISK_TYPES,
@@ -150,6 +153,133 @@ function FeedbackBar({ f, i, sessionId, reviewId }: { f: Finding; i: number; ses
   );
 }
 
+const NATURE = { sure: "不改就确定多花", exposure: "最坏情景下的敞口" } as const;
+const quantOf = (r: ReviewResult): Quant | null => (r.quant && "items" in r.quant ? (r.quant as Quant) : null);
+
+/** 一个测算项：金额、算式、用到的合同原文、假设。金额由规则代码计算，模型只抄数字。 */
+function QuantItemView({ item, onClause }: { item: QuantItem; onClause: (no: string) => void }) {
+  return (
+    <div className="space-y-1.5 text-xs">
+      <div className="flex flex-wrap items-baseline gap-x-2">
+        <span className="font-medium">{item.title}</span>
+        {item.amount != null && <span className="font-mono tabular-nums">{fmtYuan(item.amount)}</span>}
+        <span className="text-muted-foreground">{NATURE[item.nature]}</span>
+      </div>
+      {item.formula && <p className="bg-background rounded border px-2 py-1.5 font-mono leading-relaxed break-words">{item.formula}</p>}
+      {item.note && <p className="text-muted-foreground">{item.note}</p>}
+      {item.inputs.length > 0 && (
+        <ul className="text-muted-foreground space-y-0.5">
+          {item.inputs.map((x, k) => (
+            <li key={k}>
+              {x.label} = {String(x.value)}，来自
+              {x.clause ? (
+                <button onClick={() => onClause(x.clause!)} className="text-foreground mx-0.5 cursor-pointer underline underline-offset-2">{x.clause}</button>
+              ) : " 合同 "}
+              “{x.quote}”
+            </li>
+          ))}
+        </ul>
+      )}
+      {item.assumptions.length > 0 && (
+        <p className="text-muted-foreground">假设与标准：{item.assumptions.join("；")}</p>
+      )}
+    </div>
+  );
+}
+
+/** 意见卡片里的金额行：有金额时显示金额并可展开算式；算不了或核对不上时说明原因。 */
+function FindingQuantLine({ f, quant, onClause }: { f: Finding; quant: Quant | null; onClause: (no: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const q = f.quant;
+  if (!q) return null;
+  if (q.status === "quantified" && q.amount != null) {
+    const items = (quant?.items ?? []).filter((i) => q.keys.includes(i.key) && i.status === "quantified");
+    return (
+      <div className="rounded-lg border border-emerald-600/30 bg-emerald-500/5 p-3">
+        <button onClick={() => setOpen((o) => !o)} aria-expanded={open}
+          className="flex w-full cursor-pointer flex-wrap items-center gap-2 text-left text-sm">
+          <Calculator className="size-4 shrink-0 text-emerald-700 dark:text-emerald-400" />
+          <span>这条不改，最坏多花</span>
+          <span className="font-mono text-base font-semibold tabular-nums">{fmtYuan(q.amount)}</span>
+          <span className="text-muted-foreground ml-auto inline-flex items-center gap-1 text-xs">
+            怎么算的<ChevronRight className={cn("size-3.5 transition-transform", open && "rotate-90")} />
+          </span>
+        </button>
+        {open && (
+          <div className="mt-2 space-y-3 border-t pt-2">
+            {items.map((i) => <QuantItemView key={i.key} item={i} onClause={onClause} />)}
+            {items.length > 1 && <p className="text-muted-foreground text-xs">同一条款的两种口径只取较大的一项，不相加。</p>}
+          </div>
+        )}
+      </div>
+    );
+  }
+  return (
+    <p className="text-muted-foreground inline-flex items-start gap-1.5 text-xs">
+      <Calculator className="mt-0.5 size-3.5 shrink-0" />
+      {q.status === "needs_check" ? "金额需人工核对：" : q.status === "within_standard" ? "金额在公司标准内：" : "无法量化："}
+      {q.reason}
+    </p>
+  );
+}
+
+/** 汇总区：最坏情况合计、谈判优先级，以及没有挂在任何意见上的测算项。 */
+function QuantSummary({ quant, findings, onClause }: { quant: Quant; findings: Finding[]; onClause: (no: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const s = quant.summary;
+  if (quant.status !== "ok") {
+    return <p className="text-muted-foreground rounded-xl border p-3 text-xs">金额测算这一步没有完成（{quant.error}），审查意见不受影响，金额请人工核对。</p>;
+  }
+  const attached = new Set(findings.flatMap((f) => f.quant?.keys ?? []));
+  const loose = quant.items.filter((i) => !attached.has(i.key));
+  if (!s.priorities.length && !loose.length) return null;
+  const byKey = new Map(quant.items.map((i) => [i.key, i]));
+  return (
+    <section aria-label="金额测算汇总" className="bg-card space-y-3 rounded-xl border p-4">
+      <div className="flex flex-wrap items-end gap-x-6 gap-y-2">
+        <div>
+          <p className="text-muted-foreground text-xs">按现在的条款签，最坏情况多花</p>
+          <p className="font-mono text-2xl font-semibold tabular-nums">{fmtYuan(s.worst_total)}</p>
+        </div>
+        <div className="text-muted-foreground text-xs leading-relaxed">
+          <p>不改就确定多花 <span className="text-foreground font-mono tabular-nums">{fmtYuan(s.sure_total)}</span></p>
+          <p>最坏情景下的敞口 <span className="text-foreground font-mono tabular-nums">{fmtYuan(s.exposure_total)}</span></p>
+        </div>
+      </div>
+      {quant.warnings.map((w) => (
+        <p key={w} className="inline-flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-400"><AlertTriangle className="mt-0.5 size-3.5 shrink-0" />{w}</p>
+      ))}
+      {s.priorities.length > 0 && (
+        <div>
+          <p className="text-muted-foreground mb-1 text-xs">谈判优先级（按金额从大到小）</p>
+          <ol className="space-y-1 text-sm">
+            {s.priorities.map((p) => (
+              <li key={p.key} className="flex flex-wrap items-baseline gap-x-2">
+                <span className="text-muted-foreground font-mono text-xs">{p.rank}</span>
+                {p.clause && <button onClick={() => onClause(p.clause!)} className="cursor-pointer font-medium underline-offset-4 hover:underline">{p.clause}</button>}
+                <span>{p.title}</span>
+                <span className="ml-auto font-mono tabular-nums">{fmtYuan(p.amount)}</span>
+                {!attached.has(p.key) && <span className="text-muted-foreground text-xs">未列为风险</span>}
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
+      <button onClick={() => setOpen((o) => !o)} aria-expanded={open}
+        className="text-muted-foreground hover:text-foreground inline-flex cursor-pointer items-center gap-1 text-xs">
+        <ChevronRight className={cn("size-3.5 transition-transform", open && "rotate-90")} />
+        全部算式和假设（{quant.items.length} 项{s.unquantifiable ? `，其中无法量化 ${s.unquantifiable}` : ""}{s.needs_check ? `，需人工核对 ${s.needs_check}` : ""}）
+      </button>
+      {open && (
+        <div className="space-y-3 border-t pt-2">
+          {quant.items.map((i) => <QuantItemView key={i.key} item={byKey.get(i.key)!} onClause={onClause} />)}
+        </div>
+      )}
+      <p className="text-muted-foreground text-xs">金额由规则代码按公式计算，模型只负责从合同里抄数字；每个数字都核对过合同原文。资金成本率、逾期天数等是假设，展开可以看到。</p>
+    </section>
+  );
+}
+
 function FindingCard({
   f, i, result, active, onCite, onClause, sessionId,
 }: {
@@ -186,6 +316,7 @@ function FindingCard({
         </p>
       ) : null}
       {f.revised_from && <p className="text-muted-foreground text-xs">理由已由校验器改写为只保留有原文依据的部分。</p>}
+      <FindingQuantLine f={f} quant={quantOf(result)} onClause={onClause} />
       <div className="bg-muted/50 rounded-lg p-3">
         <div className="mb-1 flex items-center justify-between">
           <span className="text-muted-foreground text-xs">修改建议</span>
@@ -391,6 +522,9 @@ export default function ReviewPage() {
                         )}
                       </div>
                       <p className="text-muted-foreground text-sm whitespace-pre-line">{t.result.summary}</p>
+                      {quantOf(t.result) && (
+                        <QuantSummary quant={quantOf(t.result)!} findings={t.verified?.findings.length ? t.verified.findings : t.result.findings} onClause={pickClause} />
+                      )}
                       {(t.verified?.findings.length ? t.verified.findings : t.result.findings).map((f, i) => (
                         <FindingCard key={i} f={f} i={i} result={t.result!} active={open?.turnId === t.id ? open.cid : null}
                           onCite={(cid) => setOpen({ turnId: t.id, cid })} onClause={pickClause} sessionId={sessionId} />

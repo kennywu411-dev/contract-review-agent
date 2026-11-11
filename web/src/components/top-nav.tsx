@@ -42,11 +42,11 @@ export function TopNav() {
   const path = usePathname();
   return (
     <header className="flex h-14 shrink-0 items-center gap-4 border-b px-4">
-      <Link href="/" className="font-semibold tracking-tight">
-        Contract Risk Review Agent
-        <span className="text-muted-foreground ml-2 hidden text-xs font-normal sm:inline">合同风险审查智能体</span>
+      <Link href="/" className="shrink-0 font-semibold tracking-tight whitespace-nowrap">
+        采购合同审查<span className="hidden sm:inline"> Agent</span>
+        <span className="text-muted-foreground ml-2 hidden text-xs font-normal lg:inline">把每条风险算成钱</span>
       </Link>
-      <nav className="inline-flex rounded-lg border p-0.5 text-sm">
+      <nav className="inline-flex min-w-0 overflow-x-auto rounded-lg border p-0.5 text-sm whitespace-nowrap">
         {LINKS.map((l) => (
           <Link
             key={l.href}

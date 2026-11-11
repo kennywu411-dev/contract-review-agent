@@ -1,5 +1,7 @@
 # 合同审查评测集（构造）
 
+三套：v1（`contracts.jsonl`，48 份）、v2 难评测集（`contracts_v2.jsonl`，60 份）、v3 采购金额测算集（`contracts_v3.jsonl` 和留出集，各 60 份）。v1、v2 评审查意见，v3 评金额。
+
 `contracts.jsonl` 由 `uv run python scripts/make_contracts.py` 生成（固定随机种子，可复现），全部是构造数据：公司、价格、条款均为虚构。
 
 ## 怎么构造的
@@ -37,6 +39,19 @@
 - 干净合同带 `distractors`：刚好合规的数值、合法免责、对我方有利的单方条款、"签订地法院 + 签订地在我方"。
 - 抽查清单 `contracts_v2_spotcheck.md`（20 条）随生成器一起输出。
 - 跑法：`cra eval-review --evalset v2 [--multi-agent]`。
+
+## v3 采购金额测算集（ADR 014）
+
+`contracts_v3.jsonl` 和 `contracts_v3_holdout.jsonl` 由 `uv run python scripts/make_contracts_v3.py`（加 `--holdout` 生成留出集）生成，固定种子，全部是构造数据。各 60 份采购合同，我方都是甲方：工业品买卖 20、农产品买卖 16、加工承揽 6、数据委托处理 6、数据供应 6、数据产品开发 6。
+
+- 每份的单价、数量、交付期、预付款、账期、定金、违约金、质保金随机取值，所以每项金额的标准答案可以直接算出。
+- 18 份是多行标的（2–5 种），逐行和台账均价比。一半合同用中文数字，一半用阿拉伯数字。
+- 算不了的条款：背靠背付款、付款时间另行确定、以实际损失为基数的违约金、质保金比例另行约定。
+- 字段：`gold_lines`（标的明细）、`gold_fields`（应抄出的其他数字）、`gold_uncomputable`（有条款但算不了的主题）、`gold_amounts`（比价、资金占用、违约金敞口差、定金超额、质保金 5 项各自的金额，或 `none` / `unquantifiable`）、`ledger`（每行标的的台账均价）。
+- 标准答案的金额在生成器里独立计算，`tests/test_quant_evalset.py` 核对它和 `quant.py` 的结果逐项一致。
+- 调试只看 v3；留出集换了随机种子，规则冻结后才跑，只用来报最终数字。两套出自同一个生成器，条款写法相同。
+- v3 没有审查意见的标准答案，不用来评检出率和误报。
+- 跑法：`cra eval-quant [--evalset v3-holdout]`（三个方案：抄数 + 规则、模型直接给金额的两种推理强度）；`cra eval-quant --rescore <运行>` 用当前规则重算保存的模型输出，不调 API；`cra eval-quant-e2e` 跑完整的审查 + 测算流程。运行目录 `runs/quant-*`，里面是 `results.jsonl`、`summary.json`、`config.json`。
 
 ## 运行记录格式
 

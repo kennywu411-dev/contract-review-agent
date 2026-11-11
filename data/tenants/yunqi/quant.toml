@@ -1,0 +1,22 @@
+# 金额测算参数（构造，ADR 014）。标准条件取自本公司合同审查规范的对应条款；
+# 标“假设”的（资金成本率、情景天数、质保金标准、默认交付期）没有规范依据，按需要修改。
+capital_cost_rate_pct = 8.0   # 年化资金成本率，%
+scenario_delay_days = 30      # 违约金情景：双方各逾期多少天
+std_payment_days = 45         # 我方付款：验收合格后多少日内付款
+std_receivable_days = 45      # 我方收款：可接受的最长账期
+max_deposit_pct = 20.0        # 定金上限，%
+max_penalty_cap_pct = 20.0    # 我方承担违约金的上限，占合同总额 %
+price_alert_pct = 15.0        # 单价高于台账均价多少算超标，%
+std_retention_pct = 5.0       # 我方付款时的标准质保金比例，%
+default_delivery_days = 30    # 合同没写交付期时按多少日计
+
+[basis]
+capital_cost_rate_pct = "假设"
+scenario_delay_days = "假设"
+std_payment_days = "云启细则第九条"
+std_receivable_days = "假设"
+max_deposit_pct = "《民法典》第五百八十六条、云启细则第十条"
+max_penalty_cap_pct = "云启细则第十一条"
+price_alert_pct = "云启细则第八条"
+std_retention_pct = "假设"
+default_delivery_days = "假设"

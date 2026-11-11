@@ -1,7 +1,8 @@
 """录制展示页（site/）用的审查回放。
 
-走和 Web 审查页相同的路径：`RealEngine.review`，即多 Agent 审查加依据校验；当事人空白的合同
-先得到反问，再把用户的回答交给主审。每份合同的完整 trace 存到 runs/demo/<合同 id>.json，
+走和 Web 审查页相同的路径：`RealEngine.review`，即多 Agent 审查、金额测算加依据校验；
+当事人空白的合同先得到反问，再把用户的回答交给主审。
+每份合同的完整 trace 存到 runs/demo/<合同 id>.json，
 `scripts/build_site.py` 读它生成 site/data.json。
 
   uv run python scripts/record_demo.py                 # 录默认的几份
@@ -16,17 +17,24 @@ import argparse
 import json
 import time
 from dataclasses import asdict
+from types import SimpleNamespace
 
 from contract_review.config import ROOT
 from contract_review.contract_evalset import load_contracts
 
 OUT = ROOT / "runs" / "demo"
-# 默认录制的合同：反问 + 查台账比价、跨条款组合风险的长合同、我方是乙方的长合同、干净合同
-DEFAULT = ["goods-r3", "v2-agri-r2", "v2-dproc-r3", "agri-c2"]
+# 默认录制的合同：两份带金额测算的采购合同（v3）、反问 + 查台账比价、跨条款组合风险的长合同、
+# 我方是乙方的长合同、干净合同
+DEFAULT = ["v3-agri-07", "v3-agri-10", "goods-r3", "v2-agri-r2", "v2-dproc-r3", "agri-c2"]
 
 
 def contracts() -> dict:
     cs = load_contracts() + load_contracts(ROOT / "evals" / "contracts_v2.jsonl")
+    # v3（采购金额测算集）的字段和 v1、v2 不同，这里只用到 id、tenant、text、our_side
+    for line in (ROOT / "evals" / "contracts_v3.jsonl").read_text("utf-8").splitlines():
+        if line.strip():
+            d = json.loads(line)
+            cs.append(SimpleNamespace(**{k: d[k] for k in ("id", "tenant", "text", "our_side")}))
     return {c.id: c for c in cs}
 
 

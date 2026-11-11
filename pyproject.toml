@@ -1,7 +1,7 @@
 [project]
 name = "contract-review-agent"
 version = "1.0.0"
-description = "DocPilot：高校规章可信问答 agent（逐句出处、查不到就拒答）"
+description = "采购合同审查 Agent：逐条找出不利条款，把每条风险换算成金额"
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "anthropic>=2.1",
@@ -57,6 +57,10 @@ dev = [
 # 构造数据生成脚本：数据表一行一条，不折行
 "scripts/make_*.py" = ["E501"]
 "scripts/compare_v2.py" = ["E501"]
+# 金额测算：算式、假设说明和抄数提示词是整句中文，不按 100 字折行
+"src/contract_review/quant.py" = ["E501"]
+"src/contract_review/quant_extract.py" = ["E501"]
+"src/contract_review/eval_quant.py" = ["E501"]
 
 [tool.uv.sources]
 # 评测平台 evalkit：运行、统计、门禁、反馈、看板都由它提供

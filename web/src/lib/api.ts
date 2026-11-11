@@ -51,6 +51,7 @@ export type AgentAnswer = {
   clarification: string;
   invalid_citations: string[];
   citations: Record<string, Citation>;
+  quant?: Quant | Record<string, never>;
   steps: number;
   cost_usd: number;
   latency_ms: number;
@@ -186,7 +187,50 @@ export type Finding = {
   needs_human_review: boolean;
   verify_flags?: string[];
   revised_from?: string;
+  quant?: FindingQuant;
 };
+
+// 金额测算（ADR 014）：模型只抄数字，金额、算式和假设由规则代码给出
+export type FindingQuant = {
+  status: "quantified" | "within_standard" | "unquantifiable" | "needs_check";
+  keys: string[];
+  amount: number | null;
+  reason: string;
+};
+export type QuantInput = { field: string; label: string; value: number | string; quote: string; clause: string | null };
+export type QuantItem = {
+  key: string;
+  topic: string;
+  title: string;
+  nature: "sure" | "exposure";
+  status: FindingQuant["status"];
+  amount: number | null;
+  counted: boolean;
+  group: string;
+  formula: string;
+  inputs: QuantInput[];
+  assumptions: string[];
+  note: string;
+  clause: string | null;
+};
+export type Quant = {
+  status: "ok" | "error";
+  error: string;
+  items: QuantItem[];
+  warnings: string[];
+  summary: {
+    sure_total: number;
+    exposure_total: number;
+    worst_total: number;
+    priorities: { rank: number; key: string; title: string; clause: string | null; nature: string; amount: number }[];
+    unquantifiable: number;
+    needs_check: number;
+  };
+  cost_usd: number;
+  latency_ms: number;
+};
+export const fmtYuan = (x: number) =>
+  `¥${x.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export type ReviewResult = {
   tenant: string;
@@ -201,6 +245,7 @@ export type ReviewResult = {
   answer_needs_human: boolean;
   invalid_citations: string[];
   citations: Record<string, Citation>;
+  quant?: Quant | Record<string, never>;
   steps: number;
   cost_usd: number;
   latency_ms: number;
