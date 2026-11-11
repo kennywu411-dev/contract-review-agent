@@ -9,7 +9,7 @@ export function TableCitationView({ id, c, onClose }: { id: string; c: Extract<C
     <aside className="bg-card flex h-full min-h-0 flex-col border-l" aria-label="查表结果">
       <div className="flex items-start gap-2 border-b p-3">
         <div className="min-w-0 flex-1">
-          <p className="text-muted-foreground text-xs">[{id}] 查表结果（DataPilot MCP，只读）</p>
+          <p className="text-muted-foreground text-xs">[{id}] 查表结果（MetricLens MCP，只读）</p>
           <pre className="mt-1 overflow-x-auto font-mono text-xs whitespace-pre-wrap">{c.sql}</pre>
         </div>
         <button aria-label="关闭" onClick={onClose} className="hover:bg-accent cursor-pointer rounded p-1.5">

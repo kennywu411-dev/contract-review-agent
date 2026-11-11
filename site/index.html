@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" media="print" onload="this.media='all'" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Noto+Sans+SC:wght@400;500;700;900&family=Schibsted+Grotesk:wght@500;700;800&display=swap">
 <style>
-/* 版式沿用 UIPilot 展示页：冷色的报告纸，正文墨蓝，荧光黄只用来标“正在看的地方”。 */
+/* 版式沿用 WebHands 展示页：冷色的报告纸，正文墨蓝，荧光黄只用来标“正在看的地方”。 */
 :root {
   --paper: #f3f5f8;
   --surface: #fbfcfd;
@@ -384,9 +384,9 @@ footer nav { display: flex; gap: 6px 18px; flex-wrap: wrap; }
       <a href="https://github.com/kennywu411-dev/contract-review-agent">仓库</a>
       <a href="https://github.com/kennywu411-dev/contract-review-agent/blob/main/docs/numbers.md">数字登记表</a>
       <a href="https://github.com/kennywu411-dev/contract-review-agent/blob/main/docs/PRD.md">PRD</a>
-      <a href="https://github.com/kennywu411-dev/datapilot">DataPilot</a>
+      <a href="https://github.com/kennywu411-dev/metriclens">MetricLens</a>
       <a href="https://github.com/kennywu411-dev/evalkit">evalkit</a>
-      <a href="https://kennywu411-dev.github.io/uipilot/">UIPilot</a>
+      <a href="https://kennywu411-dev.github.io/webhands/">WebHands</a>
     </nav>
   </div>
 </footer>
@@ -516,7 +516,7 @@ function findingQuantHtml(t, f) {
 function quantStageBody(t) {
   const q = t.quant;
   if (q.status !== "ok") return `<p class="hint">金额测算这一步没有完成（${esc(q.error)}），审查意见不受影响。</p>`;
-  const via = q.backend === "datapilot-mcp" ? "经 DataPilot 只读 MCP" : "本地只读库";
+  const via = q.backend === "metriclens-mcp" ? "经 MetricLens 只读 MCP" : "本地只读库";
   const lines = q.lines.length ? `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>标的</th><th>合同单价</th><th>数量</th><th>台账均价</th><th>核对原文</th></tr></thead><tbody>${q.lines.map((l) => `<tr><td>${esc(l.item)}</td><td>${esc(l.unit_price)}</td><td>${esc(l.quantity)}</td><td>${l.ledger ? esc(Number(l.ledger.avg).toFixed(2)) + `（${l.ledger.n} 笔）` : "—"}</td><td class="${l.ok ? "" : "bad"}">${l.ok ? "通过" : esc(l.why)}</td></tr>`).join("")}</tbody></table></div>` : "";
   const figs = `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>抄出的数字</th><th>值</th><th>条款</th><th>核对原文</th></tr></thead><tbody>${q.figures.map((f) => `<tr><td>${esc(f.label)}</td><td>${esc(f.value)}</td><td>${esc(f.clause || "—")}</td><td class="${f.ok ? "" : "bad"}">${f.ok ? "通过" : esc(f.why)}</td></tr>`).join("")}</tbody></table></div>`;
   const unc = q.uncomputable.length ? `<p class="hint">有条款但算不了：${q.uncomputable.map((u) => `${noBtn(u.clause)} ${esc(u.reason)}`).join("；")}</p>` : "";
@@ -555,7 +555,7 @@ function callHtml(ti, c, backend) {
   const t = R.turns[ti];
   if (c.name === "run_sql") {
     const tb = c.hits.map((id) => { const r = t.citations[id]; return `<div class="tbl-wrap"><table class="tbl"><thead><tr>${r.columns.map((x) => `<th>${esc(x)}</th>`).join("")}</tr></thead><tbody>${r.rows.map((row) => `<tr>${row.map((x) => `<td>${esc(x ?? "—")}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`; }).join("");
-    const via = backend === "datapilot-mcp" ? "经 DataPilot 只读 MCP" : "本地只读库";
+    const via = backend === "metriclens-mcp" ? "经 MetricLens 只读 MCP" : "本地只读库";
     return `<div class="call"><div class="tool">run_sql<small>查台账</small></div><div class="q"><pre class="sql">${esc(c.input)}</pre>${tb}<div class="hits"><span class="l">${via} · ${c.ms.toFixed(0)} 毫秒 · 结果记为</span>${c.hits.map((id) => citeBtn(ti, id)).join("")}</div></div></div>`;
   }
   return `<div class="call"><div class="tool">search_docs<small>检索</small></div><div class="q">${esc(c.input)}<div class="hits"><span class="l">命中</span>${c.hits.map((id) => citeBtn(ti, id)).join("")}<span class="l">· ${sec(c.ms)}</span></div></div></div>`;
@@ -669,7 +669,7 @@ function openCite(ti, id) {
   const t = R.turns[ti], c = t.citations[id];
   if (!c.chunk) {
     $("#src-title").textContent = `${id} · 台账查询结果`;
-    $("#src-sub").textContent = R.sql_backend === "datapilot-mcp" ? "经 DataPilot 的只读 MCP 查询构造的供应商台账" : "本地只读库";
+    $("#src-sub").textContent = R.sql_backend === "metriclens-mcp" ? "经 MetricLens 的只读 MCP 查询构造的供应商台账" : "本地只读库";
     $("#src-bd").innerHTML = `<pre class="sql">${esc(c.sql)}</pre><div class="tbl-wrap"><table class="tbl"><thead><tr>${c.columns.map((x) => `<th>${esc(x)}</th>`).join("")}</tr></thead><tbody>${c.rows.map((r) => `<tr>${r.map((x) => `<td>${esc(x ?? "—")}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
   } else {
     const k = D.chunks[c.chunk];

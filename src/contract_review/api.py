@@ -71,12 +71,12 @@ DEFAULT_REVIEW_MODE = "multi"  # 首轮审查默认多 Agent（ADR 012）；"sin
 
 
 class RealEngine:
-    """真实问答：首次请求时加载检索模型和 DataPilot 连接，之后复用。"""
+    """真实问答：首次请求时加载检索模型和 MetricLens 连接，之后复用。"""
 
     def __init__(self, review_mode: str = DEFAULT_REVIEW_MODE) -> None:
         from contract_review.cli import _retriever
-        from contract_review.datapilot_client import make_backend
         from contract_review.llm import HAIKU, AnthropicLLM
+        from contract_review.metriclens_client import make_backend
         from contract_review.verify import HaikuVerifier
 
         self.review_mode = review_mode
@@ -271,7 +271,7 @@ def create_app(
     @asynccontextmanager
     async def lifespan(_app):
         yield
-        # 关闭时回收 DataPilot MCP 子进程、Milvus 服务等
+        # 关闭时回收 MetricLens MCP 子进程、Milvus 服务等
         eng = state["engine"]
         if eng is not None and hasattr(eng, "close"):
             eng.close()

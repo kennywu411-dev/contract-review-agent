@@ -1,4 +1,4 @@
-// 后端接口与 SSE 客户端。EventSource 只支持 GET，这里用 fetch + ReadableStream 解析 SSE（同 DataPilot）。
+// 后端接口与 SSE 客户端。EventSource 只支持 GET，这里用 fetch + ReadableStream 解析 SSE（同 MetricLens）。
 
 // cra serve 时前后端同源，用相对路径；开发时 `npm run dev` 设 NEXT_PUBLIC_API_BASE 指向 8000 端口
 export const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "";

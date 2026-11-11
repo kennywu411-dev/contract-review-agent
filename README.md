@@ -17,7 +17,7 @@
 原有的审查能力不变，7 类合同都支持，采购是主打场景：
 
 - 每条意见附依据原文，来源包括《民法典》、合同编通则解释、《民事诉讼法》、官方合同示范文本和本公司的审查规范，点编号就能看到高亮的条文。
-- 单价通过 [DataPilot](https://github.com/kennywu411-dev/datapilot) 的只读 MCP 查供应商台账，和历史成交价比较。
+- 单价通过 [MetricLens](https://github.com/kennywu411-dev/metriclens) 的只读 MCP 查供应商台账，和历史成交价比较。
 - 看不出我方是甲方还是乙方时，先反问。
 - 依据核实不了的意见不删除，标为"转法务复核"。
 
@@ -137,7 +137,7 @@
 审查 agent（Haiku 5.5，工具循环最多 8 轮）
   search_docs         BM25 + bge-m3 向量 → RRF 融合 → bge-reranker 重排
                       范围：通用法规和示范文本 + 本租户规范，租户由会话决定，模型改不了
-  run_sql             通过 DataPilot 只读 MCP 查台账，用同名 CTE 遮蔽，只能看到本租户的行
+  run_sql             通过 MetricLens 只读 MCP 查台账，用同名 CTE 遮蔽，只能看到本租户的行
   ask_clarification   看不出我方是甲方还是乙方时反问
   submit_review       提交意见：条款、摘录、类型、等级、理由、修改建议、依据编号、是否转人工
 
@@ -168,7 +168,7 @@ ANTHROPIC_API_KEY=sk-ant-...
 ```
 
 - 第一次审查请求会下载 bge-m3 和 bge-reranker-v2-m3（共约 2.3GB）并建向量缓存，要等几分钟；想提前做好，运行 `uv run cra index`（可选）。
-- 没有 DataPilot 时查台账自动用本地库；装了 DataPilot 的话用 `DATAPILOT_DIR` 环境变量指向它的目录，`cra link-datapilot` 会把台账库链接进去。
+- 没有 MetricLens 时查台账自动用本地库；装了 MetricLens 的话用 `METRICLENS_DIR` 环境变量指向它的目录，`cra link-metriclens` 会把台账库链接进去。
 - 示范文本来自市场监管总局合同示范文本库，网站标注了版权，所以原文只在本地使用、不进仓库，仓库里只有文本 id 和下载脚本。
 
 评测（会调用 API，都有 `--max-cost` 预算上限）：
@@ -211,7 +211,7 @@ src/contract_review/
   agent.py              通用工具循环和 trace
   tools.py              检索与查表工具、租户隔离
   retrieve.py bm25.py embed.py rerank.py vector.py milvus_index.py   检索
-  datapilot_client.py   DataPilot MCP 客户端
+  metriclens_client.py   MetricLens MCP 客户端
   html_parse.py pdf_parse.py structure.py headings.py                解析到"编、章、节、条"
   api.py                FastAPI：审查与追问（SSE）、原文高亮、评测回放
 scripts/                构造数据生成、分析脚本

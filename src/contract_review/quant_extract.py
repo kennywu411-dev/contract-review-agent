@@ -1,7 +1,7 @@
 """金额测算的模型部分（ADR 014）：让模型把合同里的数字原样抄出来，其余交给 quant.py 的规则代码。
 
 - extract_terms：一次模型调用（强制调用 submit_terms，结构化输出），只抄数字和所在原句，不做计算；
-- lookup_ledger：经查表后端（DataPilot MCP）取同一品目的历史成交均价，SQL 是固定的，不含模型生成的内容；
+- lookup_ledger：经查表后端（MetricLens MCP）取同一品目的历史成交均价，SQL 是固定的，不含模型生成的内容；
 - run_quant：抄数 → 逐个核对原文 → 查台账 → 计算 → 汇总；
 - direct_amounts：对照实验用（eval_quant.py），让模型直接给出每项金额，产品流程不用它。
 """

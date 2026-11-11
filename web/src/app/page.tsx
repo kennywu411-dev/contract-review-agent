@@ -479,7 +479,7 @@ export default function ReviewPage() {
                 <div className="space-y-3 py-8">
                   <h1 className="text-2xl font-semibold tracking-tight">站在{tenantName.replace("（构造）", "")}的立场审合同</h1>
                   <p className="text-muted-foreground text-sm leading-relaxed">
-                    逐条找出对我方不利的条款，给出风险类型、等级和可直接替换的修改建议；每条意见都挂着《民法典》、合同编通则解释、民事诉讼法或本公司审查规范的原文，点编号看原文。单价会经 DataPilot 只读查询供应商台账比对历史价。依据核实不了的意见不删除，标“转法务复核”。
+                    逐条找出对我方不利的条款，给出风险类型、等级和可直接替换的修改建议；每条意见都挂着《民法典》、合同编通则解释、民事诉讼法或本公司审查规范的原文，点编号看原文。单价会经 MetricLens 只读查询供应商台账比对历史价。依据核实不了的意见不删除，标“转法务复核”。
                   </p>
                   <p className="text-muted-foreground text-xs">演示数据（示例合同、三家公司及其规范、供应商台账）均为构造。</p>
                 </div>

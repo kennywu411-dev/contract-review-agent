@@ -11,7 +11,7 @@ HAIKU = "claude-haiku-5-5"
 SONNET = "claude-sonnet-5-5"
 DEFAULT_MODEL = HAIKU
 
-# 美元 / 百万 token：(输入, 输出, 缓存读取)。缓存写入按输入价 1.25 倍计（与 DataPilot 一致）
+# 美元 / 百万 token：(输入, 输出, 缓存读取)。缓存写入按输入价 1.25 倍计（与 MetricLens 一致）
 PRICING = {
     HAIKU: (0.10, 0.50, 0.01),
     SONNET: (2.00, 10.00, 0.20),

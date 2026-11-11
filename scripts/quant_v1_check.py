@@ -16,8 +16,8 @@ from datetime import datetime
 
 from contract_review.config import ROOT
 from contract_review.contract_evalset import load_contracts
-from contract_review.datapilot_client import make_backend
 from contract_review.llm import HAIKU, AnthropicLLM
+from contract_review.metriclens_client import make_backend
 from contract_review.quant_extract import run_quant
 
 

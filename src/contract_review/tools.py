@@ -1,4 +1,4 @@
-"""Agent 的工具：检索文档、查表（DataPilot）、反问、作答。
+"""Agent 的工具：检索文档、查表（MetricLens）、反问、作答。
 
 安全边界：租户由会话注入（ToolBox.tenant），工具参数里没有 tenant，模型改不了检索范围；
 查表结果里带 tenant 列的行只保留本租户（和 common）。
@@ -65,7 +65,7 @@ TOOLS = [
     ),
     _tool(
         "run_sql",
-        "在 campus 结构化表上执行单条只读 SELECT（经 DataPilot MCP）。用于金额、比例、名额、"
+        "在 campus 结构化表上执行单条只读 SELECT（经 MetricLens MCP）。用于金额、比例、名额、"
         "学制、校历等数字。结果带编号 [T1]…，作答时引用。WHERE 里要带 tenant 条件。",
         {"sql": {"type": "string"}},
     ),

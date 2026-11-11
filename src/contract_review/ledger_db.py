@@ -1,7 +1,7 @@
-"""供应商台账库：data/ledger_src/*.csv → data/ledger/ledger.sqlite（供 DataPilot 只读查询）。
+"""供应商台账库：data/ledger_src/*.csv → data/ledger/ledger.sqlite（供 MetricLens 只读查询）。
 
 台账是构造的（ADR 007）。每张表都必须带 tenant（租户隔离）和 source（数据出处，如"构造"）两列；
-目录布局遵循 DataPilot 的 <db_id>/<db_id>.sqlite 约定，db_id=ledger。
+目录布局遵循 MetricLens 的 <db_id>/<db_id>.sqlite 约定，db_id=ledger。
 """
 
 from __future__ import annotations

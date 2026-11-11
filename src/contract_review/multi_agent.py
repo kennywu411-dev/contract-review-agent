@@ -141,7 +141,7 @@ def merge_findings(findings: list[dict]) -> list[dict]:
 
 
 class _Locked:
-    """检索模型和 DataPilot 连接在线程间共用：调用加锁串行（检索很快，耗时主要在模型调用）。"""
+    """检索模型和 MetricLens 连接在线程间共用：调用加锁串行（检索很快，耗时主要在模型调用）。"""
 
     def __init__(self, obj, lock: threading.Lock) -> None:
         self._obj, self._lock = obj, lock

@@ -8,11 +8,11 @@ import { cn } from "@/lib/utils";
 
 const TOOL = {
   search_docs: { label: "检索文档", icon: FileSearch },
-  run_sql: { label: "查表（DataPilot MCP）", icon: Database },
+  run_sql: { label: "查表（MetricLens MCP）", icon: Database },
   ask_clarification: { label: "反问", icon: HelpCircle },
   final_answer: { label: "作答", icon: MessageSquareText },
   submit_terms: { label: "抄出合同里的数字（金额测算）", icon: MessageSquareText },
-  ledger_lookup: { label: "查台账均价（DataPilot MCP）", icon: Database },
+  ledger_lookup: { label: "查台账均价（MetricLens MCP）", icon: Database },
 } as const;
 
 function ToolCallView({ call }: { call: Step["tool_calls"][number] }) {

@@ -33,7 +33,7 @@ REVIEW_TOOLS = [
     ),
     _tool(
         "run_sql",
-        "在供应商台账（suppliers、purchase_history）上执行单条只读 SELECT（经 DataPilot MCP），"
+        "在供应商台账（suppliers、purchase_history）上执行单条只读 SELECT（经 MetricLens MCP），"
         "用于核对单价是否明显高于历史成交均价、供应商是否在黑名单、资质是否在有效期内。"
         "结果带编号 [T1]…，提交意见时引用。",
         {"sql": {"type": "string"}},

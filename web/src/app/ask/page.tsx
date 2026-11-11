@@ -134,7 +134,7 @@ export default function LawAskPage() {
                 <div className="space-y-4 py-10">
                   <h1 className="text-2xl font-semibold tracking-tight">法规与公司规范问答</h1>
                   <p className="text-muted-foreground text-sm leading-relaxed">
-                    答案来自《民法典》、合同编通则解释、民事诉讼法、官方合同示范文本和{tenantName}的合同审查规范，逐句标出处，点击编号看原文；查不到就明确拒答。涉及供应商历史价格时，agent 会通过 DataPilot 只读查询台账。
+                    答案来自《民法典》、合同编通则解释、民事诉讼法、官方合同示范文本和{tenantName}的合同审查规范，逐句标出处，点击编号看原文；查不到就明确拒答。涉及供应商历史价格时，agent 会通过 MetricLens 只读查询台账。
                   </p>
                   <div className="flex flex-wrap gap-2">
                     {EXAMPLES.map((q) => (

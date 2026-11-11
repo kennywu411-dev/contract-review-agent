@@ -4,7 +4,7 @@ import sqlite3 as _sq
 import pytest as _pt
 
 from contract_review.chunking import Chunk
-from contract_review.datapilot_client import LocalBackend
+from contract_review.metriclens_client import LocalBackend
 from contract_review.retrieve import Hit, SearchResult
 from contract_review.tools import TOOLS, ToolBox, scope_sql
 

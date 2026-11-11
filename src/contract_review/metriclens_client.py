@@ -1,7 +1,7 @@
-"""查结构化表：优先走 DataPilot 的只读 MCP Server（stdio），没有 DataPilot 时退回本地只读 sqlite。
+"""查结构化表：优先走 MetricLens 的只读 MCP Server（stdio），没有 MetricLens 时退回本地只读 sqlite。
 
-DataPilot 只认 data/dev_databases/<db_id>/<db_id>.sqlite，所以在那里建一个
-指向 data/ledger 的软链接，不改 DataPilot 的代码（`cra link-datapilot`）。
+MetricLens 只认 data/dev_databases/<db_id>/<db_id>.sqlite，所以在那里建一个
+指向 data/ledger 的软链接，不改 MetricLens 的代码（`cra link-metriclens`）。
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from typing import Protocol
 
 from contract_review.config import LEDGER_DB
 
-DATAPILOT_DIR = Path(os.environ.get("DATAPILOT_DIR", Path.home() / "Documents" / "datapilot"))
+METRICLENS_DIR = Path(os.environ.get("METRICLENS_DIR", Path.home() / "Documents" / "datapilot"))
 DB_ID = "ledger"
 MAX_ROWS = 50
 CALL_TIMEOUT_S = 20
@@ -29,9 +29,9 @@ class SQLBackend(Protocol):
     def run(self, sql: str) -> dict: ...
 
 
-def link_datapilot() -> Path:
-    """在 DataPilot 的库目录下建 ledger → 本仓库 data/ledger 的软链接；已存在则不动。"""
-    target = DATAPILOT_DIR / "data" / "dev_databases" / DB_ID
+def link_metriclens() -> Path:
+    """在 MetricLens 的库目录下建 ledger → 本仓库 data/ledger 的软链接；已存在则不动。"""
+    target = METRICLENS_DIR / "data" / "dev_databases" / DB_ID
     if not target.is_symlink():
         target.symlink_to(LEDGER_DB.parent.resolve(), target_is_directory=True)
     return target
@@ -46,7 +46,7 @@ def _deny_writes(action, *_):
 
 
 class LocalBackend:
-    """降级用：mode=ro + 只放行单条 SELECT + 授权回调拒绝写操作（同 DataPilot 的三层思路）。"""
+    """降级用：mode=ro + 只放行单条 SELECT + 授权回调拒绝写操作（同 MetricLens 的三层思路）。"""
 
     name = "local"
 
@@ -72,10 +72,10 @@ class LocalBackend:
 class MCPBackend:
     """后台线程里常驻一个 MCP 会话：避免每次查表都重新拉起 uv 和 Python（约 1–2 秒）。"""
 
-    name = "datapilot-mcp"
+    name = "metriclens-mcp"
 
-    def __init__(self, datapilot_dir: Path | None = None) -> None:
-        self.dir = datapilot_dir or DATAPILOT_DIR
+    def __init__(self, metriclens_dir: Path | None = None) -> None:
+        self.dir = metriclens_dir or METRICLENS_DIR
         self.loop = asyncio.new_event_loop()
         self.thread = threading.Thread(target=self.loop.run_forever, daemon=True)
         self.thread.start()
@@ -85,7 +85,7 @@ class MCPBackend:
         self.session = None
         self._task = asyncio.run_coroutine_threadsafe(self._serve(), self.loop)
         if not self._ready.wait(CALL_TIMEOUT_S * 3) or self._error:
-            error = self._error or TimeoutError("DataPilot MCP Server 启动超时")
+            error = self._error or TimeoutError("MetricLens MCP Server 启动超时")
             self.close()  # 启动失败也要收掉后台线程和已拉起的子进程
             raise error
 
@@ -102,7 +102,7 @@ class MCPBackend:
                 str(self.dir),
                 "python",
                 "-m",
-                "datapilot.mcp_server",
+                "metriclens.mcp_server",
             ],
         )
         try:
@@ -181,9 +181,9 @@ class ResilientBackend:
 
 
 def make_backend() -> SQLBackend:
-    if (DATAPILOT_DIR / "src" / "datapilot" / "mcp_server.py").exists():
+    if (METRICLENS_DIR / "src" / "metriclens" / "mcp_server.py").exists():
         try:
-            link_datapilot()
+            link_metriclens()
             return ResilientBackend(MCPBackend(), LocalBackend())
         except Exception:
             pass

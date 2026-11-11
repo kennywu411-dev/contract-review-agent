@@ -2,7 +2,12 @@ import sqlite3
 
 import pytest
 
-from contract_review.datapilot_client import DATAPILOT_DIR, LocalBackend, MCPBackend, link_datapilot
+from contract_review.metriclens_client import (
+    METRICLENS_DIR,
+    LocalBackend,
+    MCPBackend,
+    link_metriclens,
+)
 
 
 @pytest.fixture
@@ -34,17 +39,17 @@ def test_local_backend_reports_sql_errors(db):
 
 
 def test_link_is_idempotent(tmp_path, monkeypatch):
-    import contract_review.datapilot_client as dc
+    import contract_review.metriclens_client as dc
 
-    monkeypatch.setattr(dc, "DATAPILOT_DIR", tmp_path / "datapilot")
-    (tmp_path / "datapilot" / "data" / "dev_databases").mkdir(parents=True)
-    target = link_datapilot()
-    assert link_datapilot() == target and target.is_symlink()
+    monkeypatch.setattr(dc, "METRICLENS_DIR", tmp_path / "metriclens")
+    (tmp_path / "metriclens" / "data" / "dev_databases").mkdir(parents=True)
+    target = link_metriclens()
+    assert link_metriclens() == target and target.is_symlink()
 
 
-@pytest.mark.skipif(not (DATAPILOT_DIR / "src").exists(), reason="本机没有 DataPilot")
+@pytest.mark.skipif(not (METRICLENS_DIR / "src").exists(), reason="本机没有 MetricLens")
 def test_mcp_backend_roundtrip():
-    link_datapilot()
+    link_metriclens()
     backend = MCPBackend()
     try:
         res = backend.run("select count(*) as n from suppliers")
@@ -55,7 +60,7 @@ def test_mcp_backend_roundtrip():
 
 
 class Flaky:
-    name = "datapilot-mcp"
+    name = "metriclens-mcp"
 
     def __init__(self):
         self.calls = 0
@@ -70,7 +75,7 @@ class Flaky:
 
 
 def test_resilient_backend_falls_back_after_repeated_errors(db):
-    from contract_review.datapilot_client import ResilientBackend
+    from contract_review.metriclens_client import ResilientBackend
 
     primary = Flaky()
     b = ResilientBackend(primary, LocalBackend(db), max_errors=2)
@@ -81,7 +86,7 @@ def test_resilient_backend_falls_back_after_repeated_errors(db):
 
 
 def test_sql_errors_do_not_trigger_fallback(db):
-    from contract_review.datapilot_client import ResilientBackend
+    from contract_review.metriclens_client import ResilientBackend
 
     class Strict(Flaky):
         def run(self, sql):
@@ -90,4 +95,4 @@ def test_sql_errors_do_not_trigger_fallback(db):
 
     b = ResilientBackend(Strict(), LocalBackend(db), max_errors=1)
     b.run("select nope from t")
-    assert b.name == "datapilot-mcp"
+    assert b.name == "metriclens-mcp"

@@ -50,7 +50,7 @@ REPLAYS = [
         "tab": "采购合同：每条风险算成钱",
         "tags": ["金额测算", "4 行标的逐行比价", "谈判优先级"],
         "note": "4 种标的的采购合同，来自采购金额测算集 v3。金额测算和三个审查 Agent 并行：模型只把合同里的数字抄出来，"
-        "规则代码逐个核对原文、经 DataPilot 的只读 MCP 查台账均价、按公式计算。这一份算出 4 项金额，"
+        "规则代码逐个核对原文、经 MetricLens 的只读 MCP 查台账均价、按公式计算。这一份算出 4 项金额，"
         "和构造合同时的标准答案一致；其中“付款条件的资金占用成本”没有被审查 Agent 报成风险，在汇总区单独列出。"
         "审查意见里对第四条（检验期三十日）的那条，按构造属于多报。",
     },
@@ -67,7 +67,7 @@ REPLAYS = [
         "tab": "先反问，再查台账比价",
         "tags": ["立场不明 → 反问", "MCP 查台账"],
         "note": "合同首部的甲方、乙方名称是空白的，看不出我方是哪一方。主审先反问，"
-        "用户回答后才开始审查；价款组通过 DataPilot 的只读 MCP 查历史成交价，和合同单价比较。",
+        "用户回答后才开始审查；价款组通过 MetricLens 的只读 MCP 查历史成交价，和合同单价比较。",
     },
     {
         "id": "v2-agri-r2",
@@ -421,7 +421,7 @@ def build_quant(q: dict | None, trace: dict, ends: dict) -> dict | None:
         "cost": q.get("cost_usd", 0.0),
         "tokens_out": step["usage"]["output_tokens"] if step else 0,
         "end_ms": ends.get(("quant", 1)),
-        "backend": q.get("ledger_backend"),
+        "backend": backend_name(q.get("ledger_backend")),
         "ledger_sql": lookup["input"]["sql"] if lookup else "",
         "ledger_ms": lookup.get("ms") if lookup else None,
         "lines": [
@@ -450,6 +450,11 @@ def build_quant(q: dict | None, trace: dict, ends: dict) -> dict | None:
             for k in ("capital_cost_rate_pct", "scenario_delay_days", "std_payment_days")
         },
     }
+
+
+def backend_name(name: str | None) -> str | None:
+    """查表后端的名字：项目改名前录制的记录里是旧名字，展示时统一成现在的 metriclens-mcp。"""
+    return "metriclens-mcp" if name and name.endswith("-mcp") else name
 
 
 def check_numbers() -> None:
@@ -494,7 +499,7 @@ def main() -> None:
                 "title": c["title"],
                 "tenant": TENANTS[c["tenant"]],
                 "source": c["file"],
-                "sql_backend": rec["sql_backend"],
+                "sql_backend": backend_name(rec["sql_backend"]),
                 "header": header,
                 "clauses": clauses,
                 "turns": turns,

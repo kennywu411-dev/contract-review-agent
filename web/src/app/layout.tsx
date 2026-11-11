@@ -10,7 +10,7 @@ export const metadata: Metadata = {
   description: "采购合同审查：逐条找出不利条款，把每条风险换算成金额，按金额排出谈判优先级",
 };
 
-// 深色为默认；用户切换后记在 localStorage，首屏前同步应用，避免闪烁（与 DataPilot 一致）
+// 深色为默认；用户切换后记在 localStorage，首屏前同步应用，避免闪烁（与 MetricLens 一致）
 const themeScript = `try{var t=localStorage.getItem("cra-theme");if(t!=="light")document.documentElement.classList.add("dark")}catch(e){document.documentElement.classList.add("dark")}`;
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

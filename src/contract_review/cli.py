@@ -204,8 +204,8 @@ def print_verified(v) -> None:
 
 
 def cmd_ask(args: argparse.Namespace) -> None:
-    from contract_review.datapilot_client import make_backend
     from contract_review.llm import HAIKU, AnthropicLLM
+    from contract_review.metriclens_client import make_backend
     from contract_review.pipeline import answer_question
     from contract_review.tools import ToolBox
     from contract_review.trace import save_trace
@@ -229,9 +229,9 @@ def cmd_ask(args: argparse.Namespace) -> None:
 
 
 def cmd_link(_: argparse.Namespace) -> None:
-    from contract_review.datapilot_client import link_datapilot
+    from contract_review.metriclens_client import link_metriclens
 
-    print(f"已链接：{link_datapilot()}")
+    print(f"已链接：{link_metriclens()}")
 
 
 def cmd_eval_review(args: argparse.Namespace) -> None:
@@ -243,9 +243,9 @@ def cmd_eval_review(args: argparse.Namespace) -> None:
         load_contracts,
         sample_contracts,
     )
-    from contract_review.datapilot_client import make_backend
     from contract_review.eval_review import run_review_eval
     from contract_review.llm import make_llm
+    from contract_review.metriclens_client import make_backend
     from contract_review.review_agent import review_contract
     from contract_review.tools import ToolBox
 
@@ -339,9 +339,9 @@ def cmd_eval_quant(args: argparse.Namespace) -> None:
     import json
 
     from contract_review.config import ROOT
-    from contract_review.datapilot_client import make_backend
     from contract_review.eval_quant import ARMS, EVALSETS, print_summary, run_eval
     from contract_review.llm import make_llm
+    from contract_review.metriclens_client import make_backend
 
     if args.consistency:
         from contract_review.eval_quant import consistency
@@ -384,9 +384,9 @@ def cmd_eval_quant(args: argparse.Namespace) -> None:
 
 
 def cmd_eval_quant_e2e(args: argparse.Namespace) -> None:
-    from contract_review.datapilot_client import make_backend
     from contract_review.eval_quant import run_e2e
     from contract_review.llm import make_llm
+    from contract_review.metriclens_client import make_backend
 
     sql = make_backend()
     try:
@@ -438,9 +438,9 @@ def cmd_review_d4(args: argparse.Namespace) -> None:
 def cmd_eval_review_dialog(args: argparse.Namespace) -> None:
     import json
 
-    from contract_review.datapilot_client import make_backend
     from contract_review.eval_review_dialog import run_review_dialog_eval
     from contract_review.llm import make_llm
+    from contract_review.metriclens_client import make_backend
     from contract_review.review_agent import review_contract
     from contract_review.tools import ToolBox
 
@@ -500,9 +500,9 @@ def cmd_eval_contract_retrieval(args: argparse.Namespace) -> None:
 def cmd_eval_review_longdialog(args: argparse.Namespace) -> None:
     import json
 
-    from contract_review.datapilot_client import make_backend
     from contract_review.eval_review_longdialog import run_long_dialog_eval
     from contract_review.llm import HAIKU, AnthropicLLM, make_llm
+    from contract_review.metriclens_client import make_backend
     from contract_review.review_agent import review_contract
     from contract_review.tools import ToolBox
 
@@ -538,11 +538,11 @@ def cmd_eval_agent(args: argparse.Namespace) -> None:
     import json
 
     from contract_review.agent import run_agent
-    from contract_review.datapilot_client import make_backend
     from contract_review.eval_agent import run_agent_eval
     from contract_review.eval_retrieval import stratified_sample
     from contract_review.evalset import load_questions
     from contract_review.llm import make_llm
+    from contract_review.metriclens_client import make_backend
     from contract_review.tools import ToolBox
 
     qs = load_questions()
@@ -585,11 +585,11 @@ def cmd_eval_agent(args: argparse.Namespace) -> None:
 def cmd_eval_d4(args: argparse.Namespace) -> None:
     import json
 
-    from contract_review.datapilot_client import make_backend
     from contract_review.eval_retrieval import stratified_sample
     from contract_review.evalset import load_questions
     from contract_review.judge import Judge, run_d4_eval
     from contract_review.llm import HAIKU, SONNET, AnthropicLLM
+    from contract_review.metriclens_client import make_backend
     from contract_review.pipeline import answer_question
     from contract_review.tools import ToolBox
     from contract_review.verify import HaikuVerifier
@@ -795,9 +795,9 @@ def cmd_reverify_d4(args: argparse.Namespace) -> None:
 def cmd_eval_dialog(args: argparse.Namespace) -> None:
     import json
 
-    from contract_review.datapilot_client import make_backend
     from contract_review.eval_dialog import load_dialogs, run_dialog_eval
     from contract_review.llm import HAIKU, SONNET, AnthropicLLM
+    from contract_review.metriclens_client import make_backend
     from contract_review.tools import ToolBox
     from contract_review.verify import HaikuVerifier
 
@@ -976,7 +976,7 @@ def main() -> None:
     p.add_argument("--tag", default="dialog")
     p.add_argument("--max-cost", type=float, default=5.0)
     p.set_defaults(func=cmd_eval_dialog)
-    sub.add_parser("link-datapilot", help="把供应商台账库链接进 DataPilot").set_defaults(
+    sub.add_parser("link-metriclens", help="把供应商台账库链接进 MetricLens").set_defaults(
         func=cmd_link
     )
     args = parser.parse_args()

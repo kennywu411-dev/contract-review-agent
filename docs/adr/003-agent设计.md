@@ -10,7 +10,7 @@
    - 最多 6 步；步数用完、或模型没调用终止工具就结束时，统一记为 fallback。
 2. 4 个工具：
    - `search_docs{query}`：检索文档；
-   - `run_sql{sql}`：走 DataPilot 的只读 MCP 查表；
+   - `run_sql{sql}`：走 MetricLens 的只读 MCP 查表；
    - `ask_clarification`：反问，终止工具；
    - `final_answer{refuse, refuse_reason, sentences[{text, citations}]}`：作答，终止工具。
 
@@ -19,13 +19,13 @@
    - 检索的学校范围由会话注入，工具参数里没有 school；
    - 查表结果里带 school 列的行，只保留本校和国家层面。
 4. 结构化逐句引用：引用编号 C1… 和 T1… 在同一会话内全局递增。模型写成 `[C1]`、`C1、T2` 时统一规整；引用了不存在的编号就记入 `invalid_citations`，阶段 4 再做降级处理。
-5. DataPilot 接入：在 DataPilot 的 `data/dev_databases/campus` 下建软链接，指向本仓库的 `data/campus`，不改 DataPilot 的代码。本机找不到 DataPilot 时，退回本地只读 sqlite（`mode=ro` + 单条 SELECT + 授权回调）。
+5. MetricLens 接入：在 MetricLens 的 `data/dev_databases/campus` 下建软链接，指向本仓库的 `data/campus`，不改 MetricLens 的代码。本机找不到 MetricLens 时，退回本地只读 sqlite（`mode=ro` + 单条 SELECT + 授权回调）。
 6. 模型与缓存：
    - 模型用 `claude-haiku-5-5`，`effort=low`，thinking 用默认的 adaptive；
    - system 按学校生成、内容稳定，带 `cache_control`；
    - 请求顶层也带 `cache_control`，自动缓存消息前缀。
 
-## 结果（174 题，Haiku 5.5，查表后端 datapilot-mcp）
+## 结果（174 题，Haiku 5.5，查表后端 metriclens-mcp）
 
 | 指标 | 数值 | 说明 |
 |---|---|---|
